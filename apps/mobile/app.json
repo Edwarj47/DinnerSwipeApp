@@ -1,0 +1,45 @@
+{
+  "expo": {
+    "name": "Dinner Swipe",
+    "slug": "dinner-swipe",
+    "scheme": "dinnerswipe",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#d71920"
+    },
+    "assetBundlePatterns": ["**/*"],
+    "ios": {
+      "bundleIdentifier": "com.example.dinnerswipe",
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "com.example.dinnerswipe",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#d71920"
+      }
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/favicon.png",
+      "name": "Dinner Swipe",
+      "shortName": "DinnerSwipe",
+      "themeColor": "#d71920",
+      "backgroundColor": "#fff6f3"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      "expo-notifications"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}

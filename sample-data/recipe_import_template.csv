@@ -1,0 +1,4 @@
+name,ingredients,instructions,photo,description,servings,prep_minutes,cook_minutes,total_minutes,difficulty,tags,cuisine,meal_type,source_url,source_name
+Chicken rice bowls,"1 lb chicken breast; 2 cups rice; 1 cup salsa","Cook rice; Cook chicken; Assemble bowls",https://images.unsplash.com/photo-1546069901-ba9599a7e63c,Simple weeknight bowl,4,10,20,30,easy,"chicken, quick",Mexican-inspired,dinner,https://example.com/chicken-rice,Example Recipe Source
+No-photo pasta,"[""12 oz pasta"", ""2 cups marinara"", ""1 cup ricotta""]","[""Boil pasta"", ""Warm sauce"", ""Combine and serve""]",,Missing photo should require review,4,5,15,20,easy,pasta,Italian,dinner,,
+

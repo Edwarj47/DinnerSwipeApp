@@ -1,0 +1,77 @@
+services:
+  dinner-swipe-postgres:
+    image: postgres:16
+    container_name: dinner-swipe-postgres
+    environment:
+      POSTGRES_DB: dinner_swipe
+      POSTGRES_USER: dinner_swipe_app
+      POSTGRES_PASSWORD: ${DINNER_SWIPE_POSTGRES_PASSWORD:-change-me-dev-only}
+    volumes:
+      - dinner_swipe_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dinner_swipe_app -d dinner_swipe"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    profiles: ["development", "production"]
+
+  dinner-swipe-api:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    container_name: dinner-swipe-api
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://dinner_swipe_app:${DINNER_SWIPE_POSTGRES_PASSWORD:-change-me-dev-only}@dinner-swipe-postgres:5432/dinner_swipe
+    depends_on:
+      dinner-swipe-postgres:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:8108:8000"
+    volumes:
+      - dinner_swipe_media:/app/media
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health').read()"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    profiles: ["development", "production"]
+
+  dinner-swipe-worker:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/api.Dockerfile
+    container_name: dinner-swipe-worker
+    command: ["python", "-m", "app.workers.runner"]
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql+psycopg://dinner_swipe_app:${DINNER_SWIPE_POSTGRES_PASSWORD:-change-me-dev-only}@dinner-swipe-postgres:5432/dinner_swipe
+    depends_on:
+      dinner-swipe-postgres:
+        condition: service_healthy
+    volumes:
+      - dinner_swipe_media:/app/media
+    restart: unless-stopped
+    profiles: ["production"]
+
+  dinner-swipe-web:
+    build:
+      context: .
+      dockerfile: infrastructure/docker/web.Dockerfile
+    container_name: dinner-swipe-web
+    ports:
+      - "127.0.0.1:8109:80"
+    depends_on:
+      dinner-swipe-api:
+        condition: service_healthy
+    restart: unless-stopped
+    profiles: ["production"]
+
+volumes:
+  dinner_swipe_postgres_data:
+  dinner_swipe_media:
+

@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install -U pip
+      - run: pip install -e "apps/api[dev]"
+      - run: cd apps/api && ruff check app
+      - run: cd apps/api && mypy app
+      - run: cd apps/api && pytest
+
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint -w apps/mobile
+      - run: npm run typecheck -w apps/mobile
+      - run: npm test -w apps/mobile -- --runInBand
+      - run: npm run build:web -w apps/mobile
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker compose --profile production build
+
