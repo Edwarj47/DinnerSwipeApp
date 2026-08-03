@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <rect width="1024" height="1024" fill="#d71920"/>
+  <circle cx="512" cy="512" r="440.32" fill="#ffd9d6"/>
+  <circle cx="512" cy="512" r="401.408" fill="#ffffff"/>
+  <text x="50%" y="640" text-anchor="middle"
+    fill="#d71920" font-family="FreeSerif, Liberation Serif, Times New Roman, serif"
+    font-size="379" font-weight="700" font-style="italic" letter-spacing="-18.432px">DS</text>
+</svg>
