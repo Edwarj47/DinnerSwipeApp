@@ -39,3 +39,13 @@ npm run build:web -w apps/mobile
 Package identifiers are placeholders in `app.json` and should be changed before store work.
 
 Native manual recipe photos use `expo-image-picker`; iOS includes a photo-library usage description in `app.json`.
+
+## Expo Account
+
+Create the Expo account at:
+
+https://expo.dev/signup
+
+Use the account that should own the Dinner Swipe EAS project. Expo supports email/password and social sign-in options. EAS cloud builds are the easiest path for Android development builds and later iOS TestFlight builds.
+
+For app-store releases, Expo's current EAS Build docs note that Google Play distribution requires a Google Play Developer account and Apple App Store distribution requires Apple Developer Program access.

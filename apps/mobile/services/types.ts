@@ -46,13 +46,44 @@ export type Household = {
   id: string;
   name: string;
   invite_code: string;
+  current_user_role: string;
   members: { id: string; email: string; role: string }[];
 };
 
 export type VoteSummary = {
   weekly_plan_id: string;
-  top_match: { recipe_id: string; recipe_name: string; yes: number; maybe: number; no: number; score: number } | null;
-  votes: { recipe_id: string; recipe_name: string; yes: number; maybe: number; no: number; score: number }[];
+  total_members: number;
+  can_view_voters: boolean;
+  top_match: VoteResult | null;
+  votes: VoteResult[];
+};
+
+export type VoteResult = {
+  recipe_id: string;
+  recipe_name: string;
+  yes: number;
+  maybe: number;
+  no: number;
+  score: number;
+  total_votes: number;
+  majority_vote: "yes" | "maybe" | "no" | "tied";
+  percentages: Partial<Record<"yes" | "maybe" | "no", number>>;
+  voters?: { email: string; vote: "yes" | "maybe" | "no" }[];
+};
+
+export type UserProfile = {
+  email: string;
+  household_size: number;
+  weekly_meal_target: number;
+  max_cook_minutes: number | null;
+  difficulty_preference: string | null;
+  dietary_preferences: string[];
+  allergens: string[];
+  disliked_ingredients: string[];
+  favorite_proteins: string[];
+  budget_preference: string | null;
+  walmart_zip: string | null;
+  notification_preferences: Record<string, unknown>;
 };
 
 export type WeeklyPlan = {

@@ -29,12 +29,20 @@ def list_recipes(
     current_user: CurrentUser,
     q: str | None = None,
     include_hidden: bool = False,
+    max_total_minutes: int | None = Query(default=None, ge=1, le=1440),
     limit: int = Query(30, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ) -> list[dict[str, object]]:
     query = accessible_recipes_query(current_user)
     if q:
         query = query.where(Recipe.name.ilike(f"%{q}%"))
+    effective_max = max_total_minutes or (
+        current_user.profile.max_cook_minutes if current_user.profile else None
+    )
+    if effective_max:
+        query = query.where(
+            or_(Recipe.total_minutes.is_(None), Recipe.total_minutes <= effective_max)
+        )
     if not include_hidden:
         hidden_ids = select(HiddenRecipe.recipe_id).where(HiddenRecipe.user_id == current_user.id)
         query = query.where(Recipe.id.not_in(hidden_ids))

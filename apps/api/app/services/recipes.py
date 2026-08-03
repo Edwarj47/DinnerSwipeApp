@@ -160,6 +160,7 @@ def create_recipe(db: Session, payload: RecipeCreate, user: User | None = None) 
 
 
 def accessible_recipes_query(user: User) -> Select[tuple[Recipe]]:
+    household_id = user.profile.household_id if user.profile else None
     return (
         select(Recipe)
         .options(
@@ -170,7 +171,11 @@ def accessible_recipes_query(user: User) -> Select[tuple[Recipe]]:
         .where(
             Recipe.archived_at.is_(None),
             Recipe.validation_status == "approved",
-            or_(Recipe.owner_user_id.is_(None), Recipe.owner_user_id == user.id),
+            or_(
+                Recipe.owner_user_id.is_(None),
+                Recipe.owner_user_id == user.id,
+                Recipe.household_id == household_id,
+            ),
         )
         .order_by(Recipe.created_at.desc())
     )

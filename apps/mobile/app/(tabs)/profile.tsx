@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useLocalSearchParams } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -8,14 +8,21 @@ import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { HouseholdPanel } from "@/features/groups/HouseholdPanel";
 import { apiFetch, setToken } from "@/services/api";
+import { UserProfile } from "@/services/types";
 
 export default function ProfileScreen() {
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ reset_token?: string }>();
+  const router = useRouter();
   const [email, setEmail] = useState("test@example.com");
   const [password, setPassword] = useState("change-me-123");
   const [resetToken, setResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
+  const [householdSize, setHouseholdSize] = useState("2");
+  const [weeklyTarget, setWeeklyTarget] = useState("5");
+  const [maxCookMinutes, setMaxCookMinutes] = useState("");
+  const [allergens, setAllergens] = useState("");
+  const [dislikes, setDislikes] = useState("");
   const [status, setStatus] = useState("");
   useEffect(() => {
     if (params.reset_token) setResetToken(String(params.reset_token));
@@ -25,12 +32,26 @@ export default function ProfileScreen() {
     queryFn: () => apiFetch<{ email: string; email_verified: boolean; smtp_configured: boolean }>("/api/v1/auth/status"),
     retry: false
   });
+  const profile = useQuery({
+    queryKey: ["profile"],
+    queryFn: () => apiFetch<UserProfile>("/api/v1/profile"),
+    retry: false
+  });
+  useEffect(() => {
+    if (!profile.data) return;
+    setHouseholdSize(String(profile.data.household_size));
+    setWeeklyTarget(String(profile.data.weekly_meal_target));
+    setMaxCookMinutes(profile.data.max_cook_minutes ? String(profile.data.max_cook_minutes) : "");
+    setAllergens(profile.data.allergens.join(", "));
+    setDislikes(profile.data.disliked_ingredients.join(", "));
+  }, [profile.data]);
   const auth = useMutation({
     mutationFn: (mode: "login" | "register") =>
       apiFetch<{ access_token: string }>(`/api/v1/auth/${mode}`, { method: "POST", body: JSON.stringify({ email, password }) }),
     onSuccess: async (data) => {
       await setToken(data.access_token);
       await queryClient.invalidateQueries({ queryKey: ["auth-status"] });
+      await queryClient.invalidateQueries({ queryKey: ["profile"] });
       setStatus("Signed in.");
     },
     onError: (error) => setStatus(String(error))
@@ -51,6 +72,34 @@ export default function ProfileScreen() {
       setResetToken("");
       setNewPassword("");
       setStatus("Password reset. Sign in with the new password.");
+    },
+    onError: (error) => setStatus(String(error))
+  });
+  const saveProfile = useMutation({
+    mutationFn: () =>
+      apiFetch<UserProfile>("/api/v1/profile", {
+        method: "PUT",
+        body: JSON.stringify({
+          household_size: Number(householdSize) || 2,
+          weekly_meal_target: Number(weeklyTarget) || 5,
+          max_cook_minutes: maxCookMinutes ? Number(maxCookMinutes) : null,
+          difficulty_preference: profile.data?.difficulty_preference ?? null,
+          dietary_preferences: profile.data?.dietary_preferences ?? [],
+          allergens: listFromText(allergens),
+          disliked_ingredients: listFromText(dislikes),
+          favorite_proteins: profile.data?.favorite_proteins ?? [],
+          budget_preference: profile.data?.budget_preference ?? null,
+          walmart_zip: profile.data?.walmart_zip ?? null,
+          notification_preferences: profile.data?.notification_preferences ?? {}
+        })
+      }),
+    onSuccess: async () => {
+      setStatus("Preferences saved.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["profile"] }),
+        queryClient.invalidateQueries({ queryKey: ["recipes"] }),
+        queryClient.invalidateQueries({ queryKey: ["weekly-plan"] })
+      ]);
     },
     onError: (error) => setStatus(String(error))
   });
@@ -85,13 +134,33 @@ export default function ProfileScreen() {
         <Button label="Set new password" icon="key" onPress={() => confirmReset.mutate()} />
         {status ? <Text style={styles.status}>{status}</Text> : null}
       </View>
+      <View style={styles.panel}>
+        <Text style={styles.section}>Meal preferences</Text>
+        <View style={styles.grid}>
+          <TextInput accessibilityLabel="Household size" value={householdSize} onChangeText={setHouseholdSize} keyboardType="number-pad" placeholder="Household size" style={[styles.input, styles.gridInput]} />
+          <TextInput accessibilityLabel="Weekly dinner target" value={weeklyTarget} onChangeText={setWeeklyTarget} keyboardType="number-pad" placeholder="Weekly meals" style={[styles.input, styles.gridInput]} />
+          <TextInput accessibilityLabel="Maximum preferred cook time" value={maxCookMinutes} onChangeText={setMaxCookMinutes} keyboardType="number-pad" placeholder="Max cook minutes" style={[styles.input, styles.gridInput]} />
+        </View>
+        <TextInput accessibilityLabel="Allergens" value={allergens} onChangeText={setAllergens} placeholder="Allergens, comma separated" style={styles.input} />
+        <TextInput accessibilityLabel="Disliked ingredients" value={dislikes} onChangeText={setDislikes} placeholder="Disliked ingredients, comma separated" style={styles.input} />
+        <Text style={styles.meta}>Allergens are stored per user. For now they are not automatically hidden from group voters.</Text>
+        <Button label="Save preferences" icon="save" variant="primary" onPress={() => saveProfile.mutate()} />
+      </View>
       <HouseholdPanel />
       <View style={styles.panel}>
         <Text style={styles.section}>Prepared integrations</Text>
         <Text style={styles.meta}>Expo SecureStore is used on native builds. Web uses local storage for development and should be hardened behind production auth settings before public launch.</Text>
+        <View style={styles.actions}>
+          <Button label="Privacy" icon="document-text" onPress={() => router.push("/privacy" as never)} />
+          <Button label="Terms" icon="document-text" onPress={() => router.push("/terms" as never)} />
+        </View>
       </View>
     </Screen>
   );
+}
+
+function listFromText(value: string) {
+  return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
 const styles = StyleSheet.create({
@@ -99,6 +168,8 @@ const styles = StyleSheet.create({
   subtitle: { color: Colors.muted, marginBottom: 14 },
   panel: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 14, gap: 10, marginBottom: 12 },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12 },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  gridInput: { flex: 1, minWidth: 118 },
   actions: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
   securityBox: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 6 },
   status: { color: Colors.basil, fontWeight: "700" },

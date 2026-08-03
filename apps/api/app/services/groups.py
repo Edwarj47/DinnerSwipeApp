@@ -8,7 +8,7 @@ from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.models.entities import Household, HouseholdMember, Recipe, User, WeeklyPlanVote
+from app.models.entities import Household, HouseholdMember, Recipe, User, WeeklyPlan, WeeklyPlanVote
 from app.services.recipes import get_or_create_current_plan
 
 ALPHABET = string.ascii_uppercase + string.digits
@@ -53,6 +53,9 @@ def serialize_household(db: Session, user: User) -> dict[str, Any]:
         "id": household.id,
         "name": household.name,
         "invite_code": invite_code,
+        "current_user_role": next(
+            (member.role for member, member_user in rows if member_user.id == user.id), "member"
+        ),
         "members": [
             {"id": member.user_id, "email": member_user.email, "role": member.role}
             for member, member_user in rows
@@ -78,7 +81,7 @@ def join_household(db: Session, user: User, invite_code: str) -> dict[str, Any]:
 
 
 def record_weekly_vote(db: Session, user: User, recipe_id: str, vote: str) -> dict[str, Any]:
-    plan = get_or_create_current_plan(db, user)
+    plan = group_vote_plan(db, user)
     recipe = db.get(Recipe, recipe_id)
     household_id = user.profile.household_id if user.profile else None
     if not recipe or recipe.archived_at is not None:
@@ -103,7 +106,18 @@ def record_weekly_vote(db: Session, user: User, recipe_id: str, vote: str) -> di
 
 
 def vote_summary(db: Session, user: User) -> dict[str, Any]:
-    plan = get_or_create_current_plan(db, user)
+    household = current_household(db, user)
+    plan = group_vote_plan(db, user)
+    member_rows = db.execute(
+        select(HouseholdMember, User)
+        .join(User, User.id == HouseholdMember.user_id)
+        .where(HouseholdMember.household_id == household.id)
+        .order_by(User.email)
+    ).all()
+    member_count = len(member_rows)
+    is_owner = any(
+        member.user_id == user.id and member.role == "owner" for member, _ in member_rows
+    )
     rows = db.execute(
         select(
             WeeklyPlanVote.recipe_id,
@@ -132,9 +146,71 @@ def vote_summary(db: Session, user: User) -> dict[str, Any]:
         item[vote] = count
     for item in recipes.values():
         item["score"] = item["yes"] * 2 + item["maybe"] - item["no"] * 2
+        item["total_votes"] = item["yes"] + item["maybe"] + item["no"]
+        item["majority_vote"] = majority_vote(item)
+        item["percentages"] = {
+            key: round((int(item[key]) / member_count) * 100)
+            for key in ("yes", "maybe", "no")
+            if member_count and int(item[key]) > 0
+        }
     ranked = sorted(
         recipes.values(),
-        key=lambda item: (int(item["score"]), int(item["yes"]), int(item["maybe"])),
+        key=lambda item: (
+            majority_rank(str(item["majority_vote"])),
+            int(item["yes"]),
+            int(item["score"]),
+            int(item["maybe"]),
+        ),
         reverse=True,
     )
-    return {"weekly_plan_id": plan.id, "top_match": ranked[0] if ranked else None, "votes": ranked}
+    if is_owner:
+        voter_rows = db.execute(
+            select(WeeklyPlanVote.recipe_id, User.email, WeeklyPlanVote.vote)
+            .join(User, User.id == WeeklyPlanVote.user_id)
+            .join(HouseholdMember, HouseholdMember.user_id == User.id)
+            .where(
+                WeeklyPlanVote.weekly_plan_id == plan.id,
+                HouseholdMember.household_id == household.id,
+            )
+            .order_by(User.email)
+        ).all()
+        by_recipe: dict[str, list[dict[str, str]]] = {}
+        for recipe_id, email, vote in voter_rows:
+            by_recipe.setdefault(recipe_id, []).append({"email": email, "vote": vote})
+        for item in ranked:
+            item["voters"] = by_recipe.get(str(item["recipe_id"]), [])
+    return {
+        "weekly_plan_id": plan.id,
+        "total_members": member_count,
+        "can_view_voters": is_owner,
+        "top_match": ranked[0] if ranked else None,
+        "votes": ranked,
+    }
+
+
+def group_vote_plan(db: Session, user: User) -> WeeklyPlan:
+    household = current_household(db, user)
+    owner = db.scalar(
+        select(User)
+        .join(HouseholdMember, HouseholdMember.user_id == User.id)
+        .where(HouseholdMember.household_id == household.id, HouseholdMember.role == "owner")
+        .order_by(HouseholdMember.created_at)
+    )
+    return get_or_create_current_plan(db, owner or user)
+
+
+def majority_vote(item: dict[str, Any]) -> str:
+    yes = int(item["yes"])
+    maybe = int(item["maybe"])
+    no = int(item["no"])
+    if yes > maybe and yes > no:
+        return "yes"
+    if no > yes and no > maybe:
+        return "no"
+    if maybe > yes and maybe > no:
+        return "maybe"
+    return "tied"
+
+
+def majority_rank(vote: str) -> int:
+    return {"yes": 4, "maybe": 3, "tied": 2, "no": 1}.get(vote, 0)

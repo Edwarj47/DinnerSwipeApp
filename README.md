@@ -32,7 +32,9 @@ Open `http://127.0.0.1:19006`, register from Profile, then use Discover.
 - Public recipe URL ingestion with SSRF protections, JSON-LD extraction, metadata fallback, conservative HTML hints, AI normalization adapter, and approval gate
 - Manual recipe creation with optional web photo upload
 - Email verification and password reset foundation with branded HTML email templates
-- Household invite codes and weekly recipe voting foundation
+- Household invite codes, majority-based group voting, owner-visible vote counts, percentages, and voter detail
+- User profile max-cook-time filtering and per-user allergen/disliked ingredient storage
+- Dinner Swipe privacy and terms pages adapted from DCSS legal language
 - Alembic database migration and Docker Compose stack with isolated PostgreSQL
 
 ## Assumptions
@@ -75,3 +77,5 @@ For the planned VPS route, point `https://dinner.dcss.dev` at the local web serv
 - `documentation/known-limitations.md`
 - `documentation/security-checklist.md`
 - `documentation/secrets-and-public-repo.md`
+- `documentation/privacy-policy.md`
+- `documentation/terms-of-service.md`
