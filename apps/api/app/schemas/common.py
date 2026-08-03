@@ -166,6 +166,14 @@ class PantryItemIn(ApiModel):
     category: str = "pantry"
 
 
+class GroceryManualItemIn(ApiModel):
+    display_name: str = Field(min_length=1, max_length=180)
+    quantity: float | None = Field(default=None, ge=0, le=9999)
+    unit: str | None = Field(default=None, max_length=32)
+    category: str = Field(default="household", max_length=80)
+    notes: str | None = Field(default=None, max_length=500)
+
+
 class GroceryItemOut(ApiModel):
     id: str
     normalized_name: str
