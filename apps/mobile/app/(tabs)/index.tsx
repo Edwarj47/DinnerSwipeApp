@@ -3,6 +3,7 @@ import { Link } from "expo-router";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
+import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
@@ -39,9 +40,12 @@ export default function DiscoverScreen() {
   return (
     <Screen scroll={false}>
       <View style={styles.header}>
-        <View>
-          <Text style={styles.eyebrow}>{progressText}</Text>
-          <Text style={styles.title}>{headline}</Text>
+        <View style={styles.brand}>
+          <BrandLogo size={46} />
+          <View>
+            <Text style={styles.eyebrow}>{progressText}</Text>
+            <Text style={styles.title}>{headline}</Text>
+          </View>
         </View>
         <Button label="Undo" icon="arrow-undo" onPress={() => {
           const restored = undo();
@@ -69,6 +73,7 @@ export default function DiscoverScreen() {
 
 const styles = StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
+  brand: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
   eyebrow: { color: Colors.basil, fontWeight: "800", textTransform: "uppercase", fontSize: 12 },
   title: { color: Colors.ink, fontSize: 32, fontWeight: "900" },
   error: { color: Colors.danger, marginBottom: 12 },
@@ -76,4 +81,3 @@ const styles = StyleSheet.create({
   done: { fontSize: 22, fontWeight: "800", color: Colors.ink, textAlign: "center" },
   link: { color: Colors.blue, fontWeight: "800", fontSize: 16 }
 });
-

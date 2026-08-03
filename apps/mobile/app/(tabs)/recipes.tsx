@@ -3,6 +3,7 @@ import { Image } from "expo-image";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
+import { BrandLogo } from "@/components/BrandLogo";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { ImportPanel } from "@/features/imports/ImportPanel";
@@ -24,9 +25,7 @@ export default function RecipesScreen() {
   return (
     <Screen>
       <View style={styles.hero}>
-        <View style={styles.logoMark}>
-          <Text style={styles.logoText}>DS</Text>
-        </View>
+        <BrandLogo size={70} framed />
         <View style={{ flex: 1 }}>
           <Text style={styles.kicker}>Dinner Swipe</Text>
           <Text style={styles.title}>Add meals people will vote for.</Text>
@@ -63,8 +62,6 @@ export default function RecipesScreen() {
 
 const styles = StyleSheet.create({
   hero: { backgroundColor: Colors.tomato, borderRadius: 8, padding: 16, flexDirection: "row", gap: 14, alignItems: "center", marginBottom: 14 },
-  logoMark: { width: 62, height: 62, borderRadius: 31, backgroundColor: Colors.surface, alignItems: "center", justifyContent: "center", borderColor: "#ffd9d6", borderWidth: 3 },
-  logoText: { color: Colors.tomato, fontSize: 25, fontWeight: "900", fontFamily: "serif", fontStyle: "italic" },
   kicker: { color: "#ffe3e0", fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
   title: { color: Colors.surface, fontSize: 25, fontWeight: "900", lineHeight: 30 },
   segment: { flexDirection: "row", backgroundColor: Colors.softRed, borderRadius: 8, padding: 4, marginBottom: 12 },
