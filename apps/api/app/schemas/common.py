@@ -131,6 +131,15 @@ class WeeklySlotIn(ApiModel):
     sort_order: int = 0
 
 
+class WeeklySlotUpdate(ApiModel):
+    slot_date: date | None = None
+    slot_type: Literal["meal", "leftovers", "dining_out", "flexible"] | None = None
+    recipe_id: str | None = None
+    servings: int | None = Field(default=None, ge=1, le=30)
+    is_locked: bool | None = None
+    sort_order: int | None = None
+
+
 class WeeklyPlanOut(ApiModel):
     id: str
     week_start: date

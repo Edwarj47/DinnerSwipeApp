@@ -5,7 +5,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbDep
 from app.models.entities import WeeklyPlanSlot
-from app.schemas.common import WeeklySlotIn
+from app.schemas.common import WeeklySlotUpdate
 from app.services.recipes import get_or_create_current_plan, serialize_plan
 
 router = APIRouter(prefix="/weekly-plans", tags=["weekly-plans"])
@@ -19,7 +19,7 @@ def current_plan(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
 
 @router.put("/current/slots/{slot_id}")
 def update_slot(
-    slot_id: str, payload: WeeklySlotIn, db: DbDep, current_user: CurrentUser
+    slot_id: str, payload: WeeklySlotUpdate, db: DbDep, current_user: CurrentUser
 ) -> dict[str, object]:
     plan = get_or_create_current_plan(db, current_user)
     slot = db.scalar(
@@ -29,7 +29,10 @@ def update_slot(
     )
     if not slot:
         raise HTTPException(status_code=404, detail="Slot not found")
-    for key, value in payload.model_dump().items():
+    updates = payload.model_dump(exclude_unset=True)
+    if updates.get("slot_type") in {"leftovers", "dining_out", "flexible"}:
+        updates["recipe_id"] = None
+    for key, value in updates.items():
         setattr(slot, key, value)
     db.commit()
     return serialize_plan(db, plan)

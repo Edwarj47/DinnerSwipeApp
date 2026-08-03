@@ -251,11 +251,21 @@ def serialize_plan(db: Session, plan: WeeklyPlan) -> dict[str, Any]:
         .order_by(WeeklyPlanSlot.sort_order)
     ).all()
 
-    def recipe_name(recipe_id: str | None) -> str | None:
+    def recipe_summary(recipe_id: str | None) -> dict[str, Any]:
         if not recipe_id:
-            return None
+            return {
+                "recipe_name": None,
+                "recipe_photo_url": None,
+                "recipe_total_minutes": None,
+                "recipe_difficulty": None,
+            }
         recipe = db.get(Recipe, recipe_id)
-        return recipe.name if recipe else None
+        return {
+            "recipe_name": recipe.name if recipe else None,
+            "recipe_photo_url": recipe.photo_url if recipe else None,
+            "recipe_total_minutes": recipe.total_minutes if recipe else None,
+            "recipe_difficulty": recipe.difficulty if recipe else None,
+        }
 
     return {
         "id": plan.id,
@@ -267,11 +277,11 @@ def serialize_plan(db: Session, plan: WeeklyPlan) -> dict[str, Any]:
                 "slot_date": slot.slot_date,
                 "slot_type": slot.slot_type,
                 "recipe_id": slot.recipe_id,
-                "recipe_name": recipe_name(slot.recipe_id),
                 "servings": slot.servings,
                 "is_locked": slot.is_locked,
                 "sort_order": slot.sort_order,
             }
+            | recipe_summary(slot.recipe_id)
             for slot in slots
         ],
     }

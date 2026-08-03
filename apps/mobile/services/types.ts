@@ -65,6 +65,9 @@ export type WeeklyPlan = {
     slot_type: "meal" | "leftovers" | "dining_out" | "flexible";
     recipe_id: string | null;
     recipe_name: string | null;
+    recipe_photo_url?: string | null;
+    recipe_total_minutes?: number | null;
+    recipe_difficulty?: string | null;
     servings: number;
     is_locked: boolean;
     sort_order: number;
