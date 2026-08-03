@@ -22,6 +22,25 @@ export function UrlIngestionPanel() {
   const [url, setUrl] = useState("");
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [status, setStatus] = useState("");
+  const [editName, setEditName] = useState("");
+  const [editPhoto, setEditPhoto] = useState("");
+  const [editIngredients, setEditIngredients] = useState("");
+  const [editInstructions, setEditInstructions] = useState("");
+
+  function linesFrom(value: unknown) {
+    if (!Array.isArray(value)) return "";
+    return value
+      .map((item) => {
+        if (typeof item === "string") return item;
+        if (item && typeof item === "object") {
+          const row = item as { original_text?: string; text?: string };
+          return row.original_text ?? row.text ?? "";
+        }
+        return "";
+      })
+      .filter(Boolean)
+      .join("\n");
+  }
 
   async function submit() {
     setStatus("Fetching and checking the recipe page...");
@@ -33,15 +52,39 @@ export function UrlIngestionPanel() {
     if (first) {
       const full = await apiFetch<Candidate>(`/api/v1/url-ingestion/${first.id}`);
       setCandidate(full);
+      setEditName(String(full.extracted_data?.name ?? ""));
+      setEditPhoto(String(full.extracted_data?.photo_url ?? ""));
+      setEditIngredients(linesFrom(full.extracted_data?.ingredients));
+      setEditInstructions(linesFrom(full.extracted_data?.instructions));
       setStatus("Recipe draft ready for review.");
     }
   }
 
   async function approve() {
     if (!candidate) return;
+    const ingredients = editIngredients.split(/\n|;/).map((item) => item.trim()).filter(Boolean);
+    const instructions = editInstructions.split(/\n|;/).map((item) => item.trim()).filter(Boolean);
     await apiFetch(`/api/v1/url-ingestion/${candidate.id}/approve`, {
       method: "POST",
-      body: JSON.stringify({ accept_placeholder_photo: true })
+      body: JSON.stringify({
+        accept_placeholder_photo: !editPhoto,
+        edits: {
+          name: editName,
+          photo_url: editPhoto || null,
+          servings: Number(candidate.extracted_data?.servings ?? 4),
+          prep_minutes: candidate.extracted_data?.prep_minutes ?? null,
+          cook_minutes: candidate.extracted_data?.cook_minutes ?? null,
+          total_minutes: candidate.extracted_data?.total_minutes ?? null,
+          difficulty: String(candidate.extracted_data?.difficulty ?? "requires_review"),
+          meal_type: String(candidate.extracted_data?.meal_type ?? "dinner"),
+          source_type: String(candidate.extracted_data?.source_type ?? "url_html"),
+          source_url: candidate.source_url,
+          source_title: String(candidate.extracted_data?.source_title ?? ""),
+          tags: Array.isArray(candidate.extracted_data?.tags) ? candidate.extracted_data.tags : [],
+          ingredients: ingredients.map((original_text, index) => ({ original_text, sort_order: index })),
+          instructions: instructions.map((text, index) => ({ text, step_number: index + 1 }))
+        }
+      })
     });
     setStatus("Approved into your recipe library.");
   }
@@ -62,10 +105,13 @@ export function UrlIngestionPanel() {
       {candidate ? (
         <View style={styles.review}>
           {candidate.extracted_data?.photo_url ? <Image source={{ uri: String(candidate.extracted_data.photo_url) }} style={styles.photo} contentFit="cover" /> : null}
-          <Text style={styles.name}>{String(candidate.extracted_data?.name ?? "Requires review")}</Text>
+          <TextInput accessibilityLabel="Review recipe name" value={editName} onChangeText={setEditName} style={styles.input} />
+          <TextInput accessibilityLabel="Review recipe photo URL" value={editPhoto} onChangeText={setEditPhoto} autoCapitalize="none" style={styles.input} />
           <Text style={styles.meta}>{candidate.source_url}</Text>
           <Text style={styles.meta}>{Array.isArray(candidate.extracted_data?.ingredients) ? `${candidate.extracted_data.ingredients.length} ingredients` : "Ingredients need review"} • {Array.isArray(candidate.extracted_data?.instructions) ? `${candidate.extracted_data.instructions.length} steps` : "Steps need review"}</Text>
           <Text style={styles.meta}>{(candidate.validation_warnings ?? []).join("; ") || "No blocking validation warnings returned."}</Text>
+          <TextInput accessibilityLabel="Review ingredients" value={editIngredients} onChangeText={setEditIngredients} multiline style={[styles.input, styles.area]} />
+          <TextInput accessibilityLabel="Review instructions" value={editInstructions} onChangeText={setEditInstructions} multiline style={[styles.input, styles.area]} />
           <Button label="Approve to library" icon="checkmark-circle" onPress={() => void approve().catch((error) => setStatus(String(error)))} />
         </View>
       ) : null}
@@ -80,6 +126,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 19, fontWeight: "900", color: Colors.ink },
   badge: { color: Colors.tomato, fontWeight: "900" },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12 },
+  area: { minHeight: 120, paddingTop: 12, textAlignVertical: "top" },
   quickLinks: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   review: { gap: 8 },
   photo: { width: "100%", aspectRatio: 1.65, borderRadius: 8, backgroundColor: Colors.border },

@@ -31,6 +31,7 @@ Open `http://127.0.0.1:19006`, register from Profile, then use Discover.
 - CSV/XLSX upload, column mapping suggestions, validation, duplicate checks, preview, partial import, confirmation, and CSV error export
 - Public recipe URL ingestion with SSRF protections, JSON-LD extraction, metadata fallback, conservative HTML hints, AI normalization adapter, and approval gate
 - Manual recipe creation with optional web photo upload
+- Email verification and password reset foundation with branded HTML email templates
 - Household invite codes and weekly recipe voting foundation
 - Alembic database migration and Docker Compose stack with isolated PostgreSQL
 

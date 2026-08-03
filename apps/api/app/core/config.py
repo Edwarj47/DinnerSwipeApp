@@ -24,6 +24,16 @@ class Settings(BaseSettings):
     image_storage_path: str = "./media"
     max_image_upload_size_bytes: int = 5_242_880
     allowed_origins: str = "http://127.0.0.1:19006,http://localhost:19006"
+    email_from: str = "DSAsupport@dcss.dev"
+    email_from_name: str = "Dinner Swipe"
+    email_smtp_host: str = ""
+    email_smtp_port: int = 587
+    email_smtp_username: str = ""
+    email_smtp_password: str = ""
+    email_smtp_use_tls: bool = True
+    email_smtp_use_ssl: bool = False
+    email_token_minutes: int = 60
+    password_reset_token_minutes: int = 30
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -35,6 +45,10 @@ class Settings(BaseSettings):
     @property
     def allowed_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def smtp_configured(self) -> bool:
+        return bool(self.email_smtp_host and self.email_smtp_username and self.email_smtp_password)
 
 
 @lru_cache

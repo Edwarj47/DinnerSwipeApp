@@ -15,7 +15,10 @@
     "assetBundlePatterns": ["**/*"],
     "ios": {
       "bundleIdentifier": "com.example.dinnerswipe",
-      "supportsTablet": false
+      "supportsTablet": false,
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "Dinner Swipe lets you choose recipe photos from your library."
+      }
     },
     "android": {
       "package": "com.example.dinnerswipe",

@@ -10,6 +10,7 @@ Set these in the VPS `.env` or a deployment secret store:
 - `DINNER_SWIPE_POSTGRES_PASSWORD`: generated password for the isolated `dinner_swipe_app` Postgres role.
 - `DATABASE_URL`: includes the Dinner Swipe database password and must stay secret.
 - `OPENAI_API_KEY`: app-scoped OpenAI key for recipe URL normalization.
+- `EMAIL_SMTP_HOST`, `EMAIL_SMTP_USERNAME`, `EMAIL_SMTP_PASSWORD`: SMTP credentials for verification and password reset email.
 
 ## Public Configuration
 
@@ -19,6 +20,8 @@ These are safe to keep in `.env.example` or app config:
 - `PUBLIC_API_URL=https://dinner.dcss.dev`
 - `ALLOWED_ORIGINS=https://dinner.dcss.dev`
 - `OPENAI_MODEL=gpt-5-mini`
+- `EMAIL_FROM=DSAsupport@dcss.dev`
+- `EMAIL_FROM_NAME=Dinner Swipe`
 - feature flags and upload limits
 
 ## GitHub Repository

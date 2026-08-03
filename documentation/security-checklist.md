@@ -1,6 +1,8 @@
 # Security Checklist
 
 - [x] Separate Dinner Swipe PostgreSQL service and credentials
+- [x] Email verification and password reset tokens are stored hashed and expire
+- [x] SMTP credentials are environment-only, not repository files
 - [x] No secrets committed
 - [x] `.env.example` uses placeholders
 - [x] JWT secret validation for production
@@ -13,4 +15,3 @@
 - [ ] Rate limits on public endpoints
 - [ ] Object storage and malware scanning for copied recipe images
 - [ ] Full native security review before app-store release
-

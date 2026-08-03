@@ -49,7 +49,8 @@ export type Household = {
 
 export type VoteSummary = {
   weekly_plan_id: string;
-  votes: { recipe_id: string; recipe_name: string; yes: number; maybe: number; no: number }[];
+  top_match: { recipe_id: string; recipe_name: string; yes: number; maybe: number; no: number; score: number } | null;
+  votes: { recipe_id: string; recipe_name: string; yes: number; maybe: number; no: number; score: number }[];
 };
 
 export type WeeklyPlan = {

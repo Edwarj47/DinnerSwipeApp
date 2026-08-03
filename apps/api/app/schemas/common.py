@@ -30,6 +30,25 @@ class RefreshRequest(ApiModel):
     refresh_token: str
 
 
+class AuthStatus(ApiModel):
+    email: EmailStr
+    email_verified: bool
+    smtp_configured: bool
+
+
+class VerifyEmailRequest(ApiModel):
+    token: str = Field(min_length=20, max_length=300)
+
+
+class PasswordResetRequest(ApiModel):
+    email: EmailStr
+
+
+class PasswordResetConfirm(ApiModel):
+    token: str = Field(min_length=20, max_length=300)
+    password: str = Field(min_length=8, max_length=128)
+
+
 class IngredientIn(ApiModel):
     original_text: str
     normalized_name: str | None = None

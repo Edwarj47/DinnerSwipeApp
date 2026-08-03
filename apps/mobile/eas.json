@@ -10,18 +10,29 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_APP_NAME": "Dinner Swipe"
+        "EXPO_PUBLIC_APP_NAME": "Dinner Swipe",
+        "EXPO_PUBLIC_API_URL": "https://dinner.dcss.dev",
+        "EXPO_PUBLIC_FEATURE_AI_INGESTION": "true"
       }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "env": {
+        "EXPO_PUBLIC_APP_NAME": "Dinner Swipe",
+        "EXPO_PUBLIC_API_URL": "https://dinner.dcss.dev",
+        "EXPO_PUBLIC_FEATURE_AI_INGESTION": "true"
+      }
     },
     "production": {
-      "autoIncrement": true
+      "autoIncrement": true,
+      "env": {
+        "EXPO_PUBLIC_APP_NAME": "Dinner Swipe",
+        "EXPO_PUBLIC_API_URL": "https://dinner.dcss.dev",
+        "EXPO_PUBLIC_FEATURE_AI_INGESTION": "true"
+      }
     }
   },
   "submit": {
     "production": {}
   }
 }
-

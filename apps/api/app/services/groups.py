@@ -119,7 +119,22 @@ def vote_summary(db: Session, user: User) -> dict[str, Any]:
     recipes: dict[str, dict[str, Any]] = {}
     for recipe_id, name, vote, count in rows:
         item = recipes.setdefault(
-            recipe_id, {"recipe_id": recipe_id, "recipe_name": name, "yes": 0, "maybe": 0, "no": 0}
+            recipe_id,
+            {
+                "recipe_id": recipe_id,
+                "recipe_name": name,
+                "yes": 0,
+                "maybe": 0,
+                "no": 0,
+                "score": 0,
+            },
         )
         item[vote] = count
-    return {"weekly_plan_id": plan.id, "votes": list(recipes.values())}
+    for item in recipes.values():
+        item["score"] = item["yes"] * 2 + item["maybe"] - item["no"] * 2
+    ranked = sorted(
+        recipes.values(),
+        key=lambda item: (int(item["score"]), int(item["yes"]), int(item["maybe"])),
+        reverse=True,
+    )
+    return {"weekly_plan_id": plan.id, "top_match": ranked[0] if ranked else None, "votes": ranked}

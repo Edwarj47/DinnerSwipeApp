@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import * as ImagePicker from "expo-image-picker";
 import React, { useState } from "react";
 import { Platform, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -40,6 +41,36 @@ export function ManualRecipePanel() {
     const token = await getToken();
     const form = new FormData();
     form.append("file", file);
+    const response = await fetch(`${API_URL}/api/v1/recipes/photo-upload`, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+      body: form
+    });
+    if (!response.ok) throw new Error(await response.text());
+    const data = (await response.json()) as { photo_url: string };
+    setPhotoUrl(data.photo_url);
+    setStatus("Photo uploaded and attached.");
+  }
+
+  async function pickNativePhoto() {
+    const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (!permission.granted) {
+      setStatus("Photo permission is required to choose an image.");
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.9
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    const token = await getToken();
+    const form = new FormData();
+    form.append("file", {
+      uri: asset.uri,
+      name: asset.fileName ?? "recipe-photo.jpg",
+      type: asset.mimeType ?? "image/jpeg"
+    } as unknown as Blob);
     const response = await fetch(`${API_URL}/api/v1/recipes/photo-upload`, {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}` } : undefined,
@@ -106,7 +137,7 @@ export function ManualRecipePanel() {
           }
         })
       ) : (
-        <Text style={styles.meta}>Native photo picker is prepared for the next mobile build pass.</Text>
+        <Button label="Choose photo" icon="image" onPress={() => void pickNativePhoto().catch((error) => setStatus(String(error)))} />
       )}
       <TextInput accessibilityLabel="Photo URL" value={photoUrl} onChangeText={setPhotoUrl} placeholder="Photo URL or upload result" autoCapitalize="none" style={styles.input} />
       <TextInput accessibilityLabel="Ingredients" value={ingredients} onChangeText={setIngredients} placeholder="Ingredients, one per line" multiline style={[styles.input, styles.area]} />
