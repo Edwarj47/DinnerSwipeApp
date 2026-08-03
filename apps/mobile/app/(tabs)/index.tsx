@@ -8,6 +8,7 @@ import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { MealCard } from "@/features/discover/MealCard";
+import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
@@ -16,6 +17,7 @@ export default function DiscoverScreen() {
   const queryClient = useQueryClient();
   const { sessionId, addSwipe, undo, selectedRecipes } = usePlannerStore();
   const [index, setIndex] = useState(0);
+  const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const { data, isLoading, error } = useQuery({ queryKey: ["recipes"], queryFn: () => apiFetch<Recipe[]>("/api/v1/recipes") });
   const swipe = useMutation({
     mutationFn: (payload: { recipe_id: string; action: string; session_id: string }) =>
@@ -60,13 +62,14 @@ export default function DiscoverScreen() {
           <Link href="/week" style={styles.link}>Review this week</Link>
         </View>
       ) : current ? (
-        <MealCard recipe={current} onAction={act} onOpen={() => {}} />
+        <MealCard recipe={current} onAction={act} onOpen={() => setSelectedRecipe(current)} />
       ) : (
         <View style={styles.empty}>
           <Text style={styles.done}>No more meals in this session.</Text>
           <Button label="Start over" icon="refresh" onPress={() => setIndex(0)} />
         </View>
       )}
+      <RecipeDetailSheet recipe={selectedRecipe} visible={!!selectedRecipe} onClose={() => setSelectedRecipe(null)} />
     </Screen>
   );
 }

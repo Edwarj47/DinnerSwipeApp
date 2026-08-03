@@ -29,6 +29,7 @@ export type Recipe = {
   meal_type: string;
   source_type: string;
   source_url?: string | null;
+  source_title?: string | null;
   validation_status: string;
   validation_warnings: string[];
   duplicate_status: string;
@@ -38,6 +39,7 @@ export type Recipe = {
   tags: string[];
   is_favorite: boolean;
   is_hidden: boolean;
+  last_selected_date?: string | null;
 };
 
 export type Household = {
