@@ -1,3 +1,4 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { Image } from "expo-image";
 import { StyleSheet, Text, TextInput, View } from "react-native";
@@ -6,7 +7,17 @@ import { Button } from "@/components/Button";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 
-type Candidate = { id: string; source_url: string; status: string; extracted_data?: Record<string, unknown>; validation_warnings?: string[]; confidence?: Record<string, unknown> };
+type Candidate = {
+  id: string;
+  source_url: string;
+  status: string;
+  recipe_name?: string;
+  created_at?: string;
+  warnings?: string[];
+  extracted_data?: Record<string, unknown>;
+  validation_warnings?: string[];
+  confidence?: Record<string, unknown>;
+};
 
 const EXAMPLE_LINKS = [
   { label: "Pico", url: "https://www.joyfulhealthyeats.com/pico-de-gallo/" },
@@ -19,6 +30,7 @@ const EXAMPLE_LINKS = [
 ];
 
 export function UrlIngestionPanel() {
+  const queryClient = useQueryClient();
   const [url, setUrl] = useState("");
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [status, setStatus] = useState("");
@@ -26,6 +38,10 @@ export function UrlIngestionPanel() {
   const [editPhoto, setEditPhoto] = useState("");
   const [editIngredients, setEditIngredients] = useState("");
   const [editInstructions, setEditInstructions] = useState("");
+  const history = useQuery({
+    queryKey: ["url-ingestion-history"],
+    queryFn: () => apiFetch<Candidate[]>("/api/v1/url-ingestion")
+  });
 
   function linesFrom(value: unknown) {
     if (!Array.isArray(value)) return "";
@@ -57,7 +73,19 @@ export function UrlIngestionPanel() {
       setEditIngredients(linesFrom(full.extracted_data?.ingredients));
       setEditInstructions(linesFrom(full.extracted_data?.instructions));
       setStatus("Recipe draft ready for review.");
+      await queryClient.invalidateQueries({ queryKey: ["url-ingestion-history"] });
     }
+  }
+
+  async function openCandidate(candidateId: string) {
+    const full = await apiFetch<Candidate>(`/api/v1/url-ingestion/${candidateId}`);
+    setCandidate(full);
+    setUrl(full.source_url);
+    setEditName(String(full.extracted_data?.name ?? ""));
+    setEditPhoto(String(full.extracted_data?.photo_url ?? ""));
+    setEditIngredients(linesFrom(full.extracted_data?.ingredients));
+    setEditInstructions(linesFrom(full.extracted_data?.instructions));
+    setStatus("Review draft loaded.");
   }
 
   async function approve() {
@@ -87,7 +115,25 @@ export function UrlIngestionPanel() {
       })
     });
     setStatus("Approved into your recipe library.");
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["recipes"] }),
+      queryClient.invalidateQueries({ queryKey: ["url-ingestion-history"] })
+    ]);
   }
+
+  async function reject() {
+    if (!candidate) return;
+    await apiFetch(`/api/v1/url-ingestion/${candidate.id}/reject`, { method: "POST" });
+    setStatus("Draft rejected.");
+    setCandidate({ ...candidate, status: "rejected" });
+    await queryClient.invalidateQueries({ queryKey: ["url-ingestion-history"] });
+  }
+
+  const warnings = candidate?.validation_warnings ?? [];
+  const confidence = candidate?.confidence ?? {};
+  const hasIngredients = splitReviewLines(editIngredients).length > 0;
+  const hasInstructions = splitReviewLines(editInstructions).length > 0;
+  const canApprove = Boolean(candidate && editName.trim().length > 1 && hasIngredients && hasInstructions && candidate.status !== "approved" && candidate.status !== "rejected");
 
   return (
     <View style={styles.panel}>
@@ -104,18 +150,62 @@ export function UrlIngestionPanel() {
       <Button label="Fetch recipe" icon="link" variant="primary" onPress={() => void submit().catch((error) => setStatus(String(error)))} />
       {candidate ? (
         <View style={styles.review}>
-          {candidate.extracted_data?.photo_url ? <Image source={{ uri: String(candidate.extracted_data.photo_url) }} style={styles.photo} contentFit="cover" /> : null}
+          <View style={styles.reviewHeader}>
+            <Text style={styles.reviewTitle}>Review candidate</Text>
+            <Text style={[styles.statusPill, candidate.status === "approved" ? styles.approvedPill : candidate.status === "rejected" ? styles.rejectedPill : null]}>{candidate.status.replaceAll("_", " ")}</Text>
+          </View>
+          {editPhoto ? <Image source={{ uri: editPhoto }} style={styles.photo} contentFit="cover" /> : <View style={styles.emptyPhoto}><Text style={styles.emptyPhotoText}>Photo required or approve placeholder</Text></View>}
           <TextInput accessibilityLabel="Review recipe name" value={editName} onChangeText={setEditName} style={styles.input} />
           <TextInput accessibilityLabel="Review recipe photo URL" value={editPhoto} onChangeText={setEditPhoto} autoCapitalize="none" style={styles.input} />
           <Text style={styles.meta}>{candidate.source_url}</Text>
-          <Text style={styles.meta}>{Array.isArray(candidate.extracted_data?.ingredients) ? `${candidate.extracted_data.ingredients.length} ingredients` : "Ingredients need review"} • {Array.isArray(candidate.extracted_data?.instructions) ? `${candidate.extracted_data.instructions.length} steps` : "Steps need review"}</Text>
-          <Text style={styles.meta}>{(candidate.validation_warnings ?? []).join("; ") || "No blocking validation warnings returned."}</Text>
+          <View style={styles.metrics}>
+            <Metric label="Ingredients" value={String(splitReviewLines(editIngredients).length)} />
+            <Metric label="Steps" value={String(splitReviewLines(editInstructions).length)} />
+            <Metric label="Warnings" value={String(warnings.length)} />
+          </View>
+          <View style={styles.confidenceRow}>
+            {Object.entries(confidence).slice(0, 4).map(([key, value]) => (
+              <Text key={key} style={styles.confidenceChip}>{key}: {String(value)}</Text>
+            ))}
+          </View>
+          <Text style={warnings.length ? styles.warningText : styles.meta}>{warnings.join("; ") || "No blocking validation warnings returned."}</Text>
           <TextInput accessibilityLabel="Review ingredients" value={editIngredients} onChangeText={setEditIngredients} multiline style={[styles.input, styles.area]} />
           <TextInput accessibilityLabel="Review instructions" value={editInstructions} onChangeText={setEditInstructions} multiline style={[styles.input, styles.area]} />
-          <Button label="Approve to library" icon="checkmark-circle" onPress={() => void approve().catch((error) => setStatus(String(error)))} />
+          <View style={styles.reviewActions}>
+            <Button label="Approve" icon="checkmark-circle" variant="primary" disabled={!canApprove} onPress={() => void approve().catch((error) => setStatus(String(error)))} />
+            <Button label="Re-fetch" icon="refresh" onPress={() => void submit().catch((error) => setStatus(String(error)))} />
+            <Button label="Reject" icon="close-circle" variant="danger" disabled={!candidate || candidate.status === "rejected"} onPress={() => void reject().catch((error) => setStatus(String(error)))} />
+          </View>
+        </View>
+      ) : null}
+      {(history.data ?? []).length ? (
+        <View style={styles.history}>
+          <Text style={styles.historyTitle}>Recent web drafts</Text>
+          {(history.data ?? []).slice(0, 3).map((item) => (
+            <View key={item.id} style={styles.historyRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.historyName}>{item.recipe_name ?? "Untitled draft"}</Text>
+                <Text style={styles.meta}>{item.status.replaceAll("_", " ")} • {(item.warnings ?? []).length} warning{(item.warnings ?? []).length === 1 ? "" : "s"}</Text>
+              </View>
+              <Button label="Open" icon="open" onPress={() => void openCandidate(item.id).catch((error) => setStatus(String(error)))} />
+            </View>
+          ))}
         </View>
       ) : null}
       {status ? <Text style={styles.status}>{status}</Text> : null}
+    </View>
+  );
+}
+
+function splitReviewLines(value: string) {
+  return value.split(/\n|;/).map((item) => item.trim()).filter(Boolean);
+}
+
+function Metric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.metric}>
+      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricLabel}>{label}</Text>
     </View>
   );
 }
@@ -129,7 +219,26 @@ const styles = StyleSheet.create({
   area: { minHeight: 120, paddingTop: 12, textAlignVertical: "top" },
   quickLinks: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   review: { gap: 8 },
+  reviewHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
+  reviewTitle: { color: Colors.ink, fontSize: 17, fontWeight: "900" },
+  statusPill: { color: Colors.tomatoDark, backgroundColor: Colors.softRed, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, fontWeight: "900", overflow: "hidden", textTransform: "capitalize" },
+  approvedPill: { color: Colors.basil },
+  rejectedPill: { color: Colors.danger },
   photo: { width: "100%", aspectRatio: 1.65, borderRadius: 8, backgroundColor: Colors.border },
+  emptyPhoto: { width: "100%", aspectRatio: 1.65, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.softRed, alignItems: "center", justifyContent: "center" },
+  emptyPhotoText: { color: Colors.muted, fontWeight: "800" },
+  metrics: { flexDirection: "row", gap: 8 },
+  metric: { flex: 1, minHeight: 60, borderRadius: 8, backgroundColor: Colors.softRed, alignItems: "center", justifyContent: "center" },
+  metricValue: { color: Colors.tomatoDark, fontSize: 18, fontWeight: "900" },
+  metricLabel: { color: Colors.muted, fontSize: 11, fontWeight: "800" },
+  confidenceRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
+  confidenceChip: { color: Colors.muted, backgroundColor: Colors.softRed, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, fontSize: 12, fontWeight: "700", overflow: "hidden" },
+  warningText: { color: Colors.danger, fontWeight: "700", lineHeight: 20 },
+  reviewActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  history: { gap: 8, borderTopColor: Colors.border, borderTopWidth: 1, paddingTop: 10 },
+  historyTitle: { color: Colors.ink, fontWeight: "900" },
+  historyRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.softRed, borderRadius: 8, padding: 9 },
+  historyName: { color: Colors.ink, fontWeight: "900" },
   name: { color: Colors.ink, fontSize: 17, fontWeight: "900" },
   meta: { color: Colors.muted, lineHeight: 20 },
   status: { color: Colors.basil, fontWeight: "800" }

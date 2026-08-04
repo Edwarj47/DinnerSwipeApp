@@ -12,10 +12,18 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.rate_limit import auth_rate_limiter
 from app.database.session import get_db
 from app.main import app
 from app.models import entities  # noqa: F401
 from app.models.base import Base
+
+
+@pytest.fixture(autouse=True)
+def reset_rate_limiter() -> Generator[None, None, None]:
+    auth_rate_limiter.counters.clear()
+    yield
+    auth_rate_limiter.counters.clear()
 
 
 @pytest.fixture()

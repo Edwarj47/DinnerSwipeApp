@@ -6,7 +6,7 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbDep
 from app.models.entities import UrlIngestionCandidate
 from app.schemas.common import UrlApprovalRequest, UrlIngestRequest
-from app.services.url_ingestion import approve_url_candidate, ingest_url
+from app.services.url_ingestion import approve_url_candidate, ingest_url, reject_url_candidate
 
 router = APIRouter(prefix="/url-ingestion", tags=["url-ingestion"])
 
@@ -53,6 +53,8 @@ def list_candidates(db: DbDep, current_user: CurrentUser) -> list[dict[str, obje
             "id": row.id,
             "source_url": row.source_url,
             "status": row.status,
+            "recipe_name": row.extracted_data.get("name"),
+            "warnings": row.validation_warnings,
             "created_at": row.created_at,
         }
         for row in rows
@@ -66,3 +68,8 @@ def approve(
     return approve_url_candidate(
         db, current_user, candidate_id, payload.accept_placeholder_photo, payload.edits
     )
+
+
+@router.post("/{candidate_id}/reject")
+def reject(candidate_id: str, db: DbDep, current_user: CurrentUser) -> dict[str, str]:
+    return reject_url_candidate(db, current_user, candidate_id)

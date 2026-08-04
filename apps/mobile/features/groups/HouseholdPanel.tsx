@@ -61,6 +61,7 @@ export function HouseholdPanel() {
           <Text style={styles.meta}>{majorityText(votes.top_match)} - {votes.top_match.total_votes} of {votes.total_members} voted</Text>
         </View>
       ) : null}
+      {household && votes?.can_view_voters ? <OwnerVoteDashboard household={household} votes={votes} /> : null}
       {(recipes ?? []).slice(0, 4).map((recipe) => {
         const summary = votes?.votes.find((item) => item.recipe_id === recipe.id);
         return (
@@ -110,6 +111,47 @@ function VoteChart({ result, totalMembers, canViewVoters }: { result: VoteResult
   );
 }
 
+function OwnerVoteDashboard({ household, votes }: { household: Household; votes: VoteSummary }) {
+  const voterEmails = new Set<string>();
+  for (const result of votes.votes) {
+    for (const voter of result.voters ?? []) {
+      voterEmails.add(voter.email);
+    }
+  }
+  const pendingMembers = household.members.filter((member) => !voterEmails.has(member.email));
+  const activeChoices = votes.votes.filter((result) => result.total_votes > 0);
+  return (
+    <View style={styles.ownerDashboard}>
+      <View style={styles.ownerMetrics}>
+        <OwnerMetric label="Voted" value={`${voterEmails.size}/${votes.total_members}`} />
+        <OwnerMetric label="Choices" value={String(activeChoices.length)} />
+        <OwnerMetric label="Pending" value={String(pendingMembers.length)} />
+      </View>
+      {activeChoices.length ? (
+        <View style={styles.ownerList}>
+          {activeChoices.slice(0, 3).map((result) => (
+            <Text key={result.recipe_id} style={styles.ownerLine}>
+              {result.recipe_name}: {result.yes} yes, {result.maybe} maybe, {result.no} no
+            </Text>
+          ))}
+        </View>
+      ) : null}
+      {pendingMembers.length ? (
+        <Text style={styles.meta}>Waiting on {pendingMembers.map((member) => member.email).join(", ")}</Text>
+      ) : null}
+    </View>
+  );
+}
+
+function OwnerMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <View style={styles.ownerMetric}>
+      <Text style={styles.ownerMetricValue}>{value}</Text>
+      <Text style={styles.ownerMetricLabel}>{label}</Text>
+    </View>
+  );
+}
+
 function majorityText(result: VoteResult) {
   if (result.majority_vote === "tied") return "Tied";
   return `${result.majority_vote[0].toUpperCase()}${result.majority_vote.slice(1)} leads`;
@@ -127,6 +169,13 @@ const styles = StyleSheet.create({
   filterRow: { gap: 6 },
   match: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12 },
   matchName: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 18 },
+  ownerDashboard: { borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 10, gap: 9 },
+  ownerMetrics: { flexDirection: "row", gap: 8 },
+  ownerMetric: { flex: 1, backgroundColor: Colors.softRed, borderRadius: 8, minHeight: 58, alignItems: "center", justifyContent: "center" },
+  ownerMetricValue: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 18 },
+  ownerMetricLabel: { color: Colors.muted, fontWeight: "800", fontSize: 11 },
+  ownerList: { gap: 4 },
+  ownerLine: { color: Colors.ink, fontWeight: "700", lineHeight: 20 },
   voteRow: { gap: 10, paddingVertical: 10, borderTopColor: Colors.border, borderTopWidth: 1 },
   voteButtons: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   recipe: { color: Colors.ink, fontWeight: "800" },

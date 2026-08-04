@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Platform, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Platform, Share, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
@@ -25,6 +25,10 @@ export default function ProfileScreen() {
   const [allergens, setAllergens] = useState("");
   const [dislikes, setDislikes] = useState("");
   const [status, setStatus] = useState("");
+  const [changeCurrentPassword, setChangeCurrentPassword] = useState("");
+  const [changeNewPassword, setChangeNewPassword] = useState("");
+  const [deletePassword, setDeletePassword] = useState("");
+  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [biometricSettings, setBiometricSettings] = useState<BiometricSettings | null>(null);
   useEffect(() => {
     if (params.reset_token) setResetToken(String(params.reset_token));
@@ -96,6 +100,40 @@ export default function ProfileScreen() {
       setResetToken("");
       setNewPassword("");
       setStatus("Password reset. Sign in with the new password.");
+    },
+    onError: (error) => setStatus(String(error))
+  });
+  const changePassword = useMutation({
+    mutationFn: () =>
+      apiFetch<{ status: string }>("/api/v1/auth/password/change", {
+        method: "POST",
+        body: JSON.stringify({ current_password: changeCurrentPassword, new_password: changeNewPassword })
+      }),
+    onSuccess: () => {
+      setChangeCurrentPassword("");
+      setChangeNewPassword("");
+      setStatus("Password changed.");
+    },
+    onError: (error) => setStatus(String(error))
+  });
+  const exportAccount = useMutation({
+    mutationFn: () => apiFetch<Record<string, unknown>>("/api/v1/auth/account/export"),
+    onSuccess: async (data) => {
+      await deliverAccountExport(data);
+      setStatus("Account export generated.");
+    },
+    onError: (error) => setStatus(String(error))
+  });
+  const deleteAccount = useMutation({
+    mutationFn: () =>
+      apiFetch<{ status: string }>("/api/v1/auth/account/delete-request", {
+        method: "POST",
+        body: JSON.stringify({ current_password: deletePassword, confirmation: deleteConfirmation })
+      }),
+    onSuccess: () => {
+      setDeletePassword("");
+      setDeleteConfirmation("");
+      setStatus("Account deletion request recorded for manual review.");
     },
     onError: (error) => setStatus(String(error))
   });
@@ -184,6 +222,22 @@ export default function ProfileScreen() {
         {status ? <Text style={styles.status}>{status}</Text> : null}
       </View>
       <View style={styles.panel}>
+        <Text style={styles.section}>Account settings</Text>
+        <TextInput accessibilityLabel="Current password" secureTextEntry value={changeCurrentPassword} onChangeText={setChangeCurrentPassword} placeholder="Current password" style={styles.input} />
+        <TextInput accessibilityLabel="New account password" secureTextEntry value={changeNewPassword} onChangeText={setChangeNewPassword} placeholder="New password" style={styles.input} />
+        <Button label="Change password" icon="key" onPress={() => changePassword.mutate()} disabled={changePassword.isPending} />
+        <View style={styles.divider} />
+        <Button label="Export my data" icon="download" onPress={() => exportAccount.mutate()} disabled={exportAccount.isPending} />
+        <Text style={styles.meta}>The export includes account, profile, household, recipe, weekly plan, grocery, URL-ingestion, and audit metadata. It excludes password hashes and tokens.</Text>
+        <View style={styles.deleteBox}>
+          <Text style={styles.deleteTitle}>Delete account request</Text>
+          <Text style={styles.meta}>This records a request for manual review. It does not immediately remove recipes or household data.</Text>
+          <TextInput accessibilityLabel="Password for account deletion request" secureTextEntry value={deletePassword} onChangeText={setDeletePassword} placeholder="Current password" style={styles.input} />
+          <TextInput accessibilityLabel="Type DELETE to request account deletion" value={deleteConfirmation} onChangeText={setDeleteConfirmation} placeholder="Type DELETE" autoCapitalize="characters" style={styles.input} />
+          <Button label="Request deletion" icon="trash" variant="danger" onPress={() => deleteAccount.mutate()} disabled={deleteConfirmation !== "DELETE" || deleteAccount.isPending} />
+        </View>
+      </View>
+      <View style={styles.panel}>
         <Text style={styles.section}>Device security</Text>
         <View style={styles.toggleRow}>
           <View style={styles.toggleCopy}>
@@ -237,6 +291,21 @@ function listFromText(value: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
+async function deliverAccountExport(data: Record<string, unknown>) {
+  const json = JSON.stringify(data, null, 2);
+  const filename = `dinner-swipe-export-${new Date().toISOString().slice(0, 10)}.json`;
+  if (Platform.OS === "web" && typeof window !== "undefined" && typeof document !== "undefined") {
+    const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = filename;
+    link.click();
+    URL.revokeObjectURL(url);
+    return;
+  }
+  await Share.share({ title: filename, message: json });
+}
+
 const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: "900", color: Colors.ink },
   subtitle: { color: Colors.muted, marginBottom: 14 },
@@ -246,6 +315,9 @@ const styles = StyleSheet.create({
   gridInput: { flex: 1, minWidth: 118 },
   actions: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
   securityBox: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 6 },
+  divider: { height: 1, backgroundColor: Colors.border, marginVertical: 4 },
+  deleteBox: { borderWidth: 1, borderColor: "#f0b6b2", backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 9 },
+  deleteTitle: { color: Colors.danger, fontWeight: "900" },
   toggleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14 },
   toggleCopy: { flex: 1, gap: 4 },
   toggleTitle: { color: Colors.ink, fontWeight: "900", fontSize: 16 },

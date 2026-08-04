@@ -49,6 +49,16 @@ class PasswordResetConfirm(ApiModel):
     password: str = Field(min_length=8, max_length=128)
 
 
+class ChangePasswordRequest(ApiModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    new_password: str = Field(min_length=8, max_length=128)
+
+
+class AccountDeletionRequest(ApiModel):
+    current_password: str = Field(min_length=8, max_length=128)
+    confirmation: str = Field(pattern="^DELETE$")
+
+
 class IngredientIn(ApiModel):
     original_text: str
     normalized_name: str | None = None

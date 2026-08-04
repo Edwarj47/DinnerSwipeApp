@@ -90,3 +90,12 @@ def approve_url_candidate(
     candidate.approved_recipe_id = recipe.id
     db.commit()
     return {"recipe_id": recipe.id, "status": candidate.status}
+
+
+def reject_url_candidate(db: Session, user: User, candidate_id: str) -> dict[str, str]:
+    candidate = db.get(UrlIngestionCandidate, candidate_id)
+    if not candidate or candidate.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    candidate.status = "rejected"
+    db.commit()
+    return {"status": candidate.status}
