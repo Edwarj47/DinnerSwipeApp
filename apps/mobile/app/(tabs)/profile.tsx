@@ -1,21 +1,22 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import { StyleSheet, Text, TextInput, View } from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { Platform, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { HouseholdPanel } from "@/features/groups/HouseholdPanel";
-import { apiFetch, setToken } from "@/services/api";
+import { apiFetch, clearAuthTokens, getToken, setAuthTokens } from "@/services/api";
+import { BiometricSettings, authenticateForUnlock, getBiometricSettings, setBiometricPreference } from "@/services/biometrics";
 import { UserProfile } from "@/services/types";
 
 export default function ProfileScreen() {
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ reset_token?: string }>();
   const router = useRouter();
-  const [email, setEmail] = useState("test@example.com");
-  const [password, setPassword] = useState("change-me-123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [resetToken, setResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [householdSize, setHouseholdSize] = useState("2");
@@ -24,9 +25,16 @@ export default function ProfileScreen() {
   const [allergens, setAllergens] = useState("");
   const [dislikes, setDislikes] = useState("");
   const [status, setStatus] = useState("");
+  const [biometricSettings, setBiometricSettings] = useState<BiometricSettings | null>(null);
   useEffect(() => {
     if (params.reset_token) setResetToken(String(params.reset_token));
   }, [params.reset_token]);
+  const refreshBiometricSettings = useCallback(async () => {
+    setBiometricSettings(await getBiometricSettings());
+  }, []);
+  useEffect(() => {
+    void refreshBiometricSettings();
+  }, [refreshBiometricSettings]);
   const authStatus = useQuery({
     queryKey: ["auth-status"],
     queryFn: () => apiFetch<{ email: string; email_verified: boolean; smtp_configured: boolean }>("/api/v1/auth/status"),
@@ -47,13 +55,29 @@ export default function ProfileScreen() {
   }, [profile.data]);
   const auth = useMutation({
     mutationFn: (mode: "login" | "register") =>
-      apiFetch<{ access_token: string }>(`/api/v1/auth/${mode}`, { method: "POST", body: JSON.stringify({ email, password }) }),
+      apiFetch<{ access_token: string; refresh_token: string }>(`/api/v1/auth/${mode}`, {
+        method: "POST",
+        body: JSON.stringify({ email, password })
+      }),
     onSuccess: async (data) => {
-      await setToken(data.access_token);
+      await setAuthTokens(data);
       await queryClient.invalidateQueries({ queryKey: ["auth-status"] });
       await queryClient.invalidateQueries({ queryKey: ["profile"] });
+      await refreshBiometricSettings();
       setStatus("Signed in.");
     },
+    onError: (error) => setStatus(String(error))
+  });
+  const signOut = useMutation({
+    mutationFn: async () => {
+      try {
+        await apiFetch<{ status: string }>("/api/v1/auth/logout", { method: "POST" });
+      } finally {
+        await clearAuthTokens();
+        queryClient.clear();
+      }
+    },
+    onSuccess: () => setStatus("Signed out on this device."),
     onError: (error) => setStatus(String(error))
   });
   const resend = useMutation({
@@ -103,17 +127,41 @@ export default function ProfileScreen() {
     },
     onError: (error) => setStatus(String(error))
   });
+  async function toggleBiometrics(enabled: boolean) {
+    const settings = await getBiometricSettings();
+    if (enabled) {
+      const token = await getToken();
+      if (!token) {
+        setStatus("Sign in before enabling biometric unlock.");
+        return;
+      }
+      if (!settings.supported) {
+        setStatus(settings.hasHardware ? "Enroll biometrics in device settings first." : "This device does not support biometric unlock.");
+        await refreshBiometricSettings();
+        return;
+      }
+      const approved = await authenticateForUnlock(`Enable Dinner Swipe ${settings.label} unlock`);
+      if (!approved) {
+        setStatus("Biometric setup was cancelled.");
+        await refreshBiometricSettings();
+        return;
+      }
+    }
+    await setBiometricPreference(enabled);
+    await refreshBiometricSettings();
+    setStatus(enabled ? `${settings.label} unlock enabled.` : "Biometric unlock disabled.");
+  }
   return (
     <Screen>
       <Text style={styles.title}>Profile</Text>
       <Text style={styles.subtitle}>Household preferences, auth, Walmart ZIP, and notification settings are kept configurable for production setup.</Text>
       <View style={styles.panel}>
         <Text style={styles.section}>Account</Text>
-        <TextInput autoCapitalize="none" accessibilityLabel="Email" value={email} onChangeText={setEmail} style={styles.input} />
-        <TextInput accessibilityLabel="Password" secureTextEntry value={password} onChangeText={setPassword} style={styles.input} />
+        <TextInput autoCapitalize="none" accessibilityLabel="Email" value={email} onChangeText={setEmail} placeholder="Email" style={styles.input} />
+        <TextInput accessibilityLabel="Password" secureTextEntry value={password} onChangeText={setPassword} placeholder="Password" style={styles.input} />
         <View style={styles.actions}>
-          <Button label="Register" icon="person-add" variant="primary" onPress={() => auth.mutate("register")} />
-          <Button label="Sign in" icon="log-in" onPress={() => auth.mutate("login")} />
+          <Button label="Register" icon="person-add" variant="primary" disabled={auth.isPending} onPress={() => auth.mutate("register")} />
+          <Button label="Sign in" icon="log-in" disabled={auth.isPending} onPress={() => auth.mutate("login")} />
         </View>
         {authStatus.data ? (
           <View style={styles.securityBox}>
@@ -124,6 +172,7 @@ export default function ProfileScreen() {
             {!authStatus.data.email_verified ? (
               <Button label="Resend verification" icon="mail" onPress={() => resend.mutate()} />
             ) : null}
+            <Button label="Sign out" icon="log-out" onPress={() => signOut.mutate()} />
           </View>
         ) : null}
         <View style={styles.actions}>
@@ -133,6 +182,31 @@ export default function ProfileScreen() {
         <TextInput accessibilityLabel="New password" secureTextEntry value={newPassword} onChangeText={setNewPassword} placeholder="New password" style={styles.input} />
         <Button label="Set new password" icon="key" onPress={() => confirmReset.mutate()} />
         {status ? <Text style={styles.status}>{status}</Text> : null}
+      </View>
+      <View style={styles.panel}>
+        <Text style={styles.section}>Device security</Text>
+        <View style={styles.toggleRow}>
+          <View style={styles.toggleCopy}>
+            <Text style={styles.toggleTitle}>{biometricSettings?.label ? `Use ${biometricSettings.label}` : "Use biometrics"}</Text>
+            <Text style={styles.meta}>
+              {Platform.OS === "web"
+                ? "Biometric unlock is available on Android and iOS builds."
+                : biometricSettings?.supported
+                  ? "Unlock the saved session on this device after sign-in."
+                  : "Set up Face ID, fingerprint, or a device passcode to enable this."}
+            </Text>
+          </View>
+          <Switch
+            accessibilityLabel="Enable biometric unlock"
+            value={Boolean(biometricSettings?.enabled)}
+            disabled={Platform.OS === "web"}
+            onValueChange={(value) => {
+              void toggleBiometrics(value);
+            }}
+            thumbColor={biometricSettings?.enabled ? Colors.tomato : Colors.surface}
+            trackColor={{ false: Colors.border, true: "#f4aaa8" }}
+          />
+        </View>
       </View>
       <View style={styles.panel}>
         <Text style={styles.section}>Meal preferences</Text>
@@ -172,6 +246,9 @@ const styles = StyleSheet.create({
   gridInput: { flex: 1, minWidth: 118 },
   actions: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
   securityBox: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 6 },
+  toggleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14 },
+  toggleCopy: { flex: 1, gap: 4 },
+  toggleTitle: { color: Colors.ink, fontWeight: "900", fontSize: 16 },
   status: { color: Colors.basil, fontWeight: "700" },
   verified: { color: Colors.basil, fontWeight: "900" },
   unverified: { color: Colors.tomatoDark, fontWeight: "900" },

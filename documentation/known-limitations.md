@@ -6,5 +6,7 @@
 - Background worker is a polling shell; most MVP processing runs inline for local usability.
 - Unit conversion is conservative and aggregates only matching normalized item plus unit pairs.
 - Web auth uses local storage for development; production should move to a hardened cookie/session strategy.
+- Native biometric unlock protects the local saved session on the device. It is not a server-side biometric credential and does not replace email/password.
+- Refresh tokens are not rotated or revocation-listed yet; this should be hardened before a broad public release.
 - npm audit reports vulnerabilities in the Expo dependency tree. Do not force-upgrade without validating Expo compatibility.
 - Group voting is implemented as a first-pass household weekly vote summary. It does not yet auto-rank, auto-select, or resolve ties.

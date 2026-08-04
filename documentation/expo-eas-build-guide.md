@@ -40,6 +40,8 @@ Package identifiers are placeholders in `app.json` and should be changed before 
 
 Native manual recipe photos use `expo-image-picker`; iOS includes a photo-library usage description in `app.json`.
 
+Native biometric unlock uses `expo-local-authentication`. iOS builds include a Face ID permission string through the Expo config plugin. Web builds gracefully show biometric unlock as unavailable.
+
 ## Expo Account
 
 Create the Expo account at:

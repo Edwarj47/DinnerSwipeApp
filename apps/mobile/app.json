@@ -39,7 +39,13 @@
     "plugins": [
       "expo-router",
       "expo-secure-store",
-      "expo-notifications"
+      "expo-notifications",
+      [
+        "expo-local-authentication",
+        {
+          "faceIDPermission": "Allow Dinner Swipe to use Face ID to unlock your saved session."
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": true

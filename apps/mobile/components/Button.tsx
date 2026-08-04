@@ -9,15 +9,18 @@ type Props = {
   variant?: "primary" | "secondary" | "danger";
   onPress: () => void;
   accessibilityLabel?: string;
+  disabled?: boolean;
 };
 
-export function Button({ label, icon, variant = "secondary", onPress, accessibilityLabel }: Props) {
+export function Button({ label, icon, variant = "secondary", onPress, accessibilityLabel, disabled = false }: Props) {
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
-      style={[styles.button, styles[variant]]}
+      style={[styles.button, styles[variant], disabled ? styles.disabled : null]}
     >
       {icon ? <Ionicons name={icon} size={18} color={variant === "secondary" ? Colors.ink : "#fff"} /> : null}
       <Text style={[styles.label, variant !== "secondary" && styles.lightLabel]}>{label}</Text>
@@ -38,7 +41,7 @@ const styles = StyleSheet.create({
   primary: { backgroundColor: Colors.tomato },
   secondary: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   danger: { backgroundColor: Colors.danger },
+  disabled: { opacity: 0.45 },
   label: { color: Colors.ink, fontWeight: "700", fontSize: 14 },
   lightLabel: { color: "#fff" }
 });
-
