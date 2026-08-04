@@ -30,6 +30,10 @@ class RefreshRequest(ApiModel):
     refresh_token: str
 
 
+class LogoutRequest(ApiModel):
+    refresh_token: str | None = None
+
+
 class AuthStatus(ApiModel):
     email: EmailStr
     email_verified: bool

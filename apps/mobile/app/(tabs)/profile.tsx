@@ -7,7 +7,7 @@ import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { HouseholdPanel } from "@/features/groups/HouseholdPanel";
-import { apiFetch, clearAuthTokens, getToken, setAuthTokens } from "@/services/api";
+import { apiFetch, clearAuthTokens, getRefreshToken, getToken, setAuthTokens } from "@/services/api";
 import { BiometricSettings, authenticateForUnlock, getBiometricSettings, setBiometricPreference } from "@/services/biometrics";
 import { UserProfile } from "@/services/types";
 
@@ -75,7 +75,11 @@ export default function ProfileScreen() {
   const signOut = useMutation({
     mutationFn: async () => {
       try {
-        await apiFetch<{ status: string }>("/api/v1/auth/logout", { method: "POST" });
+        const refreshToken = await getRefreshToken();
+        await apiFetch<{ status: string }>("/api/v1/auth/logout", {
+          method: "POST",
+          body: JSON.stringify({ refresh_token: refreshToken })
+        });
       } finally {
         await clearAuthTokens();
         queryClient.clear();

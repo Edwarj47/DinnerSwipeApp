@@ -20,7 +20,7 @@ test:
 	npm test -w apps/mobile -- --runInBand
 
 migrate:
-	cd apps/api && . .venv/bin/activate && alembic upgrade head
+	./infrastructure/scripts/run-migrations.sh
 
 seed:
 	cd apps/api && . .venv/bin/activate && python -m app.workers.seed
@@ -30,4 +30,3 @@ docker-up:
 
 docker-down:
 	docker compose --profile production down
-

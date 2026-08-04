@@ -27,11 +27,13 @@ Open `http://127.0.0.1:19006`, register from Profile, then use Discover.
 - Expo Router mobile web, Android, iOS-ready app shell
 - Email/password auth with JWT access and refresh tokens, local sign-out, and native biometric unlock for saved sessions
 - Account password change, JSON data export, password-confirmed deletion request, and basic auth rate limiting
+- Database-backed refresh-token rotation/revocation and first-run sign-in gate
 - Swipeable meal cards with accessible action buttons
 - Favorites, hidden meals, weekly plan slots, pantry exclusions, grocery aggregation, and Walmart search links
 - CSV/XLSX upload, column mapping suggestions, validation, duplicate checks, preview, partial import, confirmation, and CSV error export
 - Public recipe URL ingestion with SSRF protections, JSON-LD extraction, metadata fallback, conservative HTML hints, AI normalization adapter, and approval gate
 - Manual recipe creation with phone-friendly details, photo upload/preview, validation counts, and starter templates
+- Configurable media storage adapter with local storage active and Azure Blob-ready configuration
 - Email verification and password reset foundation with branded HTML email templates
 - Household invite codes, majority-based group voting, owner-visible vote counts, percentages, and voter detail
 - User profile max-cook-time filtering and per-user allergen/disliked ingredient storage
@@ -78,6 +80,7 @@ For the planned VPS route, point `https://dinner.dcss.dev` at the local web serv
 - `documentation/known-limitations.md`
 - `documentation/security-checklist.md`
 - `documentation/scaling-plan.md`
+- `documentation/azure-migration-guide.md`
 - `documentation/secrets-and-public-repo.md`
 - `documentation/privacy-policy.md`
 - `documentation/terms-of-service.md`

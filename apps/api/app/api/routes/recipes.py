@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime
-from pathlib import Path
-from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile
 from sqlalchemy import or_, select
@@ -12,6 +10,7 @@ from app.api.deps import CurrentUser, DbDep
 from app.core.config import settings
 from app.models.entities import Favorite, HiddenRecipe, Recipe
 from app.schemas.common import RecipeCreate, RecipeOut, SwipeRequest
+from app.services.media_storage import get_media_storage
 from app.services.recipes import (
     accessible_recipes_query,
     create_recipe,
@@ -72,12 +71,13 @@ async def upload_recipe_photo(file: UploadFile, current_user: CurrentUser) -> di
         raise HTTPException(status_code=400, detail="Invalid PNG image")
     if suffix == ".webp" and not (data.startswith(b"RIFF") and data[8:12] == b"WEBP"):
         raise HTTPException(status_code=400, detail="Invalid WebP image")
-    directory = Path(settings.image_storage_path) / "uploads" / current_user.id
-    directory.mkdir(parents=True, exist_ok=True)
-    filename = f"{uuid4().hex}{suffix}"
-    (directory / filename).write_bytes(data)
-    url = f"{settings.public_api_url.rstrip('/')}/media/uploads/{current_user.id}/{filename}"
-    return {"photo_url": url, "image_status": "validated"}
+    stored = get_media_storage().save_recipe_image(
+        user_id=current_user.id,
+        data=data,
+        suffix=suffix,
+        content_type=file.content_type or "application/octet-stream",
+    )
+    return {"photo_url": stored.url, "image_status": "validated", "storage_backend": stored.backend}
 
 
 @router.get("/{recipe_id}", response_model=RecipeOut)

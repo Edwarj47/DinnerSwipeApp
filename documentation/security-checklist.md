@@ -8,6 +8,7 @@
 - [x] JWT secret validation for production
 - [x] Native biometric unlock is device-local and layered on top of email/password auth
 - [x] Refresh tokens are stored locally and used to renew expired access tokens
+- [x] Refresh tokens are opaque, stored hashed server-side, rotated on use, and revoked on logout when provided
 - [x] Basic in-process rate limiting on login, registration, and password-reset requests
 - [x] Account export excludes password hashes and tokens
 - [x] Account deletion starts as a password-confirmed manual review request
@@ -17,7 +18,7 @@
 - [x] User-scoped auth dependencies on protected endpoints
 - [x] Reverse-proxy config is documentation only
 - [ ] Production token storage strategy for web
-- [ ] Refresh-token rotation and server-side revocation table before broad public release
+- [ ] Multi-device session management UI before broad public release
 - [ ] Shared Redis or edge/WAF rate limits before multiple API replicas
 - [ ] Object storage and malware scanning for copied recipe images
 - [ ] Full native security review before app-store release

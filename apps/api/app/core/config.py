@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     max_url_response_size_bytes: int = 2_097_152
     image_storage_path: str = "./media"
     max_image_upload_size_bytes: int = 5_242_880
+    media_storage_backend: str = "local"
+    media_public_base_url: str = ""
+    azure_storage_connection_string: str = ""
+    azure_storage_container: str = ""
     allowed_origins: str = "http://127.0.0.1:19006,http://localhost:19006"
     email_from: str = "DSAsupport@dcss.dev"
     email_from_name: str = "Dinner Swipe"

@@ -3,6 +3,7 @@ import { Stack } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
+import { AuthGate } from "@/components/AuthGate";
 import { BiometricGate } from "@/components/BiometricGate";
 import { Colors } from "@/components/theme";
 
@@ -13,8 +14,10 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.background }}>
       <QueryClientProvider client={queryClient}>
         <BiometricGate>
-          <Stack screenOptions={{ headerShown: false }} />
-          <StatusBar style="dark" />
+          <AuthGate>
+            <Stack screenOptions={{ headerShown: false }} />
+            <StatusBar style="dark" />
+          </AuthGate>
         </BiometricGate>
       </QueryClientProvider>
     </GestureHandlerRootView>

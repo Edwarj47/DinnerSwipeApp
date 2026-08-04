@@ -61,6 +61,18 @@ class PasswordResetToken(Base, TimestampMixin):
     used_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class RefreshToken(Base, TimestampMixin):
+    __tablename__ = "refresh_tokens"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    replaced_by_token_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
+
 class Household(Base, TimestampMixin):
     __tablename__ = "households"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)

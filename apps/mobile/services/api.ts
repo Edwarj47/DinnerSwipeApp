@@ -8,6 +8,7 @@ export const API_URL =
     : "http://127.0.0.1:8108");
 const ACCESS_TOKEN_KEY = "dinnerSwipeAccessToken";
 const REFRESH_TOKEN_KEY = "dinnerSwipeRefreshToken";
+const authListeners = new Set<() => void>();
 
 export type AuthTokenPair = {
   access_token: string;
@@ -43,15 +44,30 @@ async function deleteStorageItem(key: string) {
   }
 }
 
+function emitAuthChanged() {
+  for (const listener of authListeners) {
+    listener();
+  }
+}
+
+export function addAuthChangeListener(listener: () => void) {
+  authListeners.add(listener);
+  return () => {
+    authListeners.delete(listener);
+  };
+}
+
 export async function setAuthTokens(tokens: AuthTokenPair) {
   await setStorageItem(ACCESS_TOKEN_KEY, tokens.access_token);
   if (tokens.refresh_token) {
     await setStorageItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
   }
+  emitAuthChanged();
 }
 
 export async function setToken(token: string) {
   await setStorageItem(ACCESS_TOKEN_KEY, token);
+  emitAuthChanged();
 }
 
 export async function getToken() {
@@ -64,6 +80,7 @@ export async function getRefreshToken() {
 
 export async function clearAuthTokens() {
   await Promise.all([deleteStorageItem(ACCESS_TOKEN_KEY), deleteStorageItem(REFRESH_TOKEN_KEY)]);
+  emitAuthChanged();
 }
 
 export async function refreshAuthTokens() {

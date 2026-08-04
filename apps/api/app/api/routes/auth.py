@@ -13,7 +13,6 @@ from app.core.config import settings
 from app.core.rate_limit import check_auth_rate_limit
 from app.core.security import (
     create_access_token,
-    create_refresh_token,
     decode_token,
     hash_password,
     verify_password,
@@ -36,12 +35,18 @@ from app.schemas.common import (
     AuthStatus,
     ChangePasswordRequest,
     LoginRequest,
+    LogoutRequest,
     PasswordResetConfirm,
     PasswordResetRequest,
     RefreshRequest,
     RegisterRequest,
     TokenPair,
     VerifyEmailRequest,
+)
+from app.services.auth_tokens import (
+    issue_refresh_token,
+    revoke_refresh_token,
+    rotate_refresh_token,
 )
 from app.services.email_auth import (
     create_email_verification,
@@ -69,9 +74,9 @@ def register(payload: RegisterRequest, request: Request, db: DbDep) -> TokenPair
     db.commit()
     db.refresh(user)
     create_email_verification(db, user)
-    return TokenPair(
-        access_token=create_access_token(user.id), refresh_token=create_refresh_token(user.id)
-    )
+    refresh_token = issue_refresh_token(db, user, request)
+    db.commit()
+    return TokenPair(access_token=create_access_token(user.id), refresh_token=refresh_token)
 
 
 @router.post("/login", response_model=TokenPair)
@@ -82,26 +87,39 @@ def login(payload: LoginRequest, request: Request, db: DbDep) -> TokenPair:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
         )
-    return TokenPair(
-        access_token=create_access_token(user.id), refresh_token=create_refresh_token(user.id)
-    )
+    refresh_token = issue_refresh_token(db, user, request)
+    db.commit()
+    return TokenPair(access_token=create_access_token(user.id), refresh_token=refresh_token)
 
 
 @router.post("/refresh", response_model=TokenPair)
-def refresh(payload: RefreshRequest, db: DbDep) -> TokenPair:
-    user_id = decode_token(payload.refresh_token, "refresh")
-    user = db.get(User, user_id) if user_id else None
-    if not user:
+def refresh(payload: RefreshRequest, request: Request, db: DbDep) -> TokenPair:
+    rotated = rotate_refresh_token(db, payload.refresh_token, request)
+    if rotated:
+        user, refresh_token = rotated
+        db.commit()
+        return TokenPair(access_token=create_access_token(user.id), refresh_token=refresh_token)
+    legacy_user_id = decode_token(payload.refresh_token, "refresh")
+    legacy_user = db.get(User, legacy_user_id) if legacy_user_id else None
+    if not legacy_user or not legacy_user.is_active:
+        db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
         )
-    return TokenPair(
-        access_token=create_access_token(user.id), refresh_token=create_refresh_token(user.id)
-    )
+    refresh_token = issue_refresh_token(db, legacy_user, request)
+    db.commit()
+    return TokenPair(access_token=create_access_token(legacy_user.id), refresh_token=refresh_token)
 
 
 @router.post("/logout")
-def logout() -> dict[str, str]:
+def logout(
+    current_user: CurrentUser,
+    db: DbDep,
+    payload: LogoutRequest | None = None,
+) -> dict[str, str]:
+    if payload and payload.refresh_token:
+        revoke_refresh_token(db, payload.refresh_token, current_user)
+        db.commit()
     return {"status": "ok"}
 
 
