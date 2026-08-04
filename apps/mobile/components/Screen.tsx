@@ -19,6 +19,5 @@ export function Screen({ children, scroll = true }: Props) {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: Colors.background },
-  content: { flexGrow: 1, paddingHorizontal: 18, paddingTop: 14, paddingBottom: 24 }
+  content: { flexGrow: 1, paddingHorizontal: 18, paddingTop: 14, paddingBottom: 96 }
 });
-
