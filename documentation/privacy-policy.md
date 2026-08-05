@@ -22,4 +22,4 @@ Cooking preferences, disliked ingredients, and allergens are stored per user. Th
 
 ## Contact
 
-Privacy questions can be sent to DSAsupport@dcss.dev.
+Privacy questions can be sent to dinnerswipe@dcss.dev.

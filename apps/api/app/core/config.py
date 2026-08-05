@@ -28,7 +28,7 @@ class Settings(BaseSettings):
     azure_storage_connection_string: str = ""
     azure_storage_container: str = ""
     allowed_origins: str = "http://127.0.0.1:19006,http://localhost:19006"
-    email_from: str = "DSAsupport@dcss.dev"
+    email_from: str = "dinnerswipe@dcss.dev"
     email_from_name: str = "Dinner Swipe"
     email_smtp_host: str = ""
     email_smtp_port: int = 587

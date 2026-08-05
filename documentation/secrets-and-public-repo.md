@@ -20,7 +20,7 @@ These are safe to keep in `.env.example` or app config:
 - `PUBLIC_API_URL=https://dinner.dcss.dev`
 - `ALLOWED_ORIGINS=https://dinner.dcss.dev`
 - `OPENAI_MODEL=gpt-5-mini`
-- `EMAIL_FROM=DSAsupport@dcss.dev`
+- `EMAIL_FROM=dinnerswipe@dcss.dev`
 - `EMAIL_FROM_NAME=Dinner Swipe`
 - feature flags and upload limits
 

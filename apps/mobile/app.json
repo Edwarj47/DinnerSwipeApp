@@ -14,14 +14,14 @@
     },
     "assetBundlePatterns": ["**/*"],
     "ios": {
-      "bundleIdentifier": "com.example.dinnerswipe",
+      "bundleIdentifier": "dev.dcss.dinnerswipe",
       "supportsTablet": false,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Dinner Swipe lets you choose recipe photos from your library."
       }
     },
     "android": {
-      "package": "com.example.dinnerswipe",
+      "package": "dev.dcss.dinnerswipe",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#d71920"
@@ -49,6 +49,11 @@
     ],
     "experiments": {
       "typedRoutes": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "fbe8bf7c-1e7e-4ace-9cd8-68f231173d90"
+      }
     }
   }
 }

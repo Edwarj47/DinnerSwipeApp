@@ -22,4 +22,4 @@ The app may link to public recipe websites and retailer search pages. Third-part
 
 ## Contact
 
-Questions regarding these Terms can be sent to DSAsupport@dcss.dev.
+Questions regarding these Terms can be sent to dinnerswipe@dcss.dev.

@@ -37,7 +37,7 @@ export const privacySections = [
   {
     title: "Contact",
     body:
-      "Privacy questions can be sent to DSAsupport@dcss.dev."
+      "Privacy questions can be sent to dinnerswipe@dcss.dev."
   }
 ];
 
@@ -80,6 +80,6 @@ export const termsSections = [
   {
     title: "Contact",
     body:
-      "Questions regarding these Terms can be sent to DSAsupport@dcss.dev."
+      "Questions regarding these Terms can be sent to dinnerswipe@dcss.dev."
   }
 ];

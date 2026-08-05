@@ -16,6 +16,36 @@ npx eas build --platform android --profile development
 
 The EAS profiles point native builds at `https://dinner.dcss.dev` through `EXPO_PUBLIC_API_URL`. Change this only when preparing staging or production domain variants.
 
+The Expo project is connected with EAS project ID:
+
+```text
+fbe8bf7c-1e7e-4ace-9cd8-68f231173d90
+```
+
+The native package identifiers are:
+
+```text
+Android package: dev.dcss.dinnerswipe
+iOS bundle identifier: dev.dcss.dinnerswipe
+```
+
+To run EAS builds from the VPS, authenticate first:
+
+```bash
+cd apps/mobile
+npx eas-cli@latest login
+```
+
+For non-interactive VPS or CI builds, create an Expo access token in the Expo dashboard and run:
+
+```bash
+export EXPO_TOKEN=<expo-access-token>
+cd apps/mobile
+npx eas-cli@latest build --profile production
+```
+
+Do not commit `EXPO_TOKEN`.
+
 Android production build:
 
 ```bash
@@ -36,7 +66,7 @@ Web export:
 npm run build:web -w apps/mobile
 ```
 
-Package identifiers are placeholders in `app.json` and should be changed before store work.
+Package identifiers are set in `app.json`; avoid changing them after store listings are created.
 
 Native manual recipe photos use `expo-image-picker`; iOS includes a photo-library usage description in `app.json`.
 
