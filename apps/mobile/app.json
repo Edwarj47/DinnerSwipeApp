@@ -29,7 +29,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#d71920"
       },
-      "versionCode": 2
+      "versionCode": 3
     },
     "web": {
       "bundler": "metro",
@@ -49,7 +49,8 @@
         {
           "faceIDPermission": "Allow Dinner Swipe to use Face ID to unlock your saved session."
         }
-      ]
+      ],
+      "./plugins/withAndroidMonorepoGradlePaths"
     ],
     "experiments": {
       "typedRoutes": true
