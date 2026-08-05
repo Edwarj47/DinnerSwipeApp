@@ -13,7 +13,9 @@
       "resizeMode": "contain",
       "backgroundColor": "#d71920"
     },
-    "assetBundlePatterns": ["**/*"],
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "ios": {
       "bundleIdentifier": "dev.dcss.dinnerswipe",
       "supportsTablet": false,
@@ -26,7 +28,8 @@
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#d71920"
-      }
+      },
+      "versionCode": 2
     },
     "web": {
       "bundler": "metro",

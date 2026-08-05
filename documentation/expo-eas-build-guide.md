@@ -52,6 +52,26 @@ npx eas-cli@latest build --profile production
 
 Do not commit `EXPO_TOKEN`.
 
+On the VPS, store the token outside the repository:
+
+```bash
+cd /home/codexvps/Desktop/projects/dinner-swipe
+infrastructure/scripts/save-expo-token.sh
+```
+
+That writes:
+
+```text
+~/.config/dinner-swipe/eas.env
+```
+
+with `0600` permissions. Future Android production builds can then use:
+
+```bash
+cd /home/codexvps/Desktop/projects/dinner-swipe
+infrastructure/scripts/eas-build-android-production.sh
+```
+
 Android production build:
 
 ```bash
