@@ -19,7 +19,7 @@ export default function RecipesScreen() {
   const [q, setQ] = useState("");
   const [mode, setMode] = useState<Mode>("web");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-  const { data } = useQuery({
+  const { data } = useQuery<Recipe[]>({
     queryKey: ["recipes", q],
     queryFn: () => apiFetch<Recipe[]>(`/api/v1/recipes?q=${encodeURIComponent(q)}`)
   });
@@ -48,7 +48,7 @@ export default function RecipesScreen() {
         <Text style={styles.sectionTitle}>Recipe library</Text>
         <Text style={styles.count}>{data?.length ?? 0}</Text>
       </View>
-      {(data ?? []).map((recipe) => (
+      {(data ?? []).map((recipe: Recipe) => (
         <Pressable key={recipe.id} accessibilityRole="button" accessibilityLabel={`Open ${recipe.name}`} onPress={() => setSelectedRecipe(recipe)} style={styles.row}>
           <Image source={{ uri: recipe.photo_url ?? undefined }} style={styles.thumb} contentFit="cover" />
           <View style={styles.body}>

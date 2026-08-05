@@ -18,8 +18,8 @@ export default function GroceryScreen() {
   const [manualQty, setManualQty] = useState("");
   const [manualUnit, setManualUnit] = useState("");
   const [pantryName, setPantryName] = useState("");
-  const { data } = useQuery({ queryKey: ["grocery"], queryFn: () => apiFetch<{ items: GroceryItem[] }>("/api/v1/grocery-lists/current") });
-  const { data: pantry } = useQuery({ queryKey: ["pantry"], queryFn: () => apiFetch<PantryItem[]>("/api/v1/grocery-lists/pantry") });
+  const { data } = useQuery<{ items: GroceryItem[] }>({ queryKey: ["grocery"], queryFn: () => apiFetch<{ items: GroceryItem[] }>("/api/v1/grocery-lists/current") });
+  const { data: pantry } = useQuery<PantryItem[]>({ queryKey: ["pantry"], queryFn: () => apiFetch<PantryItem[]>("/api/v1/grocery-lists/pantry") });
   const grouped = useMemo(() => groupItems(data?.items ?? []), [data?.items]);
   const regen = useMutation({
     mutationFn: () => apiFetch("/api/v1/grocery-lists/current/regenerate", { method: "POST" }),
@@ -79,7 +79,7 @@ export default function GroceryScreen() {
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Grocery List</Text>
-          <Text style={styles.subtitle}>{data?.items.filter((item) => !item.is_checked).length ?? 0} left to grab</Text>
+          <Text style={styles.subtitle}>{data?.items.filter((item: GroceryItem) => !item.is_checked).length ?? 0} left to grab</Text>
         </View>
         <Button label="Regenerate" icon="sync" onPress={() => regen.mutate()} />
       </View>
@@ -100,7 +100,7 @@ export default function GroceryScreen() {
           <Button label="Save" icon="bookmark" onPress={() => addPantry.mutate()} />
         </View>
         <View style={styles.chips}>
-          {(pantry ?? []).map((item) => (
+          {(pantry ?? []).map((item: PantryItem) => (
             <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Remove ${item.normalized_name} from pantry`} onPress={() => deletePantry.mutate(item)} style={styles.pantryChip}>
               <Text style={styles.pantryText}>{item.normalized_name}</Text>
               <Text style={styles.pantryRemove}>x</Text>

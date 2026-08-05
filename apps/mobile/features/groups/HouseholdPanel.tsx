@@ -12,12 +12,12 @@ export function HouseholdPanel() {
   const [code, setCode] = useState("");
   const [status, setStatus] = useState("");
   const [maxMinutes, setMaxMinutes] = useState("");
-  const { data: household } = useQuery({ queryKey: ["household"], queryFn: () => apiFetch<Household>("/api/v1/households/current") });
-  const { data: recipes } = useQuery({
+  const { data: household } = useQuery<Household>({ queryKey: ["household"], queryFn: () => apiFetch<Household>("/api/v1/households/current") });
+  const { data: recipes } = useQuery<Recipe[]>({
     queryKey: ["recipes", "vote", maxMinutes],
     queryFn: () => apiFetch<Recipe[]>(`/api/v1/recipes?limit=12${maxMinutes ? `&max_total_minutes=${encodeURIComponent(maxMinutes)}` : ""}`)
   });
-  const { data: votes } = useQuery({ queryKey: ["votes"], queryFn: () => apiFetch<VoteSummary>("/api/v1/households/current/votes") });
+  const { data: votes } = useQuery<VoteSummary>({ queryKey: ["votes"], queryFn: () => apiFetch<VoteSummary>("/api/v1/households/current/votes") });
   const join = useMutation({
     mutationFn: () => apiFetch<Household>("/api/v1/households/join", { method: "POST", body: JSON.stringify({ invite_code: code }) }),
     onSuccess: async () => {
@@ -62,8 +62,8 @@ export function HouseholdPanel() {
         </View>
       ) : null}
       {household && votes?.can_view_voters ? <OwnerVoteDashboard household={household} votes={votes} /> : null}
-      {(recipes ?? []).slice(0, 4).map((recipe) => {
-        const summary = votes?.votes.find((item) => item.recipe_id === recipe.id);
+      {(recipes ?? []).slice(0, 4).map((recipe: Recipe) => {
+        const summary = votes?.votes.find((item: VoteResult) => item.recipe_id === recipe.id);
         return (
           <View key={recipe.id} style={styles.voteRow}>
             <View style={{ flex: 1 }}>

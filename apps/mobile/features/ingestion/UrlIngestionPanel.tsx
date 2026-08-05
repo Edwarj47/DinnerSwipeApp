@@ -38,7 +38,7 @@ export function UrlIngestionPanel() {
   const [editPhoto, setEditPhoto] = useState("");
   const [editIngredients, setEditIngredients] = useState("");
   const [editInstructions, setEditInstructions] = useState("");
-  const history = useQuery({
+  const history = useQuery<Candidate[]>({
     queryKey: ["url-ingestion-history"],
     queryFn: () => apiFetch<Candidate[]>("/api/v1/url-ingestion")
   });
@@ -181,7 +181,7 @@ export function UrlIngestionPanel() {
       {(history.data ?? []).length ? (
         <View style={styles.history}>
           <Text style={styles.historyTitle}>Recent web drafts</Text>
-          {(history.data ?? []).slice(0, 3).map((item) => (
+          {(history.data ?? []).slice(0, 3).map((item: Candidate) => (
             <View key={item.id} style={styles.historyRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.historyName}>{item.recipe_name ?? "Untitled draft"}</Text>
