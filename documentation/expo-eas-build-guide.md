@@ -22,6 +22,12 @@ The Expo project is connected with EAS project ID:
 fbe8bf7c-1e7e-4ace-9cd8-68f231173d90
 ```
 
+The Expo owner is:
+
+```text
+data-centric-software-solutions
+```
+
 The native package identifiers are:
 
 ```text

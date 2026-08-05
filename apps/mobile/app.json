@@ -1,6 +1,7 @@
 {
   "expo": {
     "name": "Dinner Swipe",
+    "owner": "data-centric-software-solutions",
     "slug": "dinner-swipe",
     "scheme": "dinnerswipe",
     "version": "0.1.0",
