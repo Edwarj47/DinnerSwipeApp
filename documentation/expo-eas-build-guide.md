@@ -10,8 +10,8 @@ npx expo start -w apps/mobile
 Android development build:
 
 ```bash
-cd apps/mobile
-npx eas build --platform android --profile development
+cd /home/codexvps/Desktop/projects/dinner-swipe
+infrastructure/scripts/eas-build-android-development.sh
 ```
 
 The EAS profiles point native builds at `https://dinner.dcss.dev` through `EXPO_PUBLIC_API_URL`. Change this only when preparing staging or production domain variants.
@@ -27,6 +27,11 @@ The Expo owner is:
 ```text
 data-centric-software-solutions
 ```
+
+The saved VPS token may authenticate as an individual Expo user such as `dcss_2026`.
+That is expected as long as the user has access to the `data-centric-software-solutions`
+account. The build owner is controlled by `apps/mobile/app.json`, not by the local shell
+username.
 
 The native package identifiers are:
 
@@ -65,10 +70,11 @@ That writes:
 ~/.config/dinner-swipe/eas.env
 ```
 
-with `0600` permissions. Future Android production builds can then use:
+with `0600` permissions. Future Android builds can then use:
 
 ```bash
 cd /home/codexvps/Desktop/projects/dinner-swipe
+infrastructure/scripts/eas-build-android-development.sh
 infrastructure/scripts/eas-build-android-production.sh
 ```
 
