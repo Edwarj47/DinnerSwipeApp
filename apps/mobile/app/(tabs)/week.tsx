@@ -8,7 +8,7 @@ import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
-import { WeeklyPlan } from "@/services/types";
+import { PremiumStatus, WeeklyPlan } from "@/services/types";
 
 type WeeklySlot = WeeklyPlan["slots"][number];
 type SlotPatch = Partial<Omit<WeeklySlot, "id" | "recipe_name" | "recipe_photo_url" | "recipe_total_minutes" | "recipe_difficulty">>;
@@ -26,6 +26,7 @@ export default function WeekScreen() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState("");
   const { data, isLoading } = useQuery({ queryKey: ["weekly-plan"], queryFn: () => apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current") });
+  const premium = useQuery({ queryKey: ["premium-status"], queryFn: () => apiFetch<PremiumStatus>("/api/v1/premium/status"), retry: false });
   const sortedSlots = useMemo(() => [...(data?.slots ?? [])].sort((a, b) => a.sort_order - b.sort_order), [data?.slots]);
   const dayOptions = useMemo(() => (data ? weekDates(data.week_start) : []), [data]);
   const remove = useMutation({
@@ -65,7 +66,26 @@ export default function WeekScreen() {
       await queryClient.invalidateQueries({ queryKey: ["grocery"] });
     }
   });
+  const confirmMeal = useMutation({
+    mutationFn: ({ slot, mealStatus }: { slot: WeeklySlot; mealStatus: "ate" | "skipped" }) =>
+      apiFetch("/api/v1/macros/confirmations", {
+        method: "POST",
+        body: JSON.stringify({
+          recipe_id: slot.recipe_id,
+          weekly_plan_slot_id: slot.id,
+          meal_date: slot.slot_date,
+          status: mealStatus,
+          servings_consumed: slot.servings
+        })
+      }),
+    onSuccess: async () => {
+      setStatus("Meal logged.");
+      await queryClient.invalidateQueries({ queryKey: ["macro-summary"] });
+    },
+    onError: (error) => setStatus(String(error))
+  });
   const plannedCount = sortedSlots.filter((slot) => slot.slot_type === "meal" && slot.recipe_id).length;
+  const premiumActive = Boolean(premium.data?.active);
 
   return (
     <Screen>
@@ -83,6 +103,7 @@ export default function WeekScreen() {
         <View style={[styles.progressFill, { width: `${Math.min(100, ((plannedCount || 0) / Math.max(1, data?.meal_target ?? 1)) * 100)}%` }]} />
       </View>
       {status ? <Text style={styles.status}>{status}</Text> : null}
+      {!premiumActive ? <Text style={styles.premiumNote}>Premium macro tracking is managed from Profile.</Text> : null}
       <View style={styles.list}>
         {sortedSlots.map((slot, index) => (
           <View key={slot.id} style={styles.row}>
@@ -129,6 +150,12 @@ export default function WeekScreen() {
               <Button label="Down" icon="arrow-down" onPress={() => move.mutate({ slot, direction: 1 })} />
             </View>
             <View style={styles.actions}>
+              {slot.recipe_id && premiumActive ? (
+                <>
+                  <Button label="Ate" icon="checkmark-circle" variant="primary" disabled={confirmMeal.isPending} onPress={() => confirmMeal.mutate({ slot, mealStatus: "ate" })} />
+                  <Button label="Skipped" icon="close-circle" disabled={confirmMeal.isPending} onPress={() => confirmMeal.mutate({ slot, mealStatus: "skipped" })} />
+                </>
+              ) : null}
               {slot.recipe_id ? <Button label="Remove" icon="trash" variant="danger" onPress={() => remove.mutate(slot.id)} /> : null}
               <Button label={slot.recipe_id ? "Replace" : "Find meal"} icon="swap-horizontal" variant={slot.recipe_id ? "secondary" : "primary"} onPress={() => router.push("/")} />
             </View>
@@ -177,6 +204,7 @@ const styles = StyleSheet.create({
   progressTrack: { height: 8, backgroundColor: Colors.border, borderRadius: 999, overflow: "hidden", marginBottom: 10 },
   progressFill: { height: "100%", backgroundColor: Colors.tomato, borderRadius: 999 },
   status: { color: Colors.basil, fontWeight: "800", marginBottom: 10 },
+  premiumNote: { color: Colors.muted, fontWeight: "700", marginBottom: 10 },
   list: { gap: 10 },
   row: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 12, gap: 12 },
   cardTop: { flexDirection: "row", gap: 10, alignItems: "center" },

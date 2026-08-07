@@ -73,6 +73,35 @@ class RefreshToken(Base, TimestampMixin):
     user_agent: Mapped[str | None] = mapped_column(String(255), nullable=True)
 
 
+class UserSubscription(Base, TimestampMixin):
+    __tablename__ = "user_subscriptions"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
+    plan_key: Mapped[str] = mapped_column(String(64), default="macro_tracker_monthly")
+    status: Mapped[str] = mapped_column(String(32), default="inactive", index=True)
+    source: Mapped[str] = mapped_column(String(32), default="stripe")
+    stripe_customer_id: Mapped[str | None] = mapped_column(String(120), nullable=True, index=True)
+    stripe_subscription_id: Mapped[str | None] = mapped_column(
+        String(120), nullable=True, unique=True
+    )
+    stripe_price_id: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    current_period_end: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancel_at_period_end: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    fee_waiver_code_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+
+
+class MacroProfileTarget(Base, TimestampMixin):
+    __tablename__ = "macro_profile_targets"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), unique=True, index=True)
+    daily_calories: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    daily_protein_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+    daily_carbs_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+    daily_fat_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+    goal: Mapped[str | None] = mapped_column(String(80), nullable=True)
+
+
 class Household(Base, TimestampMixin):
     __tablename__ = "households"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
@@ -183,6 +212,20 @@ class RecipeTag(Base, TimestampMixin):
     __table_args__ = (UniqueConstraint("recipe_id", "tag"),)
 
 
+class RecipeMacroProfile(Base, TimestampMixin):
+    __tablename__ = "recipe_macro_profiles"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    recipe_id: Mapped[str] = mapped_column(ForeignKey("recipes.id"), unique=True, index=True)
+    calories_per_serving: Mapped[float | None] = mapped_column(Float, nullable=True)
+    protein_g_per_serving: Mapped[float | None] = mapped_column(Float, nullable=True)
+    carbs_g_per_serving: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fat_g_per_serving: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fiber_g_per_serving: Mapped[float | None] = mapped_column(Float, nullable=True)
+    source: Mapped[str] = mapped_column(String(64), default="manual")
+    confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    needs_review: Mapped[bool] = mapped_column(Boolean, default=True)
+
+
 class RecipePhoto(Base, TimestampMixin):
     __tablename__ = "recipe_photos"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
@@ -239,6 +282,28 @@ class MealSwipe(Base, TimestampMixin):
     recipe_id: Mapped[str] = mapped_column(ForeignKey("recipes.id"), index=True)
     action: Mapped[str] = mapped_column(String(32), nullable=False)
     session_id: Mapped[str] = mapped_column(String(36), index=True)
+
+
+class MealMacroConfirmation(Base, TimestampMixin):
+    __tablename__ = "meal_macro_confirmations"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    recipe_id: Mapped[str | None] = mapped_column(
+        ForeignKey("recipes.id"), nullable=True, index=True
+    )
+    weekly_plan_slot_id: Mapped[str | None] = mapped_column(
+        ForeignKey("weekly_plan_slots.id"), nullable=True, index=True
+    )
+    meal_date: Mapped[date] = mapped_column(Date, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="ate")
+    servings_consumed: Mapped[float] = mapped_column(Float, default=1.0)
+    calories: Mapped[float | None] = mapped_column(Float, nullable=True)
+    protein_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+    carbs_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fat_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+    fiber_g: Mapped[float | None] = mapped_column(Float, nullable=True)
+    macro_source: Mapped[str] = mapped_column(String(64), default="unmatched_recipe")
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
 class WeeklyPlanVote(Base, TimestampMixin):
@@ -404,3 +469,8 @@ class AuditEvent(Base, TimestampMixin):
 
 
 Index("ix_recipes_owner_status", Recipe.owner_user_id, Recipe.validation_status, Recipe.archived_at)
+Index(
+    "ix_meal_macro_confirmations_user_date",
+    MealMacroConfirmation.user_id,
+    MealMacroConfirmation.meal_date,
+)

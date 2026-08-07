@@ -7,6 +7,7 @@ import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { HouseholdPanel } from "@/features/groups/HouseholdPanel";
+import { PremiumMacroPanel } from "@/features/premium/PremiumMacroPanel";
 import { apiFetch, clearAuthTokens, getRefreshToken, getToken, setAuthTokens } from "@/services/api";
 import { BiometricSettings, authenticateForUnlock, getBiometricSettings, setBiometricPreference } from "@/services/biometrics";
 import { UserProfile } from "@/services/types";
@@ -278,6 +279,7 @@ export default function ProfileScreen() {
         <Text style={styles.meta}>Allergens are stored per user. For now they are not automatically hidden from group voters.</Text>
         <Button label="Save preferences" icon="save" variant="primary" onPress={() => saveProfile.mutate()} />
       </View>
+      <PremiumMacroPanel />
       <HouseholdPanel />
       <View style={styles.panel}>
         <Text style={styles.section}>Prepared integrations</Text>

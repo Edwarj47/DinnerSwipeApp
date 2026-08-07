@@ -12,3 +12,5 @@
 - Azure Blob media storage is adapter-ready but not enabled until Azure credentials, a container, and a public media base URL are configured.
 - npm audit reports vulnerabilities in the Expo dependency tree. Do not force-upgrade without validating Expo compatibility.
 - Group voting is implemented as a first-pass household weekly vote summary. It does not yet auto-rank, auto-select, or resolve ties.
+- Stripe Premium is adapter-ready but disabled until the Stripe connection/account and test-mode lifecycle are verified.
+- Macro totals require manually entered macro values or reviewed recipe macro profiles. Dinner Swipe does not infer nutrition facts from recipe text by default.

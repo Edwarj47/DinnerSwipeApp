@@ -38,6 +38,12 @@ class Settings(BaseSettings):
     email_smtp_use_ssl: bool = False
     email_token_minutes: int = 60
     password_reset_token_minutes: int = 30
+    stripe_enabled: bool = False
+    stripe_secret_key: str = ""
+    stripe_webhook_secret: str = ""
+    stripe_premium_price_id: str = ""
+    premium_monthly_price_cents: int = 999
+    premium_waiver_codes: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -53,6 +59,23 @@ class Settings(BaseSettings):
     @property
     def smtp_configured(self) -> bool:
         return bool(self.email_smtp_host and self.email_smtp_username and self.email_smtp_password)
+
+    @property
+    def stripe_configured(self) -> bool:
+        return bool(
+            self.stripe_enabled
+            and self.stripe_secret_key
+            and self.stripe_webhook_secret
+            and self.stripe_premium_price_id
+        )
+
+    @property
+    def premium_waiver_code_list(self) -> list[str]:
+        return [
+            code.strip().lower()
+            for code in self.premium_waiver_codes.split(",")
+            if code.strip()
+        ]
 
 
 @lru_cache

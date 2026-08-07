@@ -10,6 +10,7 @@ from app.api.routes import (
     imports,
     ingestion,
     plans,
+    premium,
     profile,
     recipes,
 )
@@ -24,3 +25,4 @@ api_router.include_router(grocery.router)
 api_router.include_router(imports.router)
 api_router.include_router(ingestion.router)
 api_router.include_router(groups.router)
+api_router.include_router(premium.router)

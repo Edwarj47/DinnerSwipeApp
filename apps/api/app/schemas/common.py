@@ -63,6 +63,82 @@ class AccountDeletionRequest(ApiModel):
     confirmation: str = Field(pattern="^DELETE$")
 
 
+class PremiumStatus(ApiModel):
+    active: bool
+    plan_key: str = "macro_tracker_monthly"
+    status: str = "inactive"
+    source: str | None = None
+    monthly_price_cents: int = 999
+    stripe_configured: bool = False
+    current_period_end: datetime | None = None
+    cancel_at_period_end: bool = False
+
+
+class PremiumWaiverRequest(ApiModel):
+    code: str = Field(min_length=3, max_length=80)
+
+
+class CheckoutSessionOut(ApiModel):
+    checkout_url: str
+
+
+class MacroTargetIn(ApiModel):
+    daily_calories: int | None = Field(default=None, ge=0, le=20000)
+    daily_protein_g: float | None = Field(default=None, ge=0, le=1000)
+    daily_carbs_g: float | None = Field(default=None, ge=0, le=2000)
+    daily_fat_g: float | None = Field(default=None, ge=0, le=1000)
+    goal: str | None = Field(default=None, max_length=80)
+
+
+class MacroTargetOut(MacroTargetIn):
+    id: str | None = None
+
+
+class MealMacroConfirmationIn(ApiModel):
+    recipe_id: str | None = None
+    weekly_plan_slot_id: str | None = None
+    meal_date: date | None = None
+    status: Literal["ate", "skipped"] = "ate"
+    servings_consumed: float = Field(default=1, ge=0, le=20)
+    calories: float | None = Field(default=None, ge=0, le=20000)
+    protein_g: float | None = Field(default=None, ge=0, le=1000)
+    carbs_g: float | None = Field(default=None, ge=0, le=2000)
+    fat_g: float | None = Field(default=None, ge=0, le=1000)
+    fiber_g: float | None = Field(default=None, ge=0, le=500)
+    notes: str | None = Field(default=None, max_length=500)
+
+
+class MealMacroConfirmationOut(ApiModel):
+    id: str
+    recipe_id: str | None
+    recipe_name: str | None
+    weekly_plan_slot_id: str | None
+    meal_date: date
+    status: str
+    servings_consumed: float
+    calories: float | None
+    protein_g: float | None
+    carbs_g: float | None
+    fat_g: float | None
+    fiber_g: float | None
+    macro_source: str
+    notes: str | None
+    created_at: datetime
+
+
+class MacroSummary(ApiModel):
+    days: int
+    start_date: date
+    end_date: date
+    active: bool
+    targets: MacroTargetOut
+    totals: dict[str, float]
+    eaten_meals: int
+    skipped_meals: int
+    unmatched_meals: int
+    recent_confirmations: list[MealMacroConfirmationOut]
+
+
 class IngredientIn(ApiModel):
     original_text: str
     normalized_name: str | None = None

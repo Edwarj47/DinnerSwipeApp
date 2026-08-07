@@ -86,6 +86,57 @@ export type UserProfile = {
   notification_preferences: Record<string, unknown>;
 };
 
+export type PremiumStatus = {
+  active: boolean;
+  plan_key: string;
+  status: string;
+  source?: string | null;
+  monthly_price_cents: number;
+  stripe_configured: boolean;
+  current_period_end?: string | null;
+  cancel_at_period_end: boolean;
+};
+
+export type MacroTarget = {
+  id?: string | null;
+  daily_calories?: number | null;
+  daily_protein_g?: number | null;
+  daily_carbs_g?: number | null;
+  daily_fat_g?: number | null;
+  goal?: string | null;
+};
+
+export type MacroConfirmation = {
+  id: string;
+  recipe_id?: string | null;
+  recipe_name?: string | null;
+  weekly_plan_slot_id?: string | null;
+  meal_date: string;
+  status: "ate" | "skipped";
+  servings_consumed: number;
+  calories?: number | null;
+  protein_g?: number | null;
+  carbs_g?: number | null;
+  fat_g?: number | null;
+  fiber_g?: number | null;
+  macro_source: string;
+  notes?: string | null;
+  created_at: string;
+};
+
+export type MacroSummary = {
+  days: number;
+  start_date: string;
+  end_date: string;
+  active: boolean;
+  targets: MacroTarget;
+  totals: Record<"calories" | "protein_g" | "carbs_g" | "fat_g" | "fiber_g", number>;
+  eaten_meals: number;
+  skipped_meals: number;
+  unmatched_meals: number;
+  recent_confirmations: MacroConfirmation[];
+};
+
 export type WeeklyPlan = {
   id: string;
   week_start: string;

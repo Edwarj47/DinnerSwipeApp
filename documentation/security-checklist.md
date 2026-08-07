@@ -12,6 +12,9 @@
 - [x] Basic in-process rate limiting on login, registration, and password-reset requests
 - [x] Account export excludes password hashes and tokens
 - [x] Account deletion starts as a password-confirmed manual review request
+- [x] Premium macro entitlements are checked server-side
+- [x] Local premium waiver codes are configured through ignored environment files and stored as hashes
+- [x] Stripe integration is disabled until account, API key, webhook secret, and price ID are verified
 - [x] SSRF protections for URL ingestion
 - [x] Upload size, row count, extension, and XLSX signature checks
 - [x] Formula-injection escaping for error CSV export
@@ -21,4 +24,6 @@
 - [ ] Multi-device session management UI before broad public release
 - [ ] Shared Redis or edge/WAF rate limits before multiple API replicas
 - [ ] Object storage and malware scanning for copied recipe images
+- [ ] Verified Stripe account, test-mode webhooks, and subscription lifecycle smoke tests
+- [ ] Rotate or remove beta waiver codes before public launch
 - [ ] Full native security review before app-store release

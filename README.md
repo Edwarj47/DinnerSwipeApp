@@ -37,6 +37,7 @@ Open `http://127.0.0.1:19006`, register from Profile, then use Discover.
 - Email verification and password reset foundation with branded HTML email templates
 - Household invite codes, majority-based group voting, owner-visible vote counts, percentages, and voter detail
 - User profile max-cook-time filtering and per-user allergen/disliked ingredient storage
+- Premium macro-tracker foundation with server-side entitlements, waiver-code unlocks, macro targets, meal confirmations, and Stripe-ready Checkout/webhook adapters
 - Dinner Swipe privacy and terms pages adapted from DCSS legal language
 - Alembic database migration and Docker Compose stack with isolated PostgreSQL
 
@@ -45,6 +46,7 @@ Open `http://127.0.0.1:19006`, register from Profile, then use Discover.
 - The initial web deployment is hosted behind a future reverse proxy route such as `dinner.dcss.dev`.
 - PostgreSQL for Dinner Swipe is separate from existing VPS databases.
 - OpenAI ingestion is disabled unless `AI_INGESTION_ENABLED=true` and `OPENAI_API_KEY` are configured in the ignored local `.env`.
+- Stripe billing is disabled unless the Stripe account is verified and `STRIPE_ENABLED=true` plus Stripe secrets and price IDs are configured in the ignored local `.env`.
 - Walmart MVP support is search-link generation only. No login, cart automation, checkout, or scraping is implemented.
 - Placeholder recipe images are development-only and should be replaced or copied into controlled storage before production.
 
@@ -82,5 +84,6 @@ For the planned VPS route, point `https://dinner.dcss.dev` at the local web serv
 - `documentation/scaling-plan.md`
 - `documentation/azure-migration-guide.md`
 - `documentation/secrets-and-public-repo.md`
+- `documentation/premium-macro-tracker.md`
 - `documentation/privacy-policy.md`
 - `documentation/terms-of-service.md`
