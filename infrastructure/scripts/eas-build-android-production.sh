@@ -18,4 +18,4 @@ fi
 
 cd "$repo_root/apps/mobile"
 EAS_BUILD_NO_EXPO_GO_WARNING="${EAS_BUILD_NO_EXPO_GO_WARNING:-true}" \
-  npx eas-cli@latest build --profile production --platform android --non-interactive
+  npx --yes eas-cli@latest build --profile production --platform android --non-interactive
