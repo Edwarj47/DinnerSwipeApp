@@ -42,6 +42,7 @@ class Settings(BaseSettings):
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
     stripe_premium_price_id: str = ""
+    stripe_expected_account_id: str = ""
     premium_monthly_price_cents: int = 999
     premium_waiver_codes: str = ""
 

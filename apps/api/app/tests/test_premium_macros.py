@@ -97,3 +97,31 @@ def test_stripe_checkout_is_disabled_until_configured(
     response = client.post("/api/v1/premium/checkout-session", headers=auth_headers)
     assert response.status_code == 503
     assert "Stripe billing is not configured" in response.text
+
+    portal = client.post("/api/v1/premium/billing-portal-session", headers=auth_headers)
+    assert portal.status_code == 503
+    assert "Stripe billing is not configured" in portal.text
+
+
+def test_stripe_account_mismatch_blocks_checkout(
+    client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FakeAccount:
+        @staticmethod
+        def retrieve() -> dict[str, str]:
+            return {"id": "acct_wrong"}
+
+    class FakeStripe:
+        api_key = ""
+        Account = FakeAccount
+
+    monkeypatch.setattr(settings, "stripe_enabled", True)
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_fake")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", "webhook_secret_for_test")
+    monkeypatch.setattr(settings, "stripe_premium_price_id", "price_fake")
+    monkeypatch.setattr(settings, "stripe_expected_account_id", "acct_expected")
+    monkeypatch.setattr("app.services.billing.stripe_client", FakeStripe)
+
+    response = client.post("/api/v1/premium/checkout-session", headers=auth_headers)
+    assert response.status_code == 503
+    assert "Stripe account mismatch" in response.text

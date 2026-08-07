@@ -57,6 +57,14 @@ export function PremiumMacroPanel() {
     },
     onError: (error) => setStatus(String(error))
   });
+  const manageBilling = useMutation({
+    mutationFn: () => apiFetch<{ portal_url: string }>("/api/v1/premium/billing-portal-session", { method: "POST" }),
+    onSuccess: async (data) => {
+      setStatus("Opening billing portal.");
+      await Linking.openURL(data.portal_url);
+    },
+    onError: (error) => setStatus(String(error))
+  });
   const saveTargets = useMutation({
     mutationFn: () =>
       apiFetch<MacroTarget>("/api/v1/macros/targets", {
@@ -112,7 +120,12 @@ export function PremiumMacroPanel() {
             <TextInput accessibilityLabel="Daily fat target" value={fat} onChangeText={setFat} keyboardType="decimal-pad" placeholder="Fat g" style={[styles.input, styles.gridInput]} />
           </View>
           <TextInput accessibilityLabel="Macro goal" value={goal} onChangeText={setGoal} placeholder="Goal" style={styles.input} />
-          <Button label="Save targets" icon="save" variant="primary" disabled={saveTargets.isPending} onPress={() => saveTargets.mutate()} />
+          <View style={styles.actions}>
+            <Button label="Save targets" icon="save" variant="primary" disabled={saveTargets.isPending} onPress={() => saveTargets.mutate()} />
+            {premium.data?.billing_management_available ? (
+              <Button label="Manage billing" icon="card" disabled={manageBilling.isPending} onPress={() => manageBilling.mutate()} />
+            ) : null}
+          </View>
         </>
       )}
       {summary.data?.unmatched_meals ? <Text style={styles.meta}>{summary.data.unmatched_meals} meals need macro review.</Text> : null}

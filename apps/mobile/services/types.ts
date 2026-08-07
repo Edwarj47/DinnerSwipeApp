@@ -93,6 +93,7 @@ export type PremiumStatus = {
   source?: string | null;
   monthly_price_cents: number;
   stripe_configured: boolean;
+  billing_management_available: boolean;
   current_period_end?: string | null;
   cancel_at_period_end: boolean;
 };

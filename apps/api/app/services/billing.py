@@ -52,6 +52,12 @@ def serialize_premium_status(db: Session, user: User) -> dict[str, Any]:
         "source": subscription.source if subscription else None,
         "monthly_price_cents": settings.premium_monthly_price_cents,
         "stripe_configured": settings.stripe_configured,
+        "billing_management_available": bool(
+            subscription
+            and subscription.source == "stripe"
+            and subscription.stripe_customer_id
+            and settings.stripe_configured
+        ),
         "current_period_end": subscription.current_period_end if subscription else None,
         "cancel_at_period_end": subscription.cancel_at_period_end if subscription else False,
     }
@@ -97,15 +103,10 @@ def redeem_waiver_code(db: Session, user: User, code: str) -> dict[str, Any]:
 
 
 def create_checkout_session(db: Session, user: User) -> str:
-    if not settings.stripe_configured:
-        raise HTTPException(status_code=503, detail="Stripe billing is not configured yet")
-    if stripe_client is None:
-        raise HTTPException(status_code=503, detail="Stripe dependency is not installed")
-
+    client = _configured_stripe_client()
     subscription = subscription_for_user(db, user)
     success_url = f"{settings.app_public_url.rstrip('/')}/profile?premium=success"
     cancel_url = f"{settings.app_public_url.rstrip('/')}/profile?premium=cancelled"
-    stripe_client.api_key = settings.stripe_secret_key
     params: dict[str, Any] = {
         "mode": "subscription",
         "line_items": [{"price": settings.stripe_premium_price_id, "quantity": 1}],
@@ -120,22 +121,34 @@ def create_checkout_session(db: Session, user: User) -> str:
         params["customer"] = subscription.stripe_customer_id
     else:
         params["customer_email"] = user.email
-    session = stripe_client.checkout.Session.create(**params)
+    session = client.checkout.Session.create(**params)
     url = getattr(session, "url", None)
     if not url:
         raise HTTPException(status_code=502, detail="Stripe did not return a checkout URL")
     return str(url)
 
 
+def create_customer_portal_session(db: Session, user: User) -> str:
+    client = _configured_stripe_client()
+    subscription = subscription_for_user(db, user)
+    if not subscription or subscription.source != "stripe" or not subscription.stripe_customer_id:
+        raise HTTPException(status_code=409, detail="No Stripe billing account is linked")
+    session = client.billing_portal.Session.create(
+        customer=subscription.stripe_customer_id,
+        return_url=f"{settings.app_public_url.rstrip('/')}/profile?premium=manage",
+    )
+    url = getattr(session, "url", None)
+    if not url:
+        raise HTTPException(status_code=502, detail="Stripe did not return a portal URL")
+    return str(url)
+
+
 def verify_stripe_event(payload: bytes, signature: str | None) -> dict[str, Any]:
-    if not settings.stripe_configured:
-        raise HTTPException(status_code=503, detail="Stripe billing is not configured yet")
-    if stripe_client is None:
-        raise HTTPException(status_code=503, detail="Stripe dependency is not installed")
+    client = _configured_stripe_client()
     if not signature:
         raise HTTPException(status_code=400, detail="Missing Stripe signature")
     try:
-        event = stripe_client.Webhook.construct_event(
+        event = client.Webhook.construct_event(
             payload=payload,
             sig_header=signature,
             secret=settings.stripe_webhook_secret,
@@ -224,4 +237,41 @@ def _handle_subscription_update(
 
 
 def _nullable_str(value: object) -> str | None:
+    return str(value) if value else None
+
+
+def _configured_stripe_client() -> Any:
+    if not settings.stripe_configured:
+        raise HTTPException(status_code=503, detail="Stripe billing is not configured yet")
+    if stripe_client is None:
+        raise HTTPException(status_code=503, detail="Stripe dependency is not installed")
+    stripe_client.api_key = settings.stripe_secret_key
+    _assert_expected_stripe_account(stripe_client)
+    return stripe_client
+
+
+def _assert_expected_stripe_account(client: Any) -> None:
+    expected_account_id = settings.stripe_expected_account_id.strip()
+    if not expected_account_id:
+        return
+    try:
+        account = client.Account.retrieve()
+    except Exception as exc:
+        logger.warning("stripe_account_verification_failed", error_type=type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Stripe account verification failed") from exc
+    actual_account_id = _stripe_object_value(account, "id")
+    if actual_account_id != expected_account_id:
+        logger.error(
+            "stripe_account_mismatch",
+            expected_account_id=expected_account_id,
+            actual_account_id=actual_account_id,
+        )
+        raise HTTPException(status_code=503, detail="Stripe account mismatch")
+
+
+def _stripe_object_value(obj: object, key: str) -> str | None:
+    if isinstance(obj, dict):
+        value = obj.get(key)
+    else:
+        value = getattr(obj, key, None)
     return str(value) if value else None

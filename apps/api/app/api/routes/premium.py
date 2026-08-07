@@ -6,6 +6,7 @@ from fastapi import APIRouter, Header, Query, Request
 
 from app.api.deps import CurrentUser, DbDep
 from app.schemas.common import (
+    BillingPortalSessionOut,
     CheckoutSessionOut,
     MacroSummary,
     MacroTargetIn,
@@ -17,6 +18,7 @@ from app.schemas.common import (
 )
 from app.services.billing import (
     create_checkout_session,
+    create_customer_portal_session,
     handle_stripe_event,
     redeem_waiver_code,
     serialize_premium_status,
@@ -49,6 +51,11 @@ def apply_waiver_code(
 @router.post("/premium/checkout-session", response_model=CheckoutSessionOut)
 def checkout_session(db: DbDep, current_user: CurrentUser) -> dict[str, str]:
     return {"checkout_url": create_checkout_session(db, current_user)}
+
+
+@router.post("/premium/billing-portal-session", response_model=BillingPortalSessionOut)
+def billing_portal_session(db: DbDep, current_user: CurrentUser) -> dict[str, str]:
+    return {"portal_url": create_customer_portal_session(db, current_user)}
 
 
 @router.post("/premium/stripe/webhook")

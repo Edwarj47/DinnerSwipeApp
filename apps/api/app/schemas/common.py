@@ -70,6 +70,7 @@ class PremiumStatus(ApiModel):
     source: str | None = None
     monthly_price_cents: int = 999
     stripe_configured: bool = False
+    billing_management_available: bool = False
     current_period_end: datetime | None = None
     cancel_at_period_end: bool = False
 
@@ -80,6 +81,10 @@ class PremiumWaiverRequest(ApiModel):
 
 class CheckoutSessionOut(ApiModel):
     checkout_url: str
+
+
+class BillingPortalSessionOut(ApiModel):
+    portal_url: str
 
 
 class MacroTargetIn(ApiModel):
