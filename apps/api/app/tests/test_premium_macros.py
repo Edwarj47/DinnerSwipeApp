@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import json
+import time
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -125,3 +130,47 @@ def test_stripe_account_mismatch_blocks_checkout(
     response = client.post("/api/v1/premium/checkout-session", headers=auth_headers)
     assert response.status_code == 503
     assert "Stripe account mismatch" in response.text
+
+
+def test_signed_stripe_webhook_is_processed(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    webhook_secret = "webhook_secret_for_test"
+    monkeypatch.setattr(settings, "stripe_enabled", True)
+    monkeypatch.setattr(settings, "stripe_secret_key", "sk_test_for_signature_only")
+    monkeypatch.setattr(settings, "stripe_webhook_secret", webhook_secret)
+    monkeypatch.setattr(settings, "stripe_premium_price_id", "price_for_test")
+    monkeypatch.setattr(settings, "stripe_expected_account_id", "")
+    payload = json.dumps(
+        {
+            "id": "evt_local_smoke",
+            "object": "event",
+            "type": "customer.subscription.updated",
+            "data": {
+                "object": {
+                    "id": "sub_local_smoke",
+                    "object": "subscription",
+                    "status": "active",
+                    "metadata": {},
+                }
+            },
+        },
+        separators=(",", ":"),
+    ).encode("utf-8")
+    timestamp = str(int(time.time()))
+    signed_payload = timestamp.encode("utf-8") + b"." + payload
+    signature = hmac.new(
+        webhook_secret.encode("utf-8"), signed_payload, hashlib.sha256
+    ).hexdigest()
+
+    response = client.post(
+        "/api/v1/premium/stripe/webhook",
+        content=payload,
+        headers={
+            "Stripe-Signature": f"t={timestamp},v1={signature}",
+            "Content-Type": "application/json",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["status"] == "processed"

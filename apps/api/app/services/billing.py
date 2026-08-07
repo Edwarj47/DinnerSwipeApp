@@ -156,9 +156,11 @@ def verify_stripe_event(payload: bytes, signature: str | None) -> dict[str, Any]
     except Exception as exc:
         logger.warning("stripe_webhook_verification_failed", error_type=type(exc).__name__)
         raise HTTPException(status_code=400, detail="Invalid Stripe webhook signature") from exc
-    if hasattr(event, "to_dict_recursive"):
-        return cast(dict[str, Any], event.to_dict_recursive())
-    return cast(dict[str, Any], dict(event))
+    if hasattr(event, "to_dict"):
+        return cast(dict[str, Any], event.to_dict())
+    if hasattr(event, "_to_dict_recursive"):
+        return cast(dict[str, Any], event._to_dict_recursive())
+    raise HTTPException(status_code=400, detail="Invalid Stripe webhook event")
 
 
 def handle_stripe_event(db: Session, event: dict[str, Any]) -> dict[str, str]:
