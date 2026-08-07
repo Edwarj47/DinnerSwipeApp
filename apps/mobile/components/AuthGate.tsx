@@ -25,14 +25,17 @@ type Props = {
 
 const PUBLIC_PATHS = new Set(["/privacy", "/terms"]);
 const LEGAL_DOCUMENT_VERSION = "2026-08-03";
+type AuthMode = "choice" | "login" | "register";
 
 export function AuthGate({ children }: Props) {
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const [checking, setChecking] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>("choice");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [status, setStatus] = useState("");
   const [pendingMode, setPendingMode] = useState<"login" | "register" | null>(null);
@@ -70,6 +73,10 @@ export function AuthGate({ children }: Props) {
       setStatus("Accept the Privacy Policy and Terms of Service before creating an account.");
       return;
     }
+    if (mode === "register" && password !== confirmPassword) {
+      setStatus("Passwords must match before creating an account.");
+      return;
+    }
     setPendingMode(mode);
     setStatus("");
     try {
@@ -99,8 +106,15 @@ export function AuthGate({ children }: Props) {
 
   if (PUBLIC_PATHS.has(pathname) || authenticated) return children;
 
-  const canLogin = email.trim().length > 3 && password.length >= 8 && pendingMode === null;
-  const canRegister = canLogin && acceptedLegal;
+  const canLogin = email.trim().length > 3 && password.length > 0 && pendingMode === null;
+  const canRegister =
+    email.trim().length > 3 &&
+    password.length >= 8 &&
+    confirmPassword === password &&
+    acceptedLegal &&
+    pendingMode === null;
+  const panelTitle =
+    authMode === "login" ? "Welcome back" : authMode === "register" ? "Create account" : "Get started";
 
   return (
     <>
@@ -122,31 +136,68 @@ export function AuthGate({ children }: Props) {
                 </Text>
               </View>
               <View style={styles.panel}>
-                <Text style={styles.panelTitle}>Welcome back</Text>
-                <TextInput
-                  autoCapitalize="none"
-                  autoComplete="email"
-                  accessibilityLabel="Email"
-                  keyboardType="email-address"
-                  textContentType="username"
-                  value={email}
-                  onChangeText={setEmail}
-                  placeholder="Email"
-                  placeholderTextColor="#9b928b"
-                  style={styles.input}
-                />
-                <TextInput
-                  accessibilityLabel="Password"
-                  autoComplete="password"
-                  secureTextEntry
-                  textContentType="password"
-                  value={password}
-                  onChangeText={setPassword}
-                  placeholder="Password"
-                  placeholderTextColor="#9b928b"
-                  style={styles.input}
-                />
-                <View style={styles.actions}>
+                <Text style={styles.panelTitle}>{panelTitle}</Text>
+                {authMode === "choice" ? (
+                  <View style={styles.actions}>
+                    <Button
+                      label="Log in"
+                      icon="log-in"
+                      variant="primary"
+                      onPress={() => {
+                        setStatus("");
+                        setAuthMode("login");
+                      }}
+                    />
+                    <Button
+                      label="Create account"
+                      icon="person-add"
+                      onPress={() => {
+                        setStatus("");
+                        setAuthMode("register");
+                      }}
+                    />
+                  </View>
+                ) : (
+                  <>
+                    <TextInput
+                      autoCapitalize="none"
+                      autoComplete="email"
+                      accessibilityLabel="Email"
+                      keyboardType="email-address"
+                      textContentType="username"
+                      value={email}
+                      onChangeText={setEmail}
+                      placeholder="Email"
+                      placeholderTextColor="#9b928b"
+                      style={styles.input}
+                    />
+                    <TextInput
+                      accessibilityLabel="Password"
+                      autoComplete={authMode === "login" ? "password" : "new-password"}
+                      secureTextEntry
+                      textContentType={authMode === "login" ? "password" : "newPassword"}
+                      value={password}
+                      onChangeText={setPassword}
+                      placeholder={authMode === "login" ? "Password" : "Create password"}
+                      placeholderTextColor="#9b928b"
+                      style={styles.input}
+                    />
+                    {authMode === "register" ? (
+                      <TextInput
+                        accessibilityLabel="Confirm password"
+                        autoComplete="new-password"
+                        secureTextEntry
+                        textContentType="newPassword"
+                        value={confirmPassword}
+                        onChangeText={setConfirmPassword}
+                        placeholder="Confirm password"
+                        placeholderTextColor="#9b928b"
+                        style={styles.input}
+                      />
+                    ) : null}
+                  </>
+                )}
+                {authMode === "login" ? (
                   <Button
                     label="Sign in"
                     icon="log-in"
@@ -154,25 +205,40 @@ export function AuthGate({ children }: Props) {
                     disabled={!canLogin || pendingMode === "login"}
                     onPress={() => void authenticate("login")}
                   />
+                ) : null}
+                {authMode === "register" ? (
+                  <>
+                    <Button
+                      label="Create account"
+                      icon="person-add"
+                      variant="primary"
+                      disabled={!canRegister || pendingMode === "register"}
+                      onPress={() => void authenticate("register")}
+                    />
+                    <Pressable
+                      accessibilityLabel="Accept Privacy Policy and Terms of Service"
+                      accessibilityRole="checkbox"
+                      accessibilityState={{ checked: acceptedLegal }}
+                      onPress={() => setAcceptedLegal((value) => !value)}
+                      style={styles.consentRow}
+                    >
+                      <View style={[styles.checkbox, acceptedLegal ? styles.checkboxChecked : null]}>
+                        {acceptedLegal ? <Text style={styles.checkmark}>✓</Text> : null}
+                      </View>
+                      <Text style={styles.consentText}>I agree before creating an account.</Text>
+                    </Pressable>
+                  </>
+                ) : null}
+                {authMode !== "choice" ? (
                   <Button
-                    label="Create account"
-                    icon="person-add"
-                    disabled={!canRegister || pendingMode === "register"}
-                    onPress={() => void authenticate("register")}
+                    label={authMode === "login" ? "Create account instead" : "Log in instead"}
+                    icon={authMode === "login" ? "person-add" : "log-in"}
+                    onPress={() => {
+                      setStatus("");
+                      setAuthMode(authMode === "login" ? "register" : "login");
+                    }}
                   />
-                </View>
-                <Pressable
-                  accessibilityLabel="Accept Privacy Policy and Terms of Service"
-                  accessibilityRole="checkbox"
-                  accessibilityState={{ checked: acceptedLegal }}
-                  onPress={() => setAcceptedLegal((value) => !value)}
-                  style={styles.consentRow}
-                >
-                  <View style={[styles.checkbox, acceptedLegal ? styles.checkboxChecked : null]}>
-                    {acceptedLegal ? <Text style={styles.checkmark}>✓</Text> : null}
-                  </View>
-                  <Text style={styles.consentText}>I agree before creating an account.</Text>
-                </Pressable>
+                ) : null}
                 <View style={styles.legalTextRow}>
                   <Text style={styles.legalText}>Review the </Text>
                   <Link href="/privacy" style={styles.legalLink}>
