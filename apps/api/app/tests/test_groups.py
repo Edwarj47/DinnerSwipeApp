@@ -46,7 +46,12 @@ def test_group_vote_summary_uses_shared_household_plan_and_owner_voter_detail(
     ).json()
     member = client.post(
         "/api/v1/auth/register",
-        json={"email": "group-member@example.com", "password": "change-me-123"},
+        json={
+            "email": "group-member@example.com",
+            "password": "change-me-123",
+            "terms_accepted": True,
+            "privacy_accepted": True,
+        },
     )
     member_headers = {"Authorization": f"Bearer {member.json()['access_token']}"}
     joined = client.post(

@@ -57,7 +57,13 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
 @pytest.fixture()
 def auth_headers(client: TestClient) -> dict[str, str]:
     response = client.post(
-        "/api/v1/auth/register", json={"email": "owner@example.com", "password": "change-me-123"}
+        "/api/v1/auth/register",
+        json={
+            "email": "owner@example.com",
+            "password": "change-me-123",
+            "terms_accepted": True,
+            "privacy_accepted": True,
+        },
     )
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}

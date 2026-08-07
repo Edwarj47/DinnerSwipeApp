@@ -14,7 +14,13 @@ def test_email_verification_flow(
 
     monkeypatch.setattr(email_auth, "_new_token", lambda: "verify-token-for-test-1234567890")
     register = client.post(
-        "/api/v1/auth/register", json={"email": "verify@example.com", "password": "change-me-123"}
+        "/api/v1/auth/register",
+        json={
+            "email": "verify@example.com",
+            "password": "change-me-123",
+            "terms_accepted": True,
+            "privacy_accepted": True,
+        },
     )
     assert register.status_code == 200
     user = db_session.query(User).filter_by(email="verify@example.com").one()
@@ -34,7 +40,13 @@ def test_password_reset_flow(
     from app.services import email_auth
 
     client.post(
-        "/api/v1/auth/register", json={"email": "reset@example.com", "password": "change-me-123"}
+        "/api/v1/auth/register",
+        json={
+            "email": "reset@example.com",
+            "password": "change-me-123",
+            "terms_accepted": True,
+            "privacy_accepted": True,
+        },
     )
     monkeypatch.setattr(email_auth, "_new_token", lambda: "reset-token-for-test-1234567890")
     requested = client.post(

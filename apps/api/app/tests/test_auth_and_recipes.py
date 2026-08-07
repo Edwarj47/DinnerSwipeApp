@@ -6,9 +6,24 @@ from sqlalchemy.orm import Session
 from app.models.entities import AuditEvent, RefreshToken
 
 
+def test_register_requires_legal_acceptance(client: TestClient) -> None:
+    response = client.post(
+        "/api/v1/auth/register",
+        json={"email": "no-consent@example.com", "password": "change-me-123"},
+    )
+    assert response.status_code == 422
+    assert "Privacy Policy and Terms of Service" in response.json()["detail"]
+
+
 def test_register_login_and_create_recipe(client: TestClient) -> None:
     register = client.post(
-        "/api/v1/auth/register", json={"email": "cook@example.com", "password": "change-me-123"}
+        "/api/v1/auth/register",
+        json={
+            "email": "cook@example.com",
+            "password": "change-me-123",
+            "terms_accepted": True,
+            "privacy_accepted": True,
+        },
     )
     assert register.status_code == 200
     headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
@@ -29,7 +44,13 @@ def test_register_login_and_create_recipe(client: TestClient) -> None:
 
 def test_change_password_export_and_delete_request(client: TestClient, db_session: Session) -> None:
     register = client.post(
-        "/api/v1/auth/register", json={"email": "account@example.com", "password": "change-me-123"}
+        "/api/v1/auth/register",
+        json={
+            "email": "account@example.com",
+            "password": "change-me-123",
+            "terms_accepted": True,
+            "privacy_accepted": True,
+        },
     )
     headers = {"Authorization": f"Bearer {register.json()['access_token']}"}
 
@@ -55,6 +76,8 @@ def test_change_password_export_and_delete_request(client: TestClient, db_sessio
     assert exported.status_code == 200
     exported_json = exported.json()
     assert exported_json["account"]["email"] == "account@example.com"
+    assert exported_json["account"]["terms_accepted_at"]
+    assert exported_json["account"]["privacy_accepted_at"]
     assert "password_hash" not in str(exported_json)
 
     deletion = client.post(
@@ -83,7 +106,13 @@ def test_login_rate_limit(client: TestClient) -> None:
 
 def test_refresh_token_rotates_and_logout_revokes(client: TestClient, db_session: Session) -> None:
     register = client.post(
-        "/api/v1/auth/register", json={"email": "tokens@example.com", "password": "change-me-123"}
+        "/api/v1/auth/register",
+        json={
+            "email": "tokens@example.com",
+            "password": "change-me-123",
+            "terms_accepted": True,
+            "privacy_accepted": True,
+        },
     )
     assert register.status_code == 200
     first_refresh = register.json()["refresh_token"]

@@ -40,6 +40,9 @@ class User(Base, TimestampMixin):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    privacy_accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    legal_acceptance_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
     profile: Mapped[UserProfile] = relationship(back_populates="user", uselist=False)
 
 

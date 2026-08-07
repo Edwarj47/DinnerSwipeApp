@@ -63,14 +63,40 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 def register(payload: RegisterRequest, request: Request, db: DbDep) -> TokenPair:
     email = payload.email.lower()
     check_auth_rate_limit(request, "register", email, subject_limit=4)
+    if not payload.terms_accepted or not payload.privacy_accepted:
+        raise HTTPException(
+            status_code=422,
+            detail="Privacy Policy and Terms of Service must be accepted before registration",
+        )
     if db.scalar(select(User).where(User.email == email)):
         raise HTTPException(status_code=409, detail="Email is already registered")
-    user = User(email=email, password_hash=hash_password(payload.password))
+    accepted_at = datetime.now(UTC).replace(tzinfo=None)
+    user = User(
+        email=email,
+        password_hash=hash_password(payload.password),
+        terms_accepted_at=accepted_at,
+        privacy_accepted_at=accepted_at,
+        legal_acceptance_version=payload.legal_document_version,
+    )
     household = Household(name=f"{email}'s household", invite_code=generate_invite_code(db))
     db.add_all([user, household])
     db.flush()
     db.add(HouseholdMember(household_id=household.id, user_id=user.id, role="owner"))
     db.add(UserProfile(user_id=user.id, household_id=household.id))
+    db.add(
+        AuditEvent(
+            user_id=user.id,
+            event_type="legal_documents_accepted",
+            entity_type="user",
+            entity_id=user.id,
+            payload={
+                "privacy_accepted": payload.privacy_accepted,
+                "terms_accepted": payload.terms_accepted,
+                "legal_document_version": payload.legal_document_version,
+                "accepted_at": accepted_at.isoformat(),
+            },
+        )
+    )
     db.commit()
     db.refresh(user)
     create_email_verification(db, user)
@@ -247,6 +273,13 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
             "id": current_user.id,
             "email": current_user.email,
             "email_verified": current_user.email_verified,
+            "terms_accepted_at": current_user.terms_accepted_at.isoformat()
+            if current_user.terms_accepted_at
+            else None,
+            "privacy_accepted_at": current_user.privacy_accepted_at.isoformat()
+            if current_user.privacy_accepted_at
+            else None,
+            "legal_acceptance_version": current_user.legal_acceptance_version,
             "created_at": current_user.created_at.isoformat(),
         },
         "profile": {

@@ -85,7 +85,12 @@ def test_grocery_item_update_is_account_scoped(
     assert added.status_code == 200
     other = client.post(
         "/api/v1/auth/register",
-        json={"email": "other-shopper@example.com", "password": "change-me-123"},
+        json={
+            "email": "other-shopper@example.com",
+            "password": "change-me-123",
+            "terms_accepted": True,
+            "privacy_accepted": True,
+        },
     )
     other_headers = {"Authorization": f"Bearer {other.json()['access_token']}"}
 

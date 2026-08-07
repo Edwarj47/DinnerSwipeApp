@@ -19,6 +19,9 @@ class TokenPair(ApiModel):
 class RegisterRequest(ApiModel):
     email: EmailStr
     password: str = Field(min_length=8, max_length=128)
+    terms_accepted: bool = False
+    privacy_accepted: bool = False
+    legal_document_version: str = Field(default="2026-08-03", min_length=1, max_length=40)
 
 
 class LoginRequest(ApiModel):
