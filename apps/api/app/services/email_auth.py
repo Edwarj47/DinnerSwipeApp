@@ -29,11 +29,10 @@ def _new_token() -> str:
 
 
 def _logo_html() -> str:
+    logo_url = f"{settings.public_api_url.rstrip('/')}/api/v1/brand/logo.png"
     return (
-        '<div style="width:64px;height:64px;border-radius:999px;background:#fff;'
-        "border:4px solid #ffd9d6;display:flex;align-items:center;justify-content:center;"
-        "font-family:Georgia,serif;font-style:italic;font-weight:900;color:#d71920;"
-        'font-size:25px;margin:0 auto 18px;">DS</div>'
+        f'<img src="{logo_url}" width="84" height="84" alt="Dinner Swipe" '
+        'style="display:block;width:84px;height:84px;border:0;outline:none;text-decoration:none;margin:0 auto 18px;" />'
     )
 
 

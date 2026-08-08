@@ -17,6 +17,7 @@ from app.database.session import get_db
 from app.main import app
 from app.models import entities  # noqa: F401
 from app.models.base import Base
+from app.models.entities import User
 
 
 @pytest.fixture(autouse=True)
@@ -55,7 +56,7 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
 
 
 @pytest.fixture()
-def auth_headers(client: TestClient) -> dict[str, str]:
+def auth_headers(client: TestClient, db_session: Session) -> dict[str, str]:
     response = client.post(
         "/api/v1/auth/register",
         json={
@@ -65,5 +66,8 @@ def auth_headers(client: TestClient) -> dict[str, str]:
             "privacy_accepted": True,
         },
     )
+    user = db_session.query(User).filter_by(email="owner@example.com").one()
+    user.email_verified = True
+    db_session.commit()
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}

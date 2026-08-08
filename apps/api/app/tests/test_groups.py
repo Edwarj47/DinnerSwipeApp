@@ -1,6 +1,9 @@
 from __future__ import annotations
 
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
+
+from app.models.entities import User
 
 
 def test_household_invite_and_vote(client: TestClient, auth_headers: dict[str, str]) -> None:
@@ -28,8 +31,50 @@ def test_household_invite_and_vote(client: TestClient, auth_headers: dict[str, s
     assert vote.json()["votes"][0]["yes"] == 1
 
 
-def test_group_vote_summary_uses_shared_household_plan_and_owner_voter_detail(
+def test_unverified_user_cannot_join_or_vote(
     client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    household = client.get("/api/v1/households/current", headers=auth_headers).json()
+    recipe = client.post(
+        "/api/v1/recipes",
+        headers=auth_headers,
+        json={
+            "name": "Verification gated dinner",
+            "photo_url": "https://example.com/gated.jpg",
+            "servings": 4,
+            "ingredients": [{"original_text": "1 lb chicken"}],
+            "instructions": [{"step_number": 1, "text": "Cook chicken"}],
+        },
+    ).json()
+    member = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "unverified-member@example.com",
+            "password": "change-me-123",
+            "terms_accepted": True,
+            "privacy_accepted": True,
+        },
+    )
+    member_headers = {"Authorization": f"Bearer {member.json()['access_token']}"}
+
+    joined = client.post(
+        "/api/v1/households/join",
+        headers=member_headers,
+        json={"invite_code": household["invite_code"]},
+    )
+    vote = client.post(
+        "/api/v1/households/current/votes",
+        headers=member_headers,
+        json={"recipe_id": recipe["id"], "vote": "yes"},
+    )
+
+    assert joined.status_code == 403
+    assert vote.status_code == 403
+    assert joined.json()["detail"] == "Verify your email before using group planning."
+
+
+def test_group_vote_summary_uses_shared_household_plan_and_owner_voter_detail(
+    client: TestClient, auth_headers: dict[str, str], db_session: Session
 ) -> None:
     household = client.get("/api/v1/households/current", headers=auth_headers).json()
     recipe = client.post(
@@ -53,6 +98,9 @@ def test_group_vote_summary_uses_shared_household_plan_and_owner_voter_detail(
             "privacy_accepted": True,
         },
     )
+    member_user = db_session.query(User).filter_by(email="group-member@example.com").one()
+    member_user.email_verified = True
+    db_session.commit()
     member_headers = {"Authorization": f"Bearer {member.json()['access_token']}"}
     joined = client.post(
         "/api/v1/households/join",

@@ -4,6 +4,7 @@ from fastapi import APIRouter
 
 from app.api.routes import (
     auth,
+    brand,
     grocery,
     groups,
     health,
@@ -17,6 +18,7 @@ from app.api.routes import (
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(health.router)
+api_router.include_router(brand.router)
 api_router.include_router(auth.router)
 api_router.include_router(profile.router)
 api_router.include_router(recipes.router)

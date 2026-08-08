@@ -1,7 +1,14 @@
 import { Image } from "expo-image";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
-import Animated, { runOnJS, useAnimatedStyle, useSharedValue, withSpring } from "react-native-reanimated";
+import Animated, {
+  Extrapolation,
+  interpolate,
+  runOnJS,
+  useAnimatedStyle,
+  useSharedValue,
+  withSpring
+} from "react-native-reanimated";
 
 import { Button } from "@/components/Button";
 import { Colors, shadow } from "@/components/theme";
@@ -32,6 +39,24 @@ export function MealCard({ recipe, onAction, onOpen }: Props) {
     });
   const animated = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { rotate: `${translateX.value / 24}deg` }]
+  }));
+  const planIndicator = useAnimatedStyle(() => ({
+    opacity: interpolate(translateX.value, [22, 95], [0, 1], Extrapolation.CLAMP),
+    transform: [
+      { rotate: "-8deg" },
+      { scale: interpolate(translateX.value, [22, 95], [0.92, 1], Extrapolation.CLAMP) }
+    ]
+  }));
+  const skipIndicator = useAnimatedStyle(() => ({
+    opacity: interpolate(translateX.value, [-95, -22], [1, 0], Extrapolation.CLAMP),
+    transform: [
+      { rotate: "8deg" },
+      { scale: interpolate(translateX.value, [-95, -22], [1, 0.92], Extrapolation.CLAMP) }
+    ]
+  }));
+  const favoriteIndicator = useAnimatedStyle(() => ({
+    opacity: interpolate(translateY.value, [-105, -26], [1, 0], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(translateY.value, [-105, -26], [1, 0.92], Extrapolation.CLAMP) }]
   }));
   return (
     <GestureDetector gesture={gesture}>
@@ -64,6 +89,18 @@ export function MealCard({ recipe, onAction, onOpen }: Props) {
             </View>
           </View>
         </Pressable>
+        <Animated.View pointerEvents="none" style={[styles.swipeBadge, styles.planBadge, planIndicator]}>
+          <Text style={[styles.swipeBadgeText, styles.planBadgeText]}>PLAN</Text>
+          <Text style={styles.swipeHint}>Add to week</Text>
+        </Animated.View>
+        <Animated.View pointerEvents="none" style={[styles.swipeBadge, styles.skipBadge, skipIndicator]}>
+          <Text style={[styles.swipeBadgeText, styles.skipBadgeText]}>SKIP</Text>
+          <Text style={styles.swipeHint}>Not now</Text>
+        </Animated.View>
+        <Animated.View pointerEvents="none" style={[styles.swipeBadge, styles.favoriteBadge, favoriteIndicator]}>
+          <Text style={[styles.swipeBadgeText, styles.favoriteBadgeText]}>FAVORITE</Text>
+          <Text style={styles.swipeHint}>Save idea</Text>
+        </Animated.View>
       </Animated.View>
     </GestureDetector>
   );
@@ -78,6 +115,23 @@ const styles = StyleSheet.create({
   favorite: { color: Colors.basil, fontWeight: "800", fontSize: 12, textTransform: "uppercase" },
   meta: { color: Colors.muted, fontSize: 14 },
   ingredients: { color: Colors.ink, fontSize: 15, lineHeight: 21 },
-  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 }
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  swipeBadge: {
+    position: "absolute",
+    borderRadius: 8,
+    borderWidth: 2,
+    backgroundColor: "rgba(255, 255, 255, 0.94)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    alignItems: "center",
+    gap: 2
+  },
+  planBadge: { top: 22, left: 18, borderColor: Colors.basil },
+  skipBadge: { top: 22, right: 18, borderColor: Colors.danger },
+  favoriteBadge: { top: "44%", alignSelf: "center", borderColor: Colors.corn },
+  swipeBadgeText: { fontSize: 24, lineHeight: 28, fontWeight: "900" },
+  planBadgeText: { color: Colors.basil },
+  skipBadgeText: { color: Colors.danger },
+  favoriteBadgeText: { color: Colors.tomatoDark },
+  swipeHint: { color: Colors.ink, fontSize: 11, fontWeight: "800", textTransform: "uppercase" }
 });
-

@@ -34,6 +34,47 @@ def test_email_verification_flow(
     assert user.email_verified is True
 
 
+def test_verification_email_uses_hosted_logo(
+    client: TestClient, monkeypatch: MonkeyPatch
+) -> None:
+    from app.services import email_auth
+
+    sent: dict[str, str] = {}
+
+    def capture_email(to_email: str, subject: str, html: str, text: str) -> bool:
+        sent["to"] = to_email
+        sent["subject"] = subject
+        sent["html"] = html
+        sent["text"] = text
+        return True
+
+    monkeypatch.setattr(email_auth, "_new_token", lambda: "verify-token-for-test-1234567890")
+    monkeypatch.setattr(email_auth, "_send_html_email", capture_email)
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "logo@example.com",
+            "password": "change-me-123",
+            "terms_accepted": True,
+            "privacy_accepted": True,
+        },
+    )
+
+    assert response.status_code == 200
+    assert sent["to"] == "logo@example.com"
+    assert "/api/v1/brand/logo.png" in sent["html"]
+    assert "alt=\"Dinner Swipe\"" in sent["html"]
+    assert "Verify your Dinner Swipe email" in sent["text"]
+
+
+def test_brand_logo_route(client: TestClient) -> None:
+    response = client.get("/api/v1/brand/logo.png")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/png"
+    assert response.content.startswith(b"\x89PNG\r\n\x1a\n")
+
+
 def test_password_reset_flow(
     client: TestClient, db_session: Session, monkeypatch: MonkeyPatch
 ) -> None:

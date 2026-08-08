@@ -24,4 +24,14 @@ def get_current_user(db: DbDep, token: Annotated[str, Depends(oauth2_scheme)]) -
     return user
 
 
+def get_verified_user(current_user: Annotated[User, Depends(get_current_user)]) -> User:
+    if not current_user.email_verified:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Verify your email before using group planning.",
+        )
+    return current_user
+
+
 CurrentUser = Annotated[User, Depends(get_current_user)]
+VerifiedUser = Annotated[User, Depends(get_verified_user)]
