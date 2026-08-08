@@ -56,3 +56,28 @@ test("refreshes an expired access token and retries the request once", async () 
   const retryHeaders = fetchMock.mock.calls[2]?.[1]?.headers as Headers;
   expect(retryHeaders.get("Authorization")).toBe("Bearer new-access");
 });
+
+test("formats API errors for user-facing auth messages", async () => {
+  const fetchMock = jest.mocked(fetch);
+  fetchMock
+    .mockResolvedValueOnce(jsonResponse({ detail: "Invalid email or password" }, 401))
+    .mockResolvedValueOnce(
+      jsonResponse(
+        {
+          detail: [
+            {
+              loc: ["body", "password"],
+              msg: "String should have at least 8 characters",
+              type: "string_too_short"
+            }
+          ]
+        },
+        422
+      )
+    );
+
+  await expect(apiFetch("/api/v1/auth/login")).rejects.toThrow("Invalid email or password");
+  await expect(apiFetch("/api/v1/auth/register")).rejects.toThrow(
+    "Password must be at least 8 characters."
+  );
+});

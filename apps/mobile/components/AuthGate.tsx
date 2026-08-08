@@ -98,7 +98,7 @@ export function AuthGate({ children }: Props) {
       await queryClient.invalidateQueries();
       setAuthenticated(true);
     } catch (error) {
-      setStatus(String(error));
+      setStatus(error instanceof Error ? error.message : "Unable to complete authentication.");
     } finally {
       setPendingMode(null);
     }
@@ -183,17 +183,22 @@ export function AuthGate({ children }: Props) {
                       style={styles.input}
                     />
                     {authMode === "register" ? (
-                      <TextInput
-                        accessibilityLabel="Confirm password"
-                        autoComplete="new-password"
-                        secureTextEntry
-                        textContentType="newPassword"
-                        value={confirmPassword}
-                        onChangeText={setConfirmPassword}
-                        placeholder="Confirm password"
-                        placeholderTextColor="#9b928b"
-                        style={styles.input}
-                      />
+                      <>
+                        <TextInput
+                          accessibilityLabel="Confirm password"
+                          autoComplete="new-password"
+                          secureTextEntry
+                          textContentType="newPassword"
+                          value={confirmPassword}
+                          onChangeText={setConfirmPassword}
+                          placeholder="Confirm password"
+                          placeholderTextColor="#9b928b"
+                          style={styles.input}
+                        />
+                        <Text style={styles.helperText}>
+                          Use at least 8 characters, confirm the password, and check the agreement box.
+                        </Text>
+                      </>
                     ) : null}
                   </>
                 )}
@@ -281,5 +286,6 @@ const styles = StyleSheet.create({
   legalTextRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center" },
   legalText: { color: Colors.muted, lineHeight: 21 },
   legalLink: { color: Colors.tomatoDark, fontWeight: "900", lineHeight: 21 },
+  helperText: { color: Colors.muted, lineHeight: 20 },
   status: { color: Colors.danger, fontWeight: "700", lineHeight: 20 }
 });

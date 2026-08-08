@@ -105,6 +105,45 @@ function shouldSetJsonContentType(init: RequestInit) {
   return true;
 }
 
+function validationMessage(issue: unknown) {
+  if (!issue || typeof issue !== "object") return "";
+  const detail = issue as { loc?: unknown[]; msg?: unknown; type?: unknown };
+  const field =
+    Array.isArray(detail.loc) && detail.loc.length > 0
+      ? String(detail.loc[detail.loc.length - 1] ?? "")
+      : "";
+  const message = typeof detail.msg === "string" ? detail.msg : "";
+  const type = typeof detail.type === "string" ? detail.type : "";
+
+  if (field === "email") return "Enter a valid email address.";
+  if (field === "password" && (type.includes("too_short") || message.includes("at least"))) {
+    return "Password must be at least 8 characters.";
+  }
+  if (message) return message.replace(/^Value error,\s*/i, "");
+  return "";
+}
+
+function errorMessageFromBody(body: string, fallback: string) {
+  if (!body.trim()) return fallback;
+  try {
+    const parsed = JSON.parse(body) as { detail?: unknown; message?: unknown };
+    const detail = parsed.detail ?? parsed.message;
+    if (typeof detail === "string") return detail;
+    if (Array.isArray(detail)) {
+      const messages = detail.map(validationMessage).filter(Boolean);
+      return messages.length ? Array.from(new Set(messages)).join(" ") : fallback;
+    }
+  } catch {
+    return body;
+  }
+  return fallback;
+}
+
+async function responseErrorMessage(response: Response) {
+  const body = await response.text();
+  return errorMessageFromBody(body, `Request failed with status ${response.status}.`);
+}
+
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
   return authorizedFetch<T>(path, init, true);
 }
@@ -124,7 +163,7 @@ async function authorizedFetch<T>(path: string, init: RequestInit, canRefresh: b
     if (refreshed) return authorizedFetch<T>(path, init, false);
   }
   if (!response.ok) {
-    throw new Error(await response.text());
+    throw new Error(await responseErrorMessage(response));
   }
   return response.json() as Promise<T>;
 }
