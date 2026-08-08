@@ -68,13 +68,30 @@ export function AuthGate({ children }: Props) {
 
   useEffect(() => addAuthChangeListener(() => void checkSession()), [checkSession]);
 
+  const normalizedEmail = email.trim();
+  const isEmailReady = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
+  const isPasswordReady = password.length >= 8;
+  const doPasswordsMatch = confirmPassword.length > 0 && confirmPassword === password;
+  const canLogin = normalizedEmail.length > 3 && password.length > 0 && pendingMode === null;
+  const canRegister = isEmailReady && isPasswordReady && doPasswordsMatch && acceptedLegal && pendingMode === null;
+  const registerRequirements = [
+    { label: "Enter a valid email address.", met: isEmailReady },
+    { label: "Use at least 8 password characters.", met: isPasswordReady },
+    { label: "Confirm that both passwords match.", met: doPasswordsMatch },
+    { label: "Accept the Privacy Policy and Terms.", met: acceptedLegal }
+  ];
+
   async function authenticate(mode: "login" | "register") {
-    if (mode === "register" && !acceptedLegal) {
-      setStatus("Accept the Privacy Policy and Terms of Service before creating an account.");
-      return;
-    }
-    if (mode === "register" && password !== confirmPassword) {
-      setStatus("Passwords must match before creating an account.");
+    if (mode === "register" && !canRegister) {
+      if (!isEmailReady) {
+        setStatus("Enter a valid email address before creating an account.");
+      } else if (!isPasswordReady) {
+        setStatus("Password must be at least 8 characters.");
+      } else if (!doPasswordsMatch) {
+        setStatus("Passwords must match before creating an account.");
+      } else {
+        setStatus("Accept the Privacy Policy and Terms of Service before creating an account.");
+      }
       return;
     }
     setPendingMode(mode);
@@ -83,7 +100,7 @@ export function AuthGate({ children }: Props) {
       const tokens = await apiFetch<{ access_token: string; refresh_token: string }>(`/api/v1/auth/${mode}`, {
         method: "POST",
         body: JSON.stringify({
-          email,
+          email: normalizedEmail,
           password,
           ...(mode === "register"
             ? {
@@ -106,13 +123,6 @@ export function AuthGate({ children }: Props) {
 
   if (PUBLIC_PATHS.has(pathname) || authenticated) return children;
 
-  const canLogin = email.trim().length > 3 && password.length > 0 && pendingMode === null;
-  const canRegister =
-    email.trim().length > 3 &&
-    password.length >= 8 &&
-    confirmPassword === password &&
-    acceptedLegal &&
-    pendingMode === null;
   const panelTitle =
     authMode === "login" ? "Welcome back" : authMode === "register" ? "Create account" : "Get started";
 
@@ -196,8 +206,20 @@ export function AuthGate({ children }: Props) {
                           style={styles.input}
                         />
                         <Text style={styles.helperText}>
-                          Use at least 8 characters, confirm the password, and check the agreement box.
+                          Complete each requirement below to create your account.
                         </Text>
+                        <View style={styles.requirements} accessibilityLabel="Account creation requirements">
+                          {registerRequirements.map((requirement) => (
+                            <View key={requirement.label} style={styles.requirementRow}>
+                              <View style={[styles.requirementMark, requirement.met ? styles.requirementMarkMet : null]}>
+                                {requirement.met ? <Text style={styles.requirementCheck}>✓</Text> : null}
+                              </View>
+                              <Text style={[styles.requirementText, requirement.met ? styles.requirementTextMet : null]}>
+                                {requirement.label}
+                              </Text>
+                            </View>
+                          ))}
+                        </View>
                       </>
                     ) : null}
                   </>
@@ -287,5 +309,21 @@ const styles = StyleSheet.create({
   legalText: { color: Colors.muted, lineHeight: 21 },
   legalLink: { color: Colors.tomatoDark, fontWeight: "900", lineHeight: 21 },
   helperText: { color: Colors.muted, lineHeight: 20 },
+  requirements: { gap: 7, marginTop: -2, marginBottom: 2 },
+  requirementRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  requirementMark: {
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: Colors.surface
+  },
+  requirementMarkMet: { backgroundColor: Colors.basil, borderColor: Colors.basil },
+  requirementCheck: { color: "#fff", fontWeight: "900", fontSize: 12, lineHeight: 14 },
+  requirementText: { color: Colors.muted, flex: 1, lineHeight: 18, fontSize: 13 },
+  requirementTextMet: { color: Colors.ink, fontWeight: "700" },
   status: { color: Colors.danger, fontWeight: "700", lineHeight: 20 }
 });

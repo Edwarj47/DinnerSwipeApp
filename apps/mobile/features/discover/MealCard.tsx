@@ -31,11 +31,18 @@ export function MealCard({ recipe, onAction, onOpen }: Props) {
     .onEnd(() => {
       const x = translateX.value;
       const y = translateY.value;
+      const absX = Math.abs(x);
+      const absY = Math.abs(y);
       translateX.value = withSpring(0);
       translateY.value = withSpring(0);
-      if (x > 90) runOnJS(onAction)("add");
-      if (x < -90) runOnJS(onAction)("skip");
+      if (absX < 90 && absY < 90) return;
+      if (absX >= absY) {
+        if (x > 90) runOnJS(onAction)("add");
+        if (x < -90) runOnJS(onAction)("skip");
+        return;
+      }
       if (y < -90) runOnJS(onAction)("favorite");
+      if (y > 90) runOnJS(onAction)("hide");
     });
   const animated = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { rotate: `${translateX.value / 24}deg` }]
@@ -57,6 +64,10 @@ export function MealCard({ recipe, onAction, onOpen }: Props) {
   const favoriteIndicator = useAnimatedStyle(() => ({
     opacity: interpolate(translateY.value, [-105, -26], [1, 0], Extrapolation.CLAMP),
     transform: [{ scale: interpolate(translateY.value, [-105, -26], [1, 0.92], Extrapolation.CLAMP) }]
+  }));
+  const hideIndicator = useAnimatedStyle(() => ({
+    opacity: interpolate(translateY.value, [26, 105], [0, 1], Extrapolation.CLAMP),
+    transform: [{ scale: interpolate(translateY.value, [26, 105], [0.92, 1], Extrapolation.CLAMP) }]
   }));
   return (
     <GestureDetector gesture={gesture}>
@@ -101,6 +112,10 @@ export function MealCard({ recipe, onAction, onOpen }: Props) {
           <Text style={[styles.swipeBadgeText, styles.favoriteBadgeText]}>FAVORITE</Text>
           <Text style={styles.swipeHint}>Save idea</Text>
         </Animated.View>
+        <Animated.View pointerEvents="none" style={[styles.swipeBadge, styles.hideBadge, hideIndicator]}>
+          <Text style={[styles.swipeBadgeText, styles.hideBadgeText]}>HIDE</Text>
+          <Text style={styles.swipeHint}>Never show</Text>
+        </Animated.View>
       </Animated.View>
     </GestureDetector>
   );
@@ -128,10 +143,12 @@ const styles = StyleSheet.create({
   },
   planBadge: { top: 22, left: 18, borderColor: Colors.basil },
   skipBadge: { top: 22, right: 18, borderColor: Colors.danger },
-  favoriteBadge: { top: "44%", alignSelf: "center", borderColor: Colors.corn },
+  favoriteBadge: { top: "34%", alignSelf: "center", borderColor: Colors.corn },
+  hideBadge: { bottom: "28%", alignSelf: "center", borderColor: Colors.danger },
   swipeBadgeText: { fontSize: 24, lineHeight: 28, fontWeight: "900" },
   planBadgeText: { color: Colors.basil },
   skipBadgeText: { color: Colors.danger },
   favoriteBadgeText: { color: Colors.tomatoDark },
+  hideBadgeText: { color: Colors.danger },
   swipeHint: { color: Colors.ink, fontSize: 11, fontWeight: "800", textTransform: "uppercase" }
 });
