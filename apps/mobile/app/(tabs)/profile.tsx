@@ -15,12 +15,14 @@ import { openTutorial } from "@/services/tutorial";
 import { UserProfile } from "@/services/types";
 
 type ProfileSection = "account" | "meals" | "group" | "premium";
+type AccountAction = "overview" | "reset" | "change" | "data" | "delete";
 
 export default function ProfileScreen() {
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ reset_token?: string }>();
   const router = useRouter();
   const [section, setSection] = useState<ProfileSection>("account");
+  const [accountAction, setAccountAction] = useState<AccountAction>("overview");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [resetToken, setResetToken] = useState("");
@@ -37,7 +39,11 @@ export default function ProfileScreen() {
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [biometricSettings, setBiometricSettings] = useState<BiometricSettings | null>(null);
   useEffect(() => {
-    if (params.reset_token) setResetToken(String(params.reset_token));
+    if (params.reset_token) {
+      setResetToken(String(params.reset_token));
+      setSection("account");
+      setAccountAction("reset");
+    }
   }, [params.reset_token]);
   const refreshBiometricSettings = useCallback(async () => {
     setBiometricSettings(await getBiometricSettings());
@@ -100,7 +106,11 @@ export default function ProfileScreen() {
     onError: (error) => setStatus(String(error))
   });
   const requestReset = useMutation({
-    mutationFn: () => apiFetch<{ status: string }>("/api/v1/auth/password-reset/request", { method: "POST", body: JSON.stringify({ email }) }),
+    mutationFn: () =>
+      apiFetch<{ status: string }>("/api/v1/auth/password-reset/request", {
+        method: "POST",
+        body: JSON.stringify({ email: (authStatus.data?.email ?? email).trim() })
+      }),
     onSuccess: () => setStatus("If the account exists, a reset email was sent."),
     onError: (error) => setStatus(String(error))
   });
@@ -245,17 +255,59 @@ export default function ProfileScreen() {
             )}
           </View>
           <View style={styles.panel}>
-            <Text style={styles.section}>Password</Text>
-            <View style={styles.actions}>
-              <Button label="Email reset link" icon="mail-open" onPress={() => requestReset.mutate()} />
+            <View style={styles.sectionHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.section}>Account tools</Text>
+                <Text style={styles.meta}>Choose an action when you need it.</Text>
+              </View>
+              {accountAction !== "overview" ? <Button label="Back" icon="arrow-back" onPress={() => setAccountAction("overview")} /> : null}
             </View>
-            <TextInput accessibilityLabel="Reset token" value={resetToken} onChangeText={setResetToken} autoCapitalize="none" placeholder="Reset token from email link" style={styles.input} />
-            <TextInput accessibilityLabel="New password" secureTextEntry value={newPassword} onChangeText={setNewPassword} placeholder="New password" style={styles.input} />
-            <Button label="Set new password" icon="key" onPress={() => confirmReset.mutate()} />
-            <View style={styles.divider} />
-            <TextInput accessibilityLabel="Current password" secureTextEntry value={changeCurrentPassword} onChangeText={setChangeCurrentPassword} placeholder="Current password" style={styles.input} />
-            <TextInput accessibilityLabel="New account password" secureTextEntry value={changeNewPassword} onChangeText={setChangeNewPassword} placeholder="New password" style={styles.input} />
-            <Button label="Change password" icon="key" onPress={() => changePassword.mutate()} disabled={changePassword.isPending} />
+            {accountAction === "overview" ? (
+              <View style={styles.toolGrid}>
+                <Button label="Reset password" icon="mail-open" onPress={() => setAccountAction("reset")} />
+                <Button label="Change password" icon="key" onPress={() => setAccountAction("change")} />
+                <Button label="Data and legal" icon="document-text" onPress={() => setAccountAction("data")} />
+                <Button label="Delete request" icon="trash" variant="danger" onPress={() => setAccountAction("delete")} />
+              </View>
+            ) : null}
+            {accountAction === "reset" ? (
+              <View style={styles.flowBox}>
+                <Text style={styles.flowTitle}>Reset password</Text>
+                <Text style={styles.meta}>Send a reset link, then paste the token from that email and choose a new password.</Text>
+                <Button label="Email reset link" icon="mail-open" onPress={() => requestReset.mutate()} />
+                <TextInput accessibilityLabel="Reset token" value={resetToken} onChangeText={setResetToken} autoCapitalize="none" placeholder="Reset token from email link" style={styles.input} />
+                <TextInput accessibilityLabel="New password" secureTextEntry value={newPassword} onChangeText={setNewPassword} placeholder="New password" style={styles.input} />
+                <Button label="Set new password" icon="key" variant="primary" onPress={() => confirmReset.mutate()} />
+              </View>
+            ) : null}
+            {accountAction === "change" ? (
+              <View style={styles.flowBox}>
+                <Text style={styles.flowTitle}>Change password</Text>
+                <TextInput accessibilityLabel="Current password" secureTextEntry value={changeCurrentPassword} onChangeText={setChangeCurrentPassword} placeholder="Current password" style={styles.input} />
+                <TextInput accessibilityLabel="New account password" secureTextEntry value={changeNewPassword} onChangeText={setChangeNewPassword} placeholder="New password" style={styles.input} />
+                <Button label="Change password" icon="key" variant="primary" onPress={() => changePassword.mutate()} disabled={changePassword.isPending} />
+              </View>
+            ) : null}
+            {accountAction === "data" ? (
+              <View style={styles.flowBox}>
+                <Text style={styles.flowTitle}>Data and legal</Text>
+                <Button label="Export my data" icon="download" onPress={() => exportAccount.mutate()} disabled={exportAccount.isPending} />
+                <Text style={styles.meta}>The export excludes password hashes and tokens.</Text>
+                <View style={styles.actions}>
+                  <Button label="Privacy" icon="document-text" onPress={() => router.push("/privacy" as never)} />
+                  <Button label="Terms" icon="document-text" onPress={() => router.push("/terms" as never)} />
+                </View>
+              </View>
+            ) : null}
+            {accountAction === "delete" ? (
+              <View style={styles.deleteBox}>
+                <Text style={styles.deleteTitle}>Delete account request</Text>
+                <Text style={styles.meta}>This records a request for manual review. It does not immediately remove recipes or household data.</Text>
+                <TextInput accessibilityLabel="Password for account deletion request" secureTextEntry value={deletePassword} onChangeText={setDeletePassword} placeholder="Current password" style={styles.input} />
+                <TextInput accessibilityLabel="Type DELETE to request account deletion" value={deleteConfirmation} onChangeText={setDeleteConfirmation} placeholder="Type DELETE" autoCapitalize="characters" style={styles.input} />
+                <Button label="Request deletion" icon="trash" variant="danger" onPress={() => deleteAccount.mutate()} disabled={deleteConfirmation !== "DELETE" || deleteAccount.isPending} />
+              </View>
+            ) : null}
           </View>
           <View style={styles.panel}>
             <Text style={styles.section}>Device security</Text>
@@ -280,22 +332,6 @@ export default function ProfileScreen() {
                 thumbColor={biometricSettings?.enabled ? Colors.tomato : Colors.surface}
                 trackColor={{ false: Colors.border, true: "#f4aaa8" }}
               />
-            </View>
-          </View>
-          <View style={styles.panel}>
-            <Text style={styles.section}>Data and legal</Text>
-            <Button label="Export my data" icon="download" onPress={() => exportAccount.mutate()} disabled={exportAccount.isPending} />
-            <Text style={styles.meta}>The export excludes password hashes and tokens.</Text>
-            <View style={styles.actions}>
-              <Button label="Privacy" icon="document-text" onPress={() => router.push("/privacy" as never)} />
-              <Button label="Terms" icon="document-text" onPress={() => router.push("/terms" as never)} />
-            </View>
-            <View style={styles.deleteBox}>
-              <Text style={styles.deleteTitle}>Delete account request</Text>
-              <Text style={styles.meta}>This records a request for manual review. It does not immediately remove recipes or household data.</Text>
-              <TextInput accessibilityLabel="Password for account deletion request" secureTextEntry value={deletePassword} onChangeText={setDeletePassword} placeholder="Current password" style={styles.input} />
-              <TextInput accessibilityLabel="Type DELETE to request account deletion" value={deleteConfirmation} onChangeText={setDeleteConfirmation} placeholder="Type DELETE" autoCapitalize="characters" style={styles.input} />
-              <Button label="Request deletion" icon="trash" variant="danger" onPress={() => deleteAccount.mutate()} disabled={deleteConfirmation !== "DELETE" || deleteAccount.isPending} />
             </View>
           </View>
         </>
@@ -347,6 +383,10 @@ const styles = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   gridInput: { flex: 1, minWidth: 118 },
   actions: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
+  sectionHeader: { flexDirection: "row", gap: 10, alignItems: "center" },
+  toolGrid: { gap: 9 },
+  flowBox: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 10 },
+  flowTitle: { color: Colors.ink, fontWeight: "900", fontSize: 16 },
   securityBox: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 6 },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 4 },
   deleteBox: { borderWidth: 1, borderColor: "#f0b6b2", backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 9 },
