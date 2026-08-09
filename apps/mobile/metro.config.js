@@ -7,6 +7,18 @@ const workspaceRoot = path.resolve(projectRoot, "../..");
 
 const config = getDefaultConfig(projectRoot);
 
+function resolveWorkspaceNodeModule(moduleName) {
+  if (typeof moduleName !== "string") return null;
+  const normalized = moduleName.replace(/^\.\//, "");
+  if (!normalized.startsWith("node_modules/")) return null;
+
+  try {
+    return require.resolve(path.resolve(workspaceRoot, normalized));
+  } catch {
+    return null;
+  }
+}
+
 config.watchFolders = [workspaceRoot];
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
@@ -28,5 +40,18 @@ config.resolver.extraNodeModules = new Proxy(
     }
   }
 );
+
+const upstreamResolveRequest = config.resolver.resolveRequest;
+config.resolver.resolveRequest = (context, moduleName, platform) => {
+  const workspaceNodeModule = resolveWorkspaceNodeModule(moduleName);
+  if (workspaceNodeModule) {
+    return { type: "sourceFile", filePath: workspaceNodeModule };
+  }
+
+  if (upstreamResolveRequest) {
+    return upstreamResolveRequest(context, moduleName, platform);
+  }
+  return context.resolveRequest(context, moduleName, platform);
+};
 
 module.exports = config;
