@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Platform, Share, StyleSheet, Switch, Text, TextInput, View } from "react-native";
+import { Platform, Pressable, Share, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
@@ -15,7 +15,7 @@ import { openTutorial } from "@/services/tutorial";
 import { UserProfile } from "@/services/types";
 
 type ProfileSection = "account" | "meals" | "group" | "premium";
-type AccountAction = "overview" | "reset" | "change" | "data" | "delete";
+type AccountAction = "overview" | "reset" | "data" | "delete";
 
 export default function ProfileScreen() {
   const queryClient = useQueryClient();
@@ -30,11 +30,9 @@ export default function ProfileScreen() {
   const [householdSize, setHouseholdSize] = useState("2");
   const [weeklyTarget, setWeeklyTarget] = useState("5");
   const [maxCookMinutes, setMaxCookMinutes] = useState("");
-  const [allergens, setAllergens] = useState("");
-  const [dislikes, setDislikes] = useState("");
+  const [allergens, setAllergens] = useState<string[]>([]);
+  const [dislikes, setDislikes] = useState<string[]>([]);
   const [status, setStatus] = useState("");
-  const [changeCurrentPassword, setChangeCurrentPassword] = useState("");
-  const [changeNewPassword, setChangeNewPassword] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [biometricSettings, setBiometricSettings] = useState<BiometricSettings | null>(null);
@@ -66,8 +64,8 @@ export default function ProfileScreen() {
     setHouseholdSize(String(profile.data.household_size));
     setWeeklyTarget(String(profile.data.weekly_meal_target));
     setMaxCookMinutes(profile.data.max_cook_minutes ? String(profile.data.max_cook_minutes) : "");
-    setAllergens(profile.data.allergens.join(", "));
-    setDislikes(profile.data.disliked_ingredients.join(", "));
+    setAllergens(profile.data.allergens);
+    setDislikes(profile.data.disliked_ingredients);
   }, [profile.data]);
   const auth = useMutation({
     mutationFn: (mode: "login" | "register") =>
@@ -123,19 +121,6 @@ export default function ProfileScreen() {
     },
     onError: (error) => setStatus(String(error))
   });
-  const changePassword = useMutation({
-    mutationFn: () =>
-      apiFetch<{ status: string }>("/api/v1/auth/password/change", {
-        method: "POST",
-        body: JSON.stringify({ current_password: changeCurrentPassword, new_password: changeNewPassword })
-      }),
-    onSuccess: () => {
-      setChangeCurrentPassword("");
-      setChangeNewPassword("");
-      setStatus("Password changed.");
-    },
-    onError: (error) => setStatus(String(error))
-  });
   const exportAccount = useMutation({
     mutationFn: () => apiFetch<Record<string, unknown>>("/api/v1/auth/account/export"),
     onSuccess: async (data) => {
@@ -167,8 +152,8 @@ export default function ProfileScreen() {
           max_cook_minutes: maxCookMinutes ? Number(maxCookMinutes) : null,
           difficulty_preference: profile.data?.difficulty_preference ?? null,
           dietary_preferences: profile.data?.dietary_preferences ?? [],
-          allergens: listFromText(allergens),
-          disliked_ingredients: listFromText(dislikes),
+          allergens: cleanList(allergens),
+          disliked_ingredients: cleanList(dislikes),
           favorite_proteins: profile.data?.favorite_proteins ?? [],
           budget_preference: profile.data?.budget_preference ?? null,
           walmart_zip: profile.data?.walmart_zip ?? null,
@@ -198,7 +183,7 @@ export default function ProfileScreen() {
         await refreshBiometricSettings();
         return;
       }
-      const approved = await authenticateForUnlock(`Enable Dinner Swipe ${settings.label} unlock`);
+      const approved = await authenticateForUnlock("Enable Biometrics");
       if (!approved) {
         setStatus("Biometric setup was cancelled.");
         await refreshBiometricSettings();
@@ -207,11 +192,7 @@ export default function ProfileScreen() {
     }
     await setBiometricPreference(enabled);
     await refreshBiometricSettings();
-    setStatus(
-      enabled
-        ? `${settings.label} unlock enabled for the next app open or return.`
-        : "Biometric unlock disabled."
-    );
+    setStatus(enabled ? "Biometrics enabled." : "Biometrics disabled.");
   }
   return (
     <Screen>
@@ -269,7 +250,6 @@ export default function ProfileScreen() {
             {accountAction === "overview" ? (
               <View style={styles.toolGrid}>
                 <Button label="Reset password" icon="mail-open" onPress={() => setAccountAction("reset")} />
-                <Button label="Change password" icon="key" onPress={() => setAccountAction("change")} />
                 <Button label="Data and legal" icon="document-text" onPress={() => setAccountAction("data")} />
                 <Button label="Delete request" icon="trash" variant="danger" onPress={() => setAccountAction("delete")} />
               </View>
@@ -277,19 +257,11 @@ export default function ProfileScreen() {
             {accountAction === "reset" ? (
               <View style={styles.flowBox}>
                 <Text style={styles.flowTitle}>Reset password</Text>
-                <Text style={styles.meta}>Send a reset link, then paste the token from that email and choose a new password.</Text>
-                <Button label="Email reset link" icon="mail-open" onPress={() => requestReset.mutate()} />
+                <Text style={styles.meta}>We'll email a secure reset link to your account. Use this if you forgot your password or want to change it.</Text>
+                <Button label="Send reset email" icon="mail-open" onPress={() => requestReset.mutate()} />
                 <TextInput accessibilityLabel="Reset token" value={resetToken} onChangeText={setResetToken} autoCapitalize="none" placeholder="Reset token from email link" style={styles.input} />
                 <TextInput accessibilityLabel="New password" secureTextEntry value={newPassword} onChangeText={setNewPassword} placeholder="New password" style={styles.input} />
                 <Button label="Set new password" icon="key" variant="primary" onPress={() => confirmReset.mutate()} />
-              </View>
-            ) : null}
-            {accountAction === "change" ? (
-              <View style={styles.flowBox}>
-                <Text style={styles.flowTitle}>Change password</Text>
-                <TextInput accessibilityLabel="Current password" secureTextEntry value={changeCurrentPassword} onChangeText={setChangeCurrentPassword} placeholder="Current password" style={styles.input} />
-                <TextInput accessibilityLabel="New account password" secureTextEntry value={changeNewPassword} onChangeText={setChangeNewPassword} placeholder="New password" style={styles.input} />
-                <Button label="Change password" icon="key" variant="primary" onPress={() => changePassword.mutate()} disabled={changePassword.isPending} />
               </View>
             ) : null}
             {accountAction === "data" ? (
@@ -317,12 +289,12 @@ export default function ProfileScreen() {
             <Text style={styles.section}>Device security</Text>
             <View style={styles.toggleRow}>
               <View style={styles.toggleCopy}>
-                <Text style={styles.toggleTitle}>{biometricSettings?.label ? `Use ${biometricSettings.label}` : "Use biometrics"}</Text>
+                <Text style={styles.toggleTitle}>Enable Biometrics</Text>
                 <Text style={styles.meta}>
                   {Platform.OS === "web"
                     ? "Biometric unlock is available on Android and iOS builds."
                     : biometricSettings?.supported
-                      ? "Unlock the saved session on this device when the app opens or returns."
+                      ? `Use ${biometricSettings.label} when Dinner Swipe opens.`
                       : "Set up Face ID, fingerprint, or a device passcode to enable this."}
                 </Text>
               </View>
@@ -348,8 +320,18 @@ export default function ProfileScreen() {
             <TextInput accessibilityLabel="Weekly dinner target" value={weeklyTarget} onChangeText={setWeeklyTarget} keyboardType="number-pad" placeholder="Weekly meals" style={[styles.input, styles.gridInput]} />
             <TextInput accessibilityLabel="Maximum preferred cook time" value={maxCookMinutes} onChangeText={setMaxCookMinutes} keyboardType="number-pad" placeholder="Max cook minutes" style={[styles.input, styles.gridInput]} />
           </View>
-          <TextInput accessibilityLabel="Allergens" value={allergens} onChangeText={setAllergens} placeholder="Allergens, comma separated" style={styles.input} />
-          <TextInput accessibilityLabel="Disliked ingredients" value={dislikes} onChangeText={setDislikes} placeholder="Disliked ingredients, comma separated" style={styles.input} />
+          <TagEditor
+            label="Allergens"
+            placeholder="Add an allergen"
+            values={allergens}
+            onChange={setAllergens}
+          />
+          <TagEditor
+            label="Disliked ingredients"
+            placeholder="Add an ingredient"
+            values={dislikes}
+            onChange={setDislikes}
+          />
           <Text style={styles.meta}>Allergens are stored per user. Group owners can warn or block matching recipes during group votes.</Text>
           <Button label="Save preferences" icon="save" variant="primary" onPress={() => saveProfile.mutate()} />
         </View>
@@ -360,8 +342,100 @@ export default function ProfileScreen() {
   );
 }
 
-function listFromText(value: string) {
-  return value.split(",").map((item) => item.trim()).filter(Boolean);
+function TagEditor({
+  label,
+  placeholder,
+  values,
+  onChange
+}: {
+  label: string;
+  placeholder: string;
+  values: string[];
+  onChange: (values: string[]) => void;
+}) {
+  const [draft, setDraft] = useState("");
+
+  function addRawValue(raw: string) {
+    const additions = cleanList(raw.split(","));
+    if (!additions.length) return;
+    const existing = new Set(values.map((item) => item.toLowerCase()));
+    const next = [...values];
+    for (const item of additions) {
+      if (!existing.has(item.toLowerCase())) {
+        existing.add(item.toLowerCase());
+        next.push(item);
+      }
+    }
+    onChange(next);
+  }
+
+  function handleChange(text: string) {
+    if (!text.includes(",")) {
+      setDraft(text);
+      return;
+    }
+    const parts = text.split(",");
+    const trailing = parts.pop() ?? "";
+    addRawValue(parts.join(","));
+    setDraft(trailing.trimStart());
+  }
+
+  function submitDraft() {
+    addRawValue(draft);
+    setDraft("");
+  }
+
+  function removeValue(value: string) {
+    onChange(values.filter((item) => item !== value));
+  }
+
+  return (
+    <View style={styles.tagEditor}>
+      <Text style={styles.inputLabel}>{label}</Text>
+      <View style={styles.tagInputRow}>
+        <TextInput
+          accessibilityLabel={label}
+          value={draft}
+          onChangeText={handleChange}
+          onSubmitEditing={submitDraft}
+          returnKeyType="done"
+          placeholder={placeholder}
+          style={[styles.input, styles.tagInput]}
+        />
+        <Button label="Add" icon="add" onPress={submitDraft} disabled={!draft.trim()} />
+      </View>
+      {values.length ? (
+        <View style={styles.chipRow}>
+          {values.map((value) => (
+            <Pressable
+              key={value}
+              accessibilityRole="button"
+              accessibilityLabel={`Remove ${value}`}
+              onPress={() => removeValue(value)}
+              style={styles.chip}
+            >
+              <Text style={styles.chipText}>{value}</Text>
+              <Text style={styles.chipRemove}>×</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <Text style={styles.tagHint}>Add one at a time, or paste a comma-separated list.</Text>
+      )}
+    </View>
+  );
+}
+
+function cleanList(values: string[]) {
+  const seen = new Set<string>();
+  const cleaned: string[] = [];
+  for (const value of values) {
+    const item = value.trim().replace(/\s+/g, " ");
+    if (!item || seen.has(item.toLowerCase())) continue;
+    seen.add(item.toLowerCase());
+    cleaned.push(item);
+  }
+  return cleaned;
 }
 
 async function deliverAccountExport(data: Record<string, unknown>) {
@@ -395,6 +469,26 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 4 },
   deleteBox: { borderWidth: 1, borderColor: "#f0b6b2", backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 9 },
   deleteTitle: { color: Colors.danger, fontWeight: "900" },
+  tagEditor: { gap: 8 },
+  inputLabel: { color: Colors.ink, fontWeight: "900" },
+  tagInputRow: { flexDirection: "row", alignItems: "center", gap: 8 },
+  tagInput: { flex: 1 },
+  chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chip: {
+    minHeight: 36,
+    borderRadius: 999,
+    backgroundColor: Colors.softRed,
+    borderColor: "#f4c4c0",
+    borderWidth: 1,
+    paddingLeft: 12,
+    paddingRight: 10,
+    alignItems: "center",
+    flexDirection: "row",
+    gap: 7
+  },
+  chipText: { color: Colors.tomatoDark, fontWeight: "900" },
+  chipRemove: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 18, lineHeight: 20 },
+  tagHint: { color: Colors.muted, lineHeight: 19, fontSize: 13 },
   toggleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14 },
   toggleCopy: { flex: 1, gap: 4 },
   toggleTitle: { color: Colors.ink, fontWeight: "900", fontSize: 16 },

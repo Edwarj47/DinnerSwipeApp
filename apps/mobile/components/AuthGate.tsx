@@ -138,7 +138,7 @@ export function AuthGate({ children }: Props) {
         biometricSettings?.supported &&
         !biometricSettings.enabled
       ) {
-        const approved = await authenticateForUnlock(`Enable Dinner Swipe ${biometricSettings.label} unlock`);
+        const approved = await authenticateForUnlock("Enable Biometrics");
         if (approved) {
           await setBiometricPreference(true);
         }
@@ -256,12 +256,9 @@ export function AuthGate({ children }: Props) {
                     {canOfferBiometricOptIn ? (
                       <View style={styles.biometricRow}>
                         <View style={{ flex: 1 }}>
-                          <Text style={styles.biometricTitle}>
-                            Use {biometricSettings?.label ?? "biometrics"} on this device
-                          </Text>
+                          <Text style={styles.biometricTitle}>Enable Biometrics</Text>
                           <Text style={styles.biometricText}>
-                            After this {authMode === "register" ? "account is created" : "sign-in"},
-                            unlock the saved session without typing your password.
+                            Use {biometricSettings?.label ?? "this device"} when Dinner Swipe opens.
                           </Text>
                         </View>
                         <Switch
