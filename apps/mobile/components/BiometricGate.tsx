@@ -3,7 +3,7 @@ import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, AppStateStatus, StyleSheet, Text, View } from "react-native";
 
 import { BiometricSettings, authenticateForUnlock, getBiometricSettings, setBiometricPreference } from "@/services/biometrics";
-import { clearAuthTokens, getToken } from "@/services/api";
+import { clearAuthTokens, getRefreshToken, getToken } from "@/services/api";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
 import { Colors } from "@/components/theme";
@@ -20,11 +20,16 @@ export function BiometricGate({ children }: Props) {
   const [settings, setSettings] = useState<BiometricSettings | null>(null);
   const [message, setMessage] = useState("");
   const lastAppState = useRef<AppStateStatus>(AppState.currentState);
+  const promptInProgress = useRef(false);
 
   const lockIfNeeded = useCallback(async () => {
-    const [token, biometricSettings] = await Promise.all([getToken(), getBiometricSettings()]);
+    const [token, refreshToken, biometricSettings] = await Promise.all([
+      getToken(),
+      getRefreshToken(),
+      getBiometricSettings()
+    ]);
     setSettings(biometricSettings);
-    if (token && biometricSettings.enabled && biometricSettings.supported) {
+    if ((token || refreshToken) && biometricSettings.enabled && biometricSettings.supported) {
       setGateState("locked");
       return;
     }
@@ -46,15 +51,27 @@ export function BiometricGate({ children }: Props) {
     return () => subscription.remove();
   }, [lockIfNeeded]);
 
-  async function unlock() {
+  const unlock = useCallback(async () => {
+    if (promptInProgress.current) return;
+    promptInProgress.current = true;
     setMessage("");
-    const unlocked = await authenticateForUnlock();
-    if (unlocked) {
-      setGateState("unlocked");
-      return;
+    try {
+      const unlocked = await authenticateForUnlock();
+      if (unlocked) {
+        setGateState("unlocked");
+        return;
+      }
+      setMessage("Unlock was cancelled or not recognized.");
+    } finally {
+      promptInProgress.current = false;
     }
-    setMessage("Unlock was cancelled or not recognized.");
-  }
+  }, []);
+
+  useEffect(() => {
+    if (gateState === "locked") {
+      void unlock();
+    }
+  }, [gateState, unlock]);
 
   async function usePasswordInstead() {
     await Promise.all([clearAuthTokens(), setBiometricPreference(false)]);

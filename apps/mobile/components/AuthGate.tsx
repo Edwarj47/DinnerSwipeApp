@@ -8,6 +8,7 @@ import {
   Pressable,
   ScrollView,
   StyleSheet,
+  Switch,
   Text,
   TextInput,
   View
@@ -18,6 +19,12 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
 import { Colors } from "@/components/theme";
 import { addAuthChangeListener, apiFetch, clearAuthTokens, getToken, setAuthTokens } from "@/services/api";
+import {
+  BiometricSettings,
+  authenticateForUnlock,
+  getBiometricSettings,
+  setBiometricPreference
+} from "@/services/biometrics";
 
 type Props = {
   children: ReactNode;
@@ -39,6 +46,8 @@ export function AuthGate({ children }: Props) {
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [status, setStatus] = useState("");
   const [pendingMode, setPendingMode] = useState<"login" | "register" | null>(null);
+  const [biometricSettings, setBiometricSettings] = useState<BiometricSettings | null>(null);
+  const [enableBiometricAfterAuth, setEnableBiometricAfterAuth] = useState(false);
 
   const checkSession = useCallback(async () => {
     if (PUBLIC_PATHS.has(pathname)) {
@@ -68,12 +77,24 @@ export function AuthGate({ children }: Props) {
 
   useEffect(() => addAuthChangeListener(() => void checkSession()), [checkSession]);
 
+  useEffect(() => {
+    void getBiometricSettings().then((settings) => {
+      setBiometricSettings(settings);
+      if (settings.enabled) setEnableBiometricAfterAuth(true);
+    });
+  }, []);
+
   const normalizedEmail = email.trim();
   const isEmailReady = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail);
   const isPasswordReady = password.length >= 8;
   const doPasswordsMatch = confirmPassword.length > 0 && confirmPassword === password;
   const canLogin = normalizedEmail.length > 3 && password.length > 0 && pendingMode === null;
   const canRegister = isEmailReady && isPasswordReady && doPasswordsMatch && acceptedLegal && pendingMode === null;
+  const canOfferBiometricOptIn =
+    Platform.OS !== "web" &&
+    Boolean(biometricSettings?.supported) &&
+    authMode !== "choice" &&
+    !biometricSettings?.enabled;
   const registerRequirements = [
     { label: "Enter a valid email address.", met: isEmailReady },
     { label: "Use at least 8 password characters.", met: isPasswordReady },
@@ -112,6 +133,16 @@ export function AuthGate({ children }: Props) {
         })
       });
       await setAuthTokens(tokens);
+      if (
+        enableBiometricAfterAuth &&
+        biometricSettings?.supported &&
+        !biometricSettings.enabled
+      ) {
+        const approved = await authenticateForUnlock(`Enable Dinner Swipe ${biometricSettings.label} unlock`);
+        if (approved) {
+          await setBiometricPreference(true);
+        }
+      }
       await queryClient.invalidateQueries();
       setAuthenticated(true);
     } catch (error) {
@@ -222,6 +253,26 @@ export function AuthGate({ children }: Props) {
                         </View>
                       </>
                     ) : null}
+                    {canOfferBiometricOptIn ? (
+                      <View style={styles.biometricRow}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.biometricTitle}>
+                            Use {biometricSettings?.label ?? "biometrics"} on this device
+                          </Text>
+                          <Text style={styles.biometricText}>
+                            After this {authMode === "register" ? "account is created" : "sign-in"},
+                            unlock the saved session without typing your password.
+                          </Text>
+                        </View>
+                        <Switch
+                          accessibilityLabel="Enable biometric unlock after authentication"
+                          value={enableBiometricAfterAuth}
+                          onValueChange={setEnableBiometricAfterAuth}
+                          thumbColor={enableBiometricAfterAuth ? Colors.tomato : Colors.surface}
+                          trackColor={{ false: Colors.border, true: "#f4aaa8" }}
+                        />
+                      </View>
+                    ) : null}
                   </>
                 )}
                 {authMode === "login" ? (
@@ -325,5 +376,17 @@ const styles = StyleSheet.create({
   requirementCheck: { color: "#fff", fontWeight: "900", fontSize: 12, lineHeight: 14 },
   requirementText: { color: Colors.muted, flex: 1, lineHeight: 18, fontSize: 13 },
   requirementTextMet: { color: Colors.ink, fontWeight: "700" },
+  biometricRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    padding: 12,
+    backgroundColor: Colors.softRed
+  },
+  biometricTitle: { color: Colors.ink, fontWeight: "900" },
+  biometricText: { color: Colors.muted, lineHeight: 19, marginTop: 3, fontSize: 13 },
   status: { color: Colors.danger, fontWeight: "700", lineHeight: 20 }
 });

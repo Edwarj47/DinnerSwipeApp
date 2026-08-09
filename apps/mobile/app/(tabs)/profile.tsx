@@ -207,7 +207,11 @@ export default function ProfileScreen() {
     }
     await setBiometricPreference(enabled);
     await refreshBiometricSettings();
-    setStatus(enabled ? `${settings.label} unlock enabled.` : "Biometric unlock disabled.");
+    setStatus(
+      enabled
+        ? `${settings.label} unlock enabled for the next app open or return.`
+        : "Biometric unlock disabled."
+    );
   }
   return (
     <Screen>
@@ -318,7 +322,7 @@ export default function ProfileScreen() {
                   {Platform.OS === "web"
                     ? "Biometric unlock is available on Android and iOS builds."
                     : biometricSettings?.supported
-                      ? "Unlock the saved session on this device after sign-in."
+                      ? "Unlock the saved session on this device when the app opens or returns."
                       : "Set up Face ID, fingerprint, or a device passcode to enable this."}
                 </Text>
               </View>
@@ -346,7 +350,7 @@ export default function ProfileScreen() {
           </View>
           <TextInput accessibilityLabel="Allergens" value={allergens} onChangeText={setAllergens} placeholder="Allergens, comma separated" style={styles.input} />
           <TextInput accessibilityLabel="Disliked ingredients" value={dislikes} onChangeText={setDislikes} placeholder="Disliked ingredients, comma separated" style={styles.input} />
-          <Text style={styles.meta}>Allergens are stored per user. For now they are not automatically hidden from group voters.</Text>
+          <Text style={styles.meta}>Allergens are stored per user. Group owners can warn or block matching recipes during group votes.</Text>
           <Button label="Save preferences" icon="save" variant="primary" onPress={() => saveProfile.mutate()} />
         </View>
       ) : null}
