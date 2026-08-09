@@ -5,15 +5,19 @@ import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-nat
 
 import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 
 type GroceryItem = { id: string; display_name: string; quantity: number | null; unit: string | null; category: string; is_checked: boolean; walmart_search_url?: string; match_status: string; notes?: string | null };
 type PantryItem = { id: string; normalized_name: string; category: string };
+type GroceryMode = "list" | "add" | "pantry";
 
 export default function GroceryScreen() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState("");
+  const [mode, setMode] = useState<GroceryMode>("list");
+  const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [manualName, setManualName] = useState("");
   const [manualQty, setManualQty] = useState("");
   const [manualUnit, setManualUnit] = useState("");
@@ -21,10 +25,12 @@ export default function GroceryScreen() {
   const { data } = useQuery<{ items: GroceryItem[] }>({ queryKey: ["grocery"], queryFn: () => apiFetch<{ items: GroceryItem[] }>("/api/v1/grocery-lists/current") });
   const { data: pantry } = useQuery<PantryItem[]>({ queryKey: ["pantry"], queryFn: () => apiFetch<PantryItem[]>("/api/v1/grocery-lists/pantry") });
   const grouped = useMemo(() => groupItems(data?.items ?? []), [data?.items]);
+  const itemsLeft = data?.items.filter((item: GroceryItem) => !item.is_checked).length ?? 0;
   const regen = useMutation({
     mutationFn: () => apiFetch("/api/v1/grocery-lists/current/regenerate", { method: "POST" }),
     onSuccess: async () => {
       setStatus("List regenerated from this week.");
+      setMode("list");
       await queryClient.invalidateQueries({ queryKey: ["grocery"] });
     }
   });
@@ -56,6 +62,7 @@ export default function GroceryScreen() {
       setManualQty("");
       setManualUnit("");
       setStatus("Household item added.");
+      setMode("list");
       await queryClient.invalidateQueries({ queryKey: ["grocery"] });
     }
   });
@@ -79,11 +86,22 @@ export default function GroceryScreen() {
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Grocery List</Text>
-          <Text style={styles.subtitle}>{data?.items.filter((item: GroceryItem) => !item.is_checked).length ?? 0} left to grab</Text>
+          <Text style={styles.subtitle}>{itemsLeft} left to grab</Text>
         </View>
         <Button label="Regenerate" icon="sync" onPress={() => regen.mutate()} />
       </View>
       {status ? <Text style={styles.status}>{status}</Text> : null}
+      <SegmentedControl
+        accessibilityLabel="Grocery sections"
+        value={mode}
+        onChange={setMode}
+        options={[
+          { label: "List", value: "list" },
+          { label: "Add", value: "add" },
+          { label: "Pantry", value: "pantry" }
+        ]}
+      />
+      {mode === "add" ? (
       <View style={styles.panel}>
         <Text style={styles.sectionTitle}>Add household item</Text>
         <TextInput accessibilityLabel="Manual item name" value={manualName} onChangeText={setManualName} placeholder="Paper towels, foil, dish soap" style={styles.input} />
@@ -93,6 +111,8 @@ export default function GroceryScreen() {
           <Button label="Add" icon="add" variant="primary" onPress={() => addManual.mutate()} />
         </View>
       </View>
+      ) : null}
+      {mode === "pantry" ? (
       <View style={styles.panel}>
         <Text style={styles.sectionTitle}>Pantry exclusions</Text>
         <View style={styles.inputRow}>
@@ -108,29 +128,38 @@ export default function GroceryScreen() {
           ))}
         </View>
       </View>
-      {grouped.map(([category, items]) => (
+      ) : null}
+      {mode === "list" ? grouped.map(([category, items]) => (
         <View key={category} style={styles.group}>
           <Text style={styles.category}>{category}</Text>
-          {items.map((item) => (
-            <View key={item.id} style={styles.item}>
+          {items.map((item) => {
+            const isExpanded = expandedItemId === item.id;
+            return (
+            <View key={item.id} style={[styles.item, isExpanded ? styles.itemExpanded : null]}>
               <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: item.is_checked }} onPress={() => patchItem.mutate({ item, patch: { is_checked: !item.is_checked } })} style={[styles.checkbox, item.is_checked && styles.checkboxChecked]}>
                 {item.is_checked ? <Ionicons name="checkmark" size={19} color="#fff" /> : null}
               </Pressable>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.name, item.is_checked && styles.checked]}>{item.display_name}</Text>
-                <Text style={styles.meta}>{formatQuantity(item)} - {item.match_status}{item.notes ? ` - ${item.notes}` : ""}</Text>
-                <View style={styles.itemControls}>
+              <View style={styles.itemBody}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${item.display_name}`} onPress={() => setExpandedItemId(isExpanded ? null : item.id)} style={styles.itemSummary}>
+                  <Text style={[styles.name, item.is_checked && styles.checked]}>{item.display_name}</Text>
+                  <Text style={styles.meta}>{formatQuantity(item)} - {item.match_status}</Text>
+                  {item.notes ? <Text style={styles.meta}>{item.notes}</Text> : null}
+                </Pressable>
+                {isExpanded ? (
+                  <View style={styles.itemControls}>
                   <Button label="-" icon="remove" onPress={() => patchItem.mutate({ item, patch: { quantity: Math.max(0, (item.quantity ?? 1) - 1) } })} />
                   <Button label="+" icon="add" onPress={() => patchItem.mutate({ item, patch: { quantity: (item.quantity ?? 0) + 1 } })} />
                   {item.walmart_search_url ? <Button label="Walmart" icon="search" onPress={() => Linking.openURL(item.walmart_search_url!)} /> : null}
                   <Button label="Delete" icon="trash" variant="danger" onPress={() => deleteItem.mutate(item)} />
-                </View>
+                  </View>
+                ) : null}
               </View>
             </View>
-          ))}
+            );
+          })}
         </View>
-      ))}
-      {!data?.items?.length ? (
+      )) : null}
+      {mode === "list" && !data?.items?.length ? (
         <View style={styles.emptyPanel}>
           <Text style={styles.emptyTitle}>No grocery items yet</Text>
           <Text style={styles.empty}>Choose meals or add a household item, then regenerate the list.</Text>
@@ -159,7 +188,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: "900", color: Colors.ink },
   subtitle: { color: Colors.muted },
   status: { color: Colors.basil, fontWeight: "800", marginBottom: 10 },
-  panel: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 10, marginBottom: 12 },
+  panel: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 10, marginTop: 12, marginBottom: 12 },
   sectionTitle: { color: Colors.ink, fontSize: 18, fontWeight: "900" },
   inputRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
   input: { minHeight: 46, flex: 1, minWidth: 130, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, backgroundColor: Colors.surface },
@@ -168,11 +197,14 @@ const styles = StyleSheet.create({
   pantryChip: { flexDirection: "row", gap: 7, alignItems: "center", borderRadius: 999, backgroundColor: Colors.softRed, paddingHorizontal: 10, minHeight: 34 },
   pantryText: { color: Colors.tomatoDark, fontWeight: "800", textTransform: "capitalize" },
   pantryRemove: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 16 },
-  group: { marginBottom: 12, gap: 8 },
+  group: { marginTop: 12, marginBottom: 2, gap: 8 },
   category: { color: Colors.basil, fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
   item: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, flexDirection: "row", gap: 10 },
+  itemExpanded: { borderColor: "#f0b6b2" },
   checkbox: { width: 30, height: 30, borderRadius: 8, borderWidth: 2, borderColor: Colors.border, alignItems: "center", justifyContent: "center", marginTop: 2 },
   checkboxChecked: { backgroundColor: Colors.basil, borderColor: Colors.basil },
+  itemBody: { flex: 1, gap: 1 },
+  itemSummary: { gap: 1 },
   name: { fontSize: 17, fontWeight: "800", color: Colors.ink },
   checked: { textDecorationLine: "line-through", color: Colors.muted },
   meta: { color: Colors.muted, marginTop: 2 },

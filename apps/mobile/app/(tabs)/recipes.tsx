@@ -5,6 +5,7 @@ import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { BrandLogo } from "@/components/BrandLogo";
 import { Screen } from "@/components/Screen";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { ImportPanel } from "@/features/imports/ImportPanel";
 import { UrlIngestionPanel } from "@/features/ingestion/UrlIngestionPanel";
@@ -13,42 +14,82 @@ import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 
-type Mode = "web" | "manual" | "file";
+type PageMode = "library" | "add" | "review";
+type AddMode = "web" | "manual" | "file";
 
 export default function RecipesScreen() {
   const [q, setQ] = useState("");
-  const [mode, setMode] = useState<Mode>("web");
+  const [pageMode, setPageMode] = useState<PageMode>("library");
+  const [addMode, setAddMode] = useState<AddMode>("web");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const { data } = useQuery<Recipe[]>({
     queryKey: ["recipes", q],
     queryFn: () => apiFetch<Recipe[]>(`/api/v1/recipes?q=${encodeURIComponent(q)}`)
   });
+  const recipes: Recipe[] = data ?? [];
+  const reviewRecipes = recipes.filter((recipe) =>
+    recipe.validation_status !== "approved" ||
+    recipe.validation_warnings.length > 0 ||
+    recipe.duplicate_status !== "new" ||
+    ["requires_review", "missing", "rejected"].includes(recipe.image_status)
+  );
+  const visibleRecipes = pageMode === "review" ? reviewRecipes : recipes;
 
   return (
     <Screen>
-      <View style={styles.hero}>
-        <BrandLogo size={70} framed />
+      <View style={styles.header}>
+        <BrandLogo size={54} framed />
         <View style={{ flex: 1 }}>
           <Text style={styles.kicker}>Dinner Swipe</Text>
-          <Text style={styles.title}>Add meals people will vote for.</Text>
+          <Text style={styles.title}>Recipes</Text>
+          <Text style={styles.subtitle}>Save, import, and review meals before they hit Discover.</Text>
         </View>
       </View>
-      <View style={styles.segment}>
-        {(["web", "manual", "file"] as const).map((item) => (
-          <Pressable key={item} accessibilityRole="button" onPress={() => setMode(item)} style={[styles.segmentButton, mode === item && styles.segmentActive]}>
-            <Text style={[styles.segmentText, mode === item && styles.segmentTextActive]}>{item === "web" ? "Web" : item === "manual" ? "Manual" : "CSV"}</Text>
-          </Pressable>
-        ))}
-      </View>
-      {mode === "web" ? <UrlIngestionPanel /> : null}
-      {mode === "manual" ? <ManualRecipePanel /> : null}
-      {mode === "file" ? <ImportPanel /> : null}
-      <TextInput accessibilityLabel="Search recipes" value={q} onChangeText={setQ} placeholder="Search saved recipes" style={styles.search} />
-      <View style={styles.listHeader}>
-        <Text style={styles.sectionTitle}>Recipe library</Text>
-        <Text style={styles.count}>{data?.length ?? 0}</Text>
-      </View>
-      {(data ?? []).map((recipe: Recipe) => (
+      <SegmentedControl
+        accessibilityLabel="Recipe sections"
+        value={pageMode}
+        onChange={setPageMode}
+        options={[
+          { label: "Library", value: "library" },
+          { label: "Add", value: "add" },
+          { label: "Review", value: "review" }
+        ]}
+      />
+      {pageMode === "add" ? (
+        <>
+          <View style={styles.addSegment}>
+            <SegmentedControl
+              accessibilityLabel="Recipe add options"
+              value={addMode}
+              onChange={setAddMode}
+              options={[
+                { label: "Web", value: "web" },
+                { label: "Manual", value: "manual" },
+                { label: "CSV", value: "file" }
+              ]}
+            />
+          </View>
+          {addMode === "web" ? <UrlIngestionPanel /> : null}
+          {addMode === "manual" ? <ManualRecipePanel /> : null}
+          {addMode === "file" ? <ImportPanel /> : null}
+        </>
+      ) : null}
+      {pageMode !== "add" ? (
+        <>
+          <TextInput accessibilityLabel="Search recipes" value={q} onChangeText={setQ} placeholder="Search saved recipes" style={styles.search} />
+          <View style={styles.listHeader}>
+            <Text style={styles.sectionTitle}>{pageMode === "review" ? "Needs review" : "Recipe library"}</Text>
+            <Text style={styles.count}>{visibleRecipes.length}</Text>
+          </View>
+        </>
+      ) : null}
+      {pageMode !== "add" && !visibleRecipes.length ? (
+        <View style={styles.emptyPanel}>
+          <Text style={styles.emptyTitle}>{pageMode === "review" ? "Nothing needs review" : "No recipes found"}</Text>
+          <Text style={styles.empty}>{pageMode === "review" ? "Imported and ingested recipes that need attention will appear here." : "Try another search or add a recipe."}</Text>
+        </View>
+      ) : null}
+      {pageMode !== "add" ? visibleRecipes.map((recipe: Recipe) => (
         <Pressable key={recipe.id} accessibilityRole="button" accessibilityLabel={`Open ${recipe.name}`} onPress={() => setSelectedRecipe(recipe)} style={styles.row}>
           <Image source={{ uri: recipe.photo_url ?? undefined }} style={styles.thumb} contentFit="cover" />
           <View style={styles.body}>
@@ -57,21 +98,18 @@ export default function RecipesScreen() {
             {recipe.validation_warnings.length ? <Text style={styles.warning}>{recipe.validation_warnings[0]}</Text> : null}
           </View>
         </Pressable>
-      ))}
+      )) : null}
       <RecipeDetailSheet recipe={selectedRecipe} visible={!!selectedRecipe} onClose={() => setSelectedRecipe(null)} />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  hero: { backgroundColor: Colors.tomato, borderRadius: 8, padding: 16, flexDirection: "row", gap: 14, alignItems: "center", marginBottom: 14 },
-  kicker: { color: "#ffe3e0", fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
-  title: { color: Colors.surface, fontSize: 25, fontWeight: "900", lineHeight: 30 },
-  segment: { flexDirection: "row", backgroundColor: Colors.softRed, borderRadius: 8, padding: 4, marginBottom: 12 },
-  segmentButton: { flex: 1, minHeight: 42, alignItems: "center", justifyContent: "center", borderRadius: 7 },
-  segmentActive: { backgroundColor: Colors.surface },
-  segmentText: { color: Colors.muted, fontWeight: "900" },
-  segmentTextActive: { color: Colors.tomato },
+  header: { flexDirection: "row", gap: 12, alignItems: "center", marginBottom: 14 },
+  kicker: { color: Colors.basil, fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
+  title: { color: Colors.ink, fontSize: 32, fontWeight: "900", lineHeight: 36 },
+  subtitle: { color: Colors.muted, lineHeight: 20 },
+  addSegment: { marginTop: 12 },
   search: { minHeight: 48, backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, paddingHorizontal: 12, marginVertical: 14 },
   listHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
   sectionTitle: { fontSize: 20, fontWeight: "900", color: Colors.ink },
@@ -81,5 +119,8 @@ const styles = StyleSheet.create({
   body: { flex: 1, justifyContent: "center" },
   name: { fontSize: 17, fontWeight: "900", color: Colors.ink },
   meta: { color: Colors.muted, marginTop: 3 },
-  warning: { color: Colors.danger, marginTop: 4 }
+  warning: { color: Colors.danger, marginTop: 4 },
+  emptyPanel: { alignItems: "center", paddingVertical: 34, gap: 6 },
+  emptyTitle: { color: Colors.ink, fontWeight: "900", fontSize: 20 },
+  empty: { color: Colors.muted, textAlign: "center", lineHeight: 20 }
 });

@@ -25,6 +25,7 @@ export default function WeekScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
   const [status, setStatus] = useState("");
+  const [expandedSlotId, setExpandedSlotId] = useState<string | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ["weekly-plan"], queryFn: () => apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current") });
   const premium = useQuery({ queryKey: ["premium-status"], queryFn: () => apiFetch<PremiumStatus>("/api/v1/premium/status"), retry: false });
   const sortedSlots = useMemo(() => [...(data?.slots ?? [])].sort((a, b) => a.sort_order - b.sort_order), [data?.slots]);
@@ -105,62 +106,81 @@ export default function WeekScreen() {
       {status ? <Text style={styles.status}>{status}</Text> : null}
       {!premiumActive ? <Text style={styles.premiumNote}>Premium macro tracking is managed from Profile.</Text> : null}
       <View style={styles.list}>
-        {sortedSlots.map((slot, index) => (
-          <View key={slot.id} style={styles.row}>
-            <View style={styles.cardTop}>
-              <View style={styles.slotBadge}>
-                <Text style={styles.slotBadgeText}>{index + 1}</Text>
+        {sortedSlots.map((slot, index) => {
+          const isExpanded = expandedSlotId === slot.id;
+          return (
+            <View key={slot.id} style={[styles.row, isExpanded ? styles.rowExpanded : null]}>
+              <View style={styles.cardTop}>
+                <View style={styles.slotBadge}>
+                  <Text style={styles.slotBadgeText}>{index + 1}</Text>
+                </View>
+                {slot.recipe_photo_url ? <Image source={{ uri: slot.recipe_photo_url }} style={styles.thumb} contentFit="cover" /> : <View style={styles.emptyThumb} />}
+                <View style={styles.slotMain}>
+                  <Text style={styles.day}>{slot.slot_date ? formatAssignedDate(slot.slot_date) : "Unassigned"}</Text>
+                  <Text style={styles.meal}>{slot.recipe_name ?? slotLabel(slot.slot_type)}</Text>
+                  <Text style={styles.meta}>
+                    Serves {slot.servings} - {slot.is_locked ? "locked" : "replaceable"}
+                    {slot.recipe_total_minutes ? ` - ${slot.recipe_total_minutes} min` : ""}
+                  </Text>
+                </View>
+                <Button
+                  label={slot.recipe_id ? (isExpanded ? "Done" : "Edit") : "Find"}
+                  icon={slot.recipe_id ? (isExpanded ? "checkmark" : "create") : "search"}
+                  variant={slot.recipe_id ? "secondary" : "primary"}
+                  onPress={() => {
+                    if (!slot.recipe_id) {
+                      router.push("/");
+                      return;
+                    }
+                    setExpandedSlotId(isExpanded ? null : slot.id);
+                  }}
+                />
               </View>
-              {slot.recipe_photo_url ? <Image source={{ uri: slot.recipe_photo_url }} style={styles.thumb} contentFit="cover" /> : <View style={styles.emptyThumb} />}
-              <View style={{ flex: 1 }}>
-                <Text style={styles.day}>{slot.slot_date ? formatAssignedDate(slot.slot_date) : "Unassigned"}</Text>
-                <Text style={styles.meal}>{slot.recipe_name ?? slotLabel(slot.slot_type)}</Text>
-                <Text style={styles.meta}>
-                  Serves {slot.servings} - {slot.is_locked ? "locked" : "replaceable"}
-                  {slot.recipe_total_minutes ? ` - ${slot.recipe_total_minutes} min` : ""}
-                </Text>
-              </View>
-            </View>
-            <View style={styles.days}>
-              <Pressable accessibilityRole="button" onPress={() => update.mutate({ slot, patch: { slot_date: null } })} style={[styles.dayChip, !slot.slot_date && styles.activeChip]}>
-                <Text style={[styles.dayChipText, !slot.slot_date && styles.activeChipText]}>Any</Text>
-              </Pressable>
-              {dayOptions.map((day, dayIndex) => (
-                <Pressable key={day.iso} accessibilityRole="button" accessibilityLabel={`Assign to ${day.label}`} onPress={() => update.mutate({ slot, patch: { slot_date: day.iso } })} style={[styles.dayChip, slot.slot_date === day.iso && styles.activeChip]}>
-                  <Text style={[styles.dayChipText, slot.slot_date === day.iso && styles.activeChipText]}>{DAYS[dayIndex]}</Text>
-                  <Text style={[styles.dateText, slot.slot_date === day.iso && styles.activeChipText]}>{day.short}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={styles.typeRow}>
-              {SLOT_TYPES.map((item) => (
-                <Pressable key={item.value} accessibilityRole="button" onPress={() => update.mutate({ slot, patch: { slot_type: item.value } })} style={[styles.typeButton, slot.slot_type === item.value && styles.typeActive]}>
-                  <Text style={[styles.typeText, slot.slot_type === item.value && styles.typeTextActive]}>{item.label}</Text>
-                </Pressable>
-              ))}
-            </View>
-            <View style={styles.controls}>
-              <View style={styles.stepper}>
-                <Button label="-" icon="remove" onPress={() => update.mutate({ slot, patch: { servings: Math.max(1, slot.servings - 1) } })} />
-                <Text style={styles.servings}>{slot.servings}</Text>
-                <Button label="+" icon="add" onPress={() => update.mutate({ slot, patch: { servings: slot.servings + 1 } })} />
-              </View>
-              <Button label={slot.is_locked ? "Unlock" : "Lock"} icon={slot.is_locked ? "lock-open" : "lock-closed"} onPress={() => update.mutate({ slot, patch: { is_locked: !slot.is_locked } })} />
-              <Button label="Up" icon="arrow-up" onPress={() => move.mutate({ slot, direction: -1 })} />
-              <Button label="Down" icon="arrow-down" onPress={() => move.mutate({ slot, direction: 1 })} />
-            </View>
-            <View style={styles.actions}>
-              {slot.recipe_id && premiumActive ? (
+              {isExpanded ? (
                 <>
-                  <Button label="Ate" icon="checkmark-circle" variant="primary" disabled={confirmMeal.isPending} onPress={() => confirmMeal.mutate({ slot, mealStatus: "ate" })} />
-                  <Button label="Skipped" icon="close-circle" disabled={confirmMeal.isPending} onPress={() => confirmMeal.mutate({ slot, mealStatus: "skipped" })} />
+                  <View style={styles.days}>
+                    <Pressable accessibilityRole="button" onPress={() => update.mutate({ slot, patch: { slot_date: null } })} style={[styles.dayChip, !slot.slot_date && styles.activeChip]}>
+                      <Text style={[styles.dayChipText, !slot.slot_date && styles.activeChipText]}>Any</Text>
+                    </Pressable>
+                    {dayOptions.map((day, dayIndex) => (
+                      <Pressable key={day.iso} accessibilityRole="button" accessibilityLabel={`Assign to ${day.label}`} onPress={() => update.mutate({ slot, patch: { slot_date: day.iso } })} style={[styles.dayChip, slot.slot_date === day.iso && styles.activeChip]}>
+                        <Text style={[styles.dayChipText, slot.slot_date === day.iso && styles.activeChipText]}>{DAYS[dayIndex]}</Text>
+                        <Text style={[styles.dateText, slot.slot_date === day.iso && styles.activeChipText]}>{day.short}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <View style={styles.typeRow}>
+                    {SLOT_TYPES.map((item) => (
+                      <Pressable key={item.value} accessibilityRole="button" onPress={() => update.mutate({ slot, patch: { slot_type: item.value } })} style={[styles.typeButton, slot.slot_type === item.value && styles.typeActive]}>
+                        <Text style={[styles.typeText, slot.slot_type === item.value && styles.typeTextActive]}>{item.label}</Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                  <View style={styles.controls}>
+                    <View style={styles.stepper}>
+                      <Button label="-" icon="remove" onPress={() => update.mutate({ slot, patch: { servings: Math.max(1, slot.servings - 1) } })} />
+                      <Text style={styles.servings}>{slot.servings}</Text>
+                      <Button label="+" icon="add" onPress={() => update.mutate({ slot, patch: { servings: slot.servings + 1 } })} />
+                    </View>
+                    <Button label={slot.is_locked ? "Unlock" : "Lock"} icon={slot.is_locked ? "lock-open" : "lock-closed"} onPress={() => update.mutate({ slot, patch: { is_locked: !slot.is_locked } })} />
+                    <Button label="Up" icon="arrow-up" onPress={() => move.mutate({ slot, direction: -1 })} />
+                    <Button label="Down" icon="arrow-down" onPress={() => move.mutate({ slot, direction: 1 })} />
+                  </View>
+                  <View style={styles.actions}>
+                    {slot.recipe_id && premiumActive ? (
+                      <>
+                        <Button label="Ate" icon="checkmark-circle" variant="primary" disabled={confirmMeal.isPending} onPress={() => confirmMeal.mutate({ slot, mealStatus: "ate" })} />
+                        <Button label="Skipped" icon="close-circle" disabled={confirmMeal.isPending} onPress={() => confirmMeal.mutate({ slot, mealStatus: "skipped" })} />
+                      </>
+                    ) : null}
+                    {slot.recipe_id ? <Button label="Remove" icon="trash" variant="danger" onPress={() => remove.mutate(slot.id)} /> : null}
+                    <Button label="Replace" icon="swap-horizontal" onPress={() => router.push("/")} />
+                  </View>
                 </>
               ) : null}
-              {slot.recipe_id ? <Button label="Remove" icon="trash" variant="danger" onPress={() => remove.mutate(slot.id)} /> : null}
-              <Button label={slot.recipe_id ? "Replace" : "Find meal"} icon="swap-horizontal" variant={slot.recipe_id ? "secondary" : "primary"} onPress={() => router.push("/")} />
             </View>
-          </View>
-        ))}
+          );
+        })}
       </View>
     </Screen>
   );
@@ -207,11 +227,13 @@ const styles = StyleSheet.create({
   premiumNote: { color: Colors.muted, fontWeight: "700", marginBottom: 10 },
   list: { gap: 10 },
   row: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 12, gap: 12 },
+  rowExpanded: { borderColor: "#f0b6b2" },
   cardTop: { flexDirection: "row", gap: 10, alignItems: "center" },
   slotBadge: { width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.tomato, alignItems: "center", justifyContent: "center" },
   slotBadgeText: { color: "#fff", fontWeight: "900" },
   thumb: { width: 58, height: 58, borderRadius: 8, backgroundColor: Colors.border },
   emptyThumb: { width: 58, height: 58, borderRadius: 8, backgroundColor: Colors.softRed, borderColor: Colors.border, borderWidth: 1 },
+  slotMain: { flex: 1, minWidth: 0 },
   day: { color: Colors.basil, fontWeight: "800", fontSize: 12, textTransform: "uppercase" },
   meal: { color: Colors.ink, fontSize: 18, fontWeight: "800", textTransform: "capitalize" },
   meta: { color: Colors.muted, marginTop: 2 },

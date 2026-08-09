@@ -5,6 +5,7 @@ import { Platform, Share, StyleSheet, Switch, Text, TextInput, View } from "reac
 
 import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { HouseholdPanel } from "@/features/groups/HouseholdPanel";
 import { PremiumMacroPanel } from "@/features/premium/PremiumMacroPanel";
@@ -12,10 +13,13 @@ import { apiFetch, clearAuthTokens, getRefreshToken, getToken, setAuthTokens } f
 import { BiometricSettings, authenticateForUnlock, getBiometricSettings, setBiometricPreference } from "@/services/biometrics";
 import { UserProfile } from "@/services/types";
 
+type ProfileSection = "account" | "meals" | "group" | "premium";
+
 export default function ProfileScreen() {
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ reset_token?: string }>();
   const router = useRouter();
+  const [section, setSection] = useState<ProfileSection>("account");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [resetToken, setResetToken] = useState("");
@@ -197,98 +201,119 @@ export default function ProfileScreen() {
   return (
     <Screen>
       <Text style={styles.title}>Profile</Text>
-      <Text style={styles.subtitle}>Household preferences, auth, Walmart ZIP, and notification settings are kept configurable for production setup.</Text>
-      <View style={styles.panel}>
-        <Text style={styles.section}>Account</Text>
-        <TextInput autoCapitalize="none" accessibilityLabel="Email" value={email} onChangeText={setEmail} placeholder="Email" style={styles.input} />
-        <TextInput accessibilityLabel="Password" secureTextEntry value={password} onChangeText={setPassword} placeholder="Password" style={styles.input} />
-        <View style={styles.actions}>
-          <Button label="Register" icon="person-add" variant="primary" disabled={auth.isPending} onPress={() => auth.mutate("register")} />
-          <Button label="Sign in" icon="log-in" disabled={auth.isPending} onPress={() => auth.mutate("login")} />
-        </View>
-        {authStatus.data ? (
-          <View style={styles.securityBox}>
-            <Text style={styles.meta}>{authStatus.data.email}</Text>
-            <Text style={authStatus.data.email_verified ? styles.verified : styles.unverified}>
-              {authStatus.data.email_verified ? "Email verified" : "Email not verified"}
-            </Text>
-            {!authStatus.data.email_verified ? (
-              <Button label="Resend verification" icon="mail" onPress={() => resend.mutate()} />
-            ) : null}
-            <Button label="Sign out" icon="log-out" onPress={() => signOut.mutate()} />
+      <Text style={styles.subtitle}>Manage the account, meal preferences, group voting, and premium macros from focused sections.</Text>
+      <SegmentedControl
+        accessibilityLabel="Profile sections"
+        value={section}
+        onChange={setSection}
+        options={[
+          { label: "Account", value: "account" },
+          { label: "Meals", value: "meals" },
+          { label: "Group", value: "group" },
+          { label: "Premium", value: "premium" }
+        ]}
+      />
+      {status ? <Text style={styles.status}>{status}</Text> : null}
+      {section === "account" ? (
+        <>
+          <View style={styles.panel}>
+            <Text style={styles.section}>Account</Text>
+            {authStatus.data ? (
+              <View style={styles.securityBox}>
+                <Text style={styles.meta}>{authStatus.data.email}</Text>
+                <Text style={authStatus.data.email_verified ? styles.verified : styles.unverified}>
+                  {authStatus.data.email_verified ? "Email verified" : "Email not verified"}
+                </Text>
+                <View style={styles.actions}>
+                  {!authStatus.data.email_verified ? (
+                    <Button label="Resend verification" icon="mail" onPress={() => resend.mutate()} />
+                  ) : null}
+                  <Button label="Sign out" icon="log-out" onPress={() => signOut.mutate()} />
+                </View>
+              </View>
+            ) : (
+              <>
+                <TextInput autoCapitalize="none" accessibilityLabel="Email" value={email} onChangeText={setEmail} placeholder="Email" style={styles.input} />
+                <TextInput accessibilityLabel="Password" secureTextEntry value={password} onChangeText={setPassword} placeholder="Password" style={styles.input} />
+                <View style={styles.actions}>
+                  <Button label="Register" icon="person-add" variant="primary" disabled={auth.isPending} onPress={() => auth.mutate("register")} />
+                  <Button label="Sign in" icon="log-in" disabled={auth.isPending} onPress={() => auth.mutate("login")} />
+                </View>
+              </>
+            )}
           </View>
-        ) : null}
-        <View style={styles.actions}>
-          <Button label="Email reset link" icon="mail-open" onPress={() => requestReset.mutate()} />
-        </View>
-        <TextInput accessibilityLabel="Reset token" value={resetToken} onChangeText={setResetToken} autoCapitalize="none" placeholder="Reset token from email link" style={styles.input} />
-        <TextInput accessibilityLabel="New password" secureTextEntry value={newPassword} onChangeText={setNewPassword} placeholder="New password" style={styles.input} />
-        <Button label="Set new password" icon="key" onPress={() => confirmReset.mutate()} />
-        {status ? <Text style={styles.status}>{status}</Text> : null}
-      </View>
-      <View style={styles.panel}>
-        <Text style={styles.section}>Account settings</Text>
-        <TextInput accessibilityLabel="Current password" secureTextEntry value={changeCurrentPassword} onChangeText={setChangeCurrentPassword} placeholder="Current password" style={styles.input} />
-        <TextInput accessibilityLabel="New account password" secureTextEntry value={changeNewPassword} onChangeText={setChangeNewPassword} placeholder="New password" style={styles.input} />
-        <Button label="Change password" icon="key" onPress={() => changePassword.mutate()} disabled={changePassword.isPending} />
-        <View style={styles.divider} />
-        <Button label="Export my data" icon="download" onPress={() => exportAccount.mutate()} disabled={exportAccount.isPending} />
-        <Text style={styles.meta}>The export includes account, profile, household, recipe, weekly plan, grocery, URL-ingestion, and audit metadata. It excludes password hashes and tokens.</Text>
-        <View style={styles.deleteBox}>
-          <Text style={styles.deleteTitle}>Delete account request</Text>
-          <Text style={styles.meta}>This records a request for manual review. It does not immediately remove recipes or household data.</Text>
-          <TextInput accessibilityLabel="Password for account deletion request" secureTextEntry value={deletePassword} onChangeText={setDeletePassword} placeholder="Current password" style={styles.input} />
-          <TextInput accessibilityLabel="Type DELETE to request account deletion" value={deleteConfirmation} onChangeText={setDeleteConfirmation} placeholder="Type DELETE" autoCapitalize="characters" style={styles.input} />
-          <Button label="Request deletion" icon="trash" variant="danger" onPress={() => deleteAccount.mutate()} disabled={deleteConfirmation !== "DELETE" || deleteAccount.isPending} />
-        </View>
-      </View>
-      <View style={styles.panel}>
-        <Text style={styles.section}>Device security</Text>
-        <View style={styles.toggleRow}>
-          <View style={styles.toggleCopy}>
-            <Text style={styles.toggleTitle}>{biometricSettings?.label ? `Use ${biometricSettings.label}` : "Use biometrics"}</Text>
-            <Text style={styles.meta}>
-              {Platform.OS === "web"
-                ? "Biometric unlock is available on Android and iOS builds."
-                : biometricSettings?.supported
-                  ? "Unlock the saved session on this device after sign-in."
-                  : "Set up Face ID, fingerprint, or a device passcode to enable this."}
-            </Text>
+          <View style={styles.panel}>
+            <Text style={styles.section}>Password</Text>
+            <View style={styles.actions}>
+              <Button label="Email reset link" icon="mail-open" onPress={() => requestReset.mutate()} />
+            </View>
+            <TextInput accessibilityLabel="Reset token" value={resetToken} onChangeText={setResetToken} autoCapitalize="none" placeholder="Reset token from email link" style={styles.input} />
+            <TextInput accessibilityLabel="New password" secureTextEntry value={newPassword} onChangeText={setNewPassword} placeholder="New password" style={styles.input} />
+            <Button label="Set new password" icon="key" onPress={() => confirmReset.mutate()} />
+            <View style={styles.divider} />
+            <TextInput accessibilityLabel="Current password" secureTextEntry value={changeCurrentPassword} onChangeText={setChangeCurrentPassword} placeholder="Current password" style={styles.input} />
+            <TextInput accessibilityLabel="New account password" secureTextEntry value={changeNewPassword} onChangeText={setChangeNewPassword} placeholder="New password" style={styles.input} />
+            <Button label="Change password" icon="key" onPress={() => changePassword.mutate()} disabled={changePassword.isPending} />
           </View>
-          <Switch
-            accessibilityLabel="Enable biometric unlock"
-            value={Boolean(biometricSettings?.enabled)}
-            disabled={Platform.OS === "web"}
-            onValueChange={(value) => {
-              void toggleBiometrics(value);
-            }}
-            thumbColor={biometricSettings?.enabled ? Colors.tomato : Colors.surface}
-            trackColor={{ false: Colors.border, true: "#f4aaa8" }}
-          />
+          <View style={styles.panel}>
+            <Text style={styles.section}>Device security</Text>
+            <View style={styles.toggleRow}>
+              <View style={styles.toggleCopy}>
+                <Text style={styles.toggleTitle}>{biometricSettings?.label ? `Use ${biometricSettings.label}` : "Use biometrics"}</Text>
+                <Text style={styles.meta}>
+                  {Platform.OS === "web"
+                    ? "Biometric unlock is available on Android and iOS builds."
+                    : biometricSettings?.supported
+                      ? "Unlock the saved session on this device after sign-in."
+                      : "Set up Face ID, fingerprint, or a device passcode to enable this."}
+                </Text>
+              </View>
+              <Switch
+                accessibilityLabel="Enable biometric unlock"
+                value={Boolean(biometricSettings?.enabled)}
+                disabled={Platform.OS === "web"}
+                onValueChange={(value) => {
+                  void toggleBiometrics(value);
+                }}
+                thumbColor={biometricSettings?.enabled ? Colors.tomato : Colors.surface}
+                trackColor={{ false: Colors.border, true: "#f4aaa8" }}
+              />
+            </View>
+          </View>
+          <View style={styles.panel}>
+            <Text style={styles.section}>Data and legal</Text>
+            <Button label="Export my data" icon="download" onPress={() => exportAccount.mutate()} disabled={exportAccount.isPending} />
+            <Text style={styles.meta}>The export excludes password hashes and tokens.</Text>
+            <View style={styles.actions}>
+              <Button label="Privacy" icon="document-text" onPress={() => router.push("/privacy" as never)} />
+              <Button label="Terms" icon="document-text" onPress={() => router.push("/terms" as never)} />
+            </View>
+            <View style={styles.deleteBox}>
+              <Text style={styles.deleteTitle}>Delete account request</Text>
+              <Text style={styles.meta}>This records a request for manual review. It does not immediately remove recipes or household data.</Text>
+              <TextInput accessibilityLabel="Password for account deletion request" secureTextEntry value={deletePassword} onChangeText={setDeletePassword} placeholder="Current password" style={styles.input} />
+              <TextInput accessibilityLabel="Type DELETE to request account deletion" value={deleteConfirmation} onChangeText={setDeleteConfirmation} placeholder="Type DELETE" autoCapitalize="characters" style={styles.input} />
+              <Button label="Request deletion" icon="trash" variant="danger" onPress={() => deleteAccount.mutate()} disabled={deleteConfirmation !== "DELETE" || deleteAccount.isPending} />
+            </View>
+          </View>
+        </>
+      ) : null}
+      {section === "meals" ? (
+        <View style={styles.panel}>
+          <Text style={styles.section}>Meal preferences</Text>
+          <View style={styles.grid}>
+            <TextInput accessibilityLabel="Household size" value={householdSize} onChangeText={setHouseholdSize} keyboardType="number-pad" placeholder="Household size" style={[styles.input, styles.gridInput]} />
+            <TextInput accessibilityLabel="Weekly dinner target" value={weeklyTarget} onChangeText={setWeeklyTarget} keyboardType="number-pad" placeholder="Weekly meals" style={[styles.input, styles.gridInput]} />
+            <TextInput accessibilityLabel="Maximum preferred cook time" value={maxCookMinutes} onChangeText={setMaxCookMinutes} keyboardType="number-pad" placeholder="Max cook minutes" style={[styles.input, styles.gridInput]} />
+          </View>
+          <TextInput accessibilityLabel="Allergens" value={allergens} onChangeText={setAllergens} placeholder="Allergens, comma separated" style={styles.input} />
+          <TextInput accessibilityLabel="Disliked ingredients" value={dislikes} onChangeText={setDislikes} placeholder="Disliked ingredients, comma separated" style={styles.input} />
+          <Text style={styles.meta}>Allergens are stored per user. For now they are not automatically hidden from group voters.</Text>
+          <Button label="Save preferences" icon="save" variant="primary" onPress={() => saveProfile.mutate()} />
         </View>
-      </View>
-      <View style={styles.panel}>
-        <Text style={styles.section}>Meal preferences</Text>
-        <View style={styles.grid}>
-          <TextInput accessibilityLabel="Household size" value={householdSize} onChangeText={setHouseholdSize} keyboardType="number-pad" placeholder="Household size" style={[styles.input, styles.gridInput]} />
-          <TextInput accessibilityLabel="Weekly dinner target" value={weeklyTarget} onChangeText={setWeeklyTarget} keyboardType="number-pad" placeholder="Weekly meals" style={[styles.input, styles.gridInput]} />
-          <TextInput accessibilityLabel="Maximum preferred cook time" value={maxCookMinutes} onChangeText={setMaxCookMinutes} keyboardType="number-pad" placeholder="Max cook minutes" style={[styles.input, styles.gridInput]} />
-        </View>
-        <TextInput accessibilityLabel="Allergens" value={allergens} onChangeText={setAllergens} placeholder="Allergens, comma separated" style={styles.input} />
-        <TextInput accessibilityLabel="Disliked ingredients" value={dislikes} onChangeText={setDislikes} placeholder="Disliked ingredients, comma separated" style={styles.input} />
-        <Text style={styles.meta}>Allergens are stored per user. For now they are not automatically hidden from group voters.</Text>
-        <Button label="Save preferences" icon="save" variant="primary" onPress={() => saveProfile.mutate()} />
-      </View>
-      <PremiumMacroPanel />
-      <HouseholdPanel />
-      <View style={styles.panel}>
-        <Text style={styles.section}>Prepared integrations</Text>
-        <Text style={styles.meta}>Expo SecureStore is used on native builds. Web uses local storage for development and should be hardened behind production auth settings before public launch.</Text>
-        <View style={styles.actions}>
-          <Button label="Privacy" icon="document-text" onPress={() => router.push("/privacy" as never)} />
-          <Button label="Terms" icon="document-text" onPress={() => router.push("/terms" as never)} />
-        </View>
-      </View>
+      ) : null}
+      {section === "group" ? <HouseholdPanel /> : null}
+      {section === "premium" ? <PremiumMacroPanel /> : null}
     </Screen>
   );
 }
@@ -314,8 +339,8 @@ async function deliverAccountExport(data: Record<string, unknown>) {
 
 const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: "900", color: Colors.ink },
-  subtitle: { color: Colors.muted, marginBottom: 14 },
-  panel: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 14, gap: 10, marginBottom: 12 },
+  subtitle: { color: Colors.muted, marginBottom: 14, lineHeight: 20 },
+  panel: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 14, gap: 10, marginTop: 12 },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   gridInput: { flex: 1, minWidth: 118 },
