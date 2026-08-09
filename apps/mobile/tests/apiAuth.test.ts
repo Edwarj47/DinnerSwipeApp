@@ -57,6 +57,28 @@ test("refreshes an expired access token and retries the request once", async () 
   expect(retryHeaders.get("Authorization")).toBe("Bearer new-access");
 });
 
+test("shares one refresh request across concurrent expired requests", async () => {
+  await setAuthTokens({ access_token: "expired-access", refresh_token: "refresh-a" });
+  const fetchMock = jest.mocked(fetch);
+  fetchMock
+    .mockResolvedValueOnce(jsonResponse({ detail: "expired-a" }, 401))
+    .mockResolvedValueOnce(jsonResponse({ detail: "expired-b" }, 401))
+    .mockResolvedValueOnce(jsonResponse({ access_token: "new-access", refresh_token: "new-refresh" }))
+    .mockResolvedValueOnce(jsonResponse({ household_size: 2 }))
+    .mockResolvedValueOnce(jsonResponse({ weekly_meal_target: 5 }));
+
+  const [profile, settings] = await Promise.all([
+    apiFetch<{ household_size: number }>("/api/v1/profile"),
+    apiFetch<{ weekly_meal_target: number }>("/api/v1/profile/settings")
+  ]);
+
+  expect(profile.household_size).toBe(2);
+  expect(settings.weekly_meal_target).toBe(5);
+  expect(fetchMock.mock.calls.filter((call) => String(call[0]).includes("/api/v1/auth/refresh"))).toHaveLength(1);
+  expect(await getToken()).toBe("new-access");
+  expect(await getRefreshToken()).toBe("new-refresh");
+});
+
 test("formats API errors for user-facing auth messages", async () => {
   const fetchMock = jest.mocked(fetch);
   fetchMock

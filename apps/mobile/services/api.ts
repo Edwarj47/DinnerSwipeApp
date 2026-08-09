@@ -9,6 +9,7 @@ export const API_URL =
 const ACCESS_TOKEN_KEY = "dinnerSwipeAccessToken";
 const REFRESH_TOKEN_KEY = "dinnerSwipeRefreshToken";
 const authListeners = new Set<() => void>();
+let refreshInFlight: Promise<boolean> | null = null;
 
 export type AuthTokenPair = {
   access_token: string;
@@ -83,7 +84,7 @@ export async function clearAuthTokens() {
   emitAuthChanged();
 }
 
-export async function refreshAuthTokens() {
+async function doRefreshAuthTokens() {
   const refreshToken = await getRefreshToken();
   if (!refreshToken) return false;
   const response = await fetch(`${API_URL}/api/v1/auth/refresh`, {
@@ -97,6 +98,13 @@ export async function refreshAuthTokens() {
   }
   await setAuthTokens((await response.json()) as AuthTokenPair);
   return true;
+}
+
+export async function refreshAuthTokens() {
+  refreshInFlight ??= doRefreshAuthTokens().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
 }
 
 function shouldSetJsonContentType(init: RequestInit) {

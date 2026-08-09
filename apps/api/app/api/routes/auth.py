@@ -233,6 +233,39 @@ def change_password(
     return {"status": "password_changed"}
 
 
+def _audit_event_for_account_export(event: AuditEvent) -> dict[str, object]:
+    descriptions = {
+        "legal_documents_accepted": "Privacy Policy and Terms were accepted.",
+        "password_changed": "The account password was changed.",
+        "account_deletion_requested": "Account deletion was requested for manual review.",
+        "refresh_token_reuse_detected": "A saved session token was rejected and sessions were revoked for security.",
+    }
+    payload = event.payload or {}
+    details: dict[str, object] = {}
+    if event.event_type == "legal_documents_accepted":
+        for key in (
+            "privacy_accepted",
+            "terms_accepted",
+            "legal_document_version",
+            "accepted_at",
+        ):
+            if key in payload:
+                details[key] = payload[key]
+    elif event.event_type == "account_deletion_requested":
+        details["status"] = payload.get("status", "pending_manual_review")
+    elif event.event_type == "refresh_token_reuse_detected":
+        details["action"] = "saved_sessions_revoked"
+    elif event.event_type == "password_changed":
+        details["source"] = "account_settings"
+
+    return {
+        "event_type": event.event_type,
+        "description": descriptions.get(event.event_type, "Account activity was recorded."),
+        "created_at": event.created_at.isoformat(),
+        "details": details,
+    }
+
+
 @router.get("/account/export")
 def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
     profile = current_user.profile
@@ -240,17 +273,20 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
         db.get(Household, profile.household_id) if profile and profile.household_id else None
     )
     household_members = []
+    current_user_role = None
     if household:
         rows = db.scalars(
             select(HouseholdMember).where(HouseholdMember.household_id == household.id)
         ).all()
         for member in rows:
-            member_user = db.get(User, member.user_id)
+            is_current_user = member.user_id == current_user.id
+            if is_current_user:
+                current_user_role = member.role
             household_members.append(
                 {
-                    "user_id": member.user_id,
-                    "email": member_user.email if member_user else None,
+                    "email": current_user.email if is_current_user else None,
                     "role": member.role,
+                    "is_current_user": is_current_user,
                     "joined_at": member.created_at.isoformat(),
                 }
             )
@@ -269,6 +305,8 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
     ).all()
     return {
         "exported_at": datetime.now(UTC).isoformat(),
+        "export_format_version": "2026-08-09",
+        "export_scope": "Authenticated account export. Password hashes, tokens, token identifiers, provider keys, and other household members' private identifiers are excluded.",
         "account": {
             "id": current_user.id,
             "email": current_user.email,
@@ -298,6 +336,8 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
         "household": {
             "id": household.id,
             "name": household.name,
+            "current_user_role": current_user_role,
+            "member_count": len(household_members),
             "members": household_members,
         }
         if household
@@ -364,16 +404,7 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
             }
             for candidate in candidates
         ],
-        "audit_events": [
-            {
-                "event_type": event.event_type,
-                "entity_type": event.entity_type,
-                "entity_id": event.entity_id,
-                "payload": event.payload,
-                "created_at": event.created_at.isoformat(),
-            }
-            for event in audit_events
-        ],
+        "account_activity": [_audit_event_for_account_export(event) for event in audit_events],
     }
 
 

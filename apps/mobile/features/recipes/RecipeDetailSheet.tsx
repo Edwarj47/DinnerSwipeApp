@@ -1,7 +1,17 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { useMemo } from "react";
+import {
+  Linking,
+  Modal,
+  PanResponder,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
 
 import { Button } from "@/components/Button";
 import { Colors, shadow } from "@/components/theme";
@@ -18,15 +28,31 @@ type Props = {
 export function RecipeDetailSheet({ recipe, visible, onClose }: Props) {
   const queryClient = useQueryClient();
   const { sessionId, addSwipe } = usePlannerStore();
+  const dragToClose = useMemo(
+    () =>
+      PanResponder.create({
+        onMoveShouldSetPanResponder: (_, gesture) =>
+          gesture.dy > 12 && Math.abs(gesture.dy) > Math.abs(gesture.dx),
+        onPanResponderRelease: (_, gesture) => {
+          if (gesture.dy > 72 || gesture.vy > 0.75) {
+            onClose();
+          }
+        }
+      }),
+    [onClose]
+  );
   const action = useMutation({
     mutationFn: (payload: { recipe_id: string; action: "add" | "favorite" | "hide" }) =>
       apiFetch("/api/v1/recipes/swipes", { method: "POST", body: JSON.stringify({ ...payload, session_id: sessionId }) }),
-    onSuccess: async () => {
+    onSuccess: async (_result, variables) => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["weekly-plan"] }),
         queryClient.invalidateQueries({ queryKey: ["recipes"] }),
         queryClient.invalidateQueries({ queryKey: ["grocery"] })
       ]);
+      if (variables.action === "hide") {
+        onClose();
+      }
     }
   });
   const vote = useMutation({
@@ -47,7 +73,14 @@ export function RecipeDetailSheet({ recipe, visible, onClose }: Props) {
     <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
       <View style={styles.backdrop}>
         <View style={styles.sheet}>
-          <View style={styles.grabber} />
+          <View
+            {...dragToClose.panHandlers}
+            accessibilityRole="button"
+            accessibilityLabel="Drag down to close recipe details"
+            style={styles.dragHandle}
+          >
+            <View style={styles.grabber} />
+          </View>
           <Pressable accessibilityRole="button" accessibilityLabel="Close recipe details" onPress={onClose} style={styles.close}>
             <Ionicons name="close" size={24} color={Colors.ink} />
           </Pressable>
@@ -146,7 +179,8 @@ function RecipeSection({ title, children }: { title: string; children: React.Rea
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.32)", justifyContent: "flex-end" },
   sheet: { maxHeight: "92%", backgroundColor: Colors.background, borderTopLeftRadius: 18, borderTopRightRadius: 18, overflow: "hidden", ...shadow },
-  grabber: { width: 42, height: 5, borderRadius: 999, backgroundColor: Colors.border, alignSelf: "center", marginTop: 10 },
+  dragHandle: { minHeight: 28, alignItems: "center", justifyContent: "center" },
+  grabber: { width: 42, height: 5, borderRadius: 999, backgroundColor: Colors.border },
   close: { position: "absolute", top: 14, right: 14, zIndex: 2, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.9)", alignItems: "center", justifyContent: "center" },
   content: { padding: 16, paddingBottom: 30, gap: 14 },
   photo: { width: "100%", aspectRatio: 1.25, borderRadius: 8, backgroundColor: Colors.border },

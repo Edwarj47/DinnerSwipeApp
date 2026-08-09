@@ -18,7 +18,14 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
 import { Colors } from "@/components/theme";
-import { addAuthChangeListener, apiFetch, clearAuthTokens, getToken, setAuthTokens } from "@/services/api";
+import {
+  addAuthChangeListener,
+  apiFetch,
+  clearAuthTokens,
+  getRefreshToken,
+  getToken,
+  setAuthTokens
+} from "@/services/api";
 import {
   BiometricSettings,
   authenticateForUnlock,
@@ -54,8 +61,8 @@ export function AuthGate({ children }: Props) {
       setChecking(false);
       return;
     }
-    const token = await getToken();
-    if (!token) {
+    const [token, refreshToken] = await Promise.all([getToken(), getRefreshToken()]);
+    if (!token && !refreshToken) {
       setAuthenticated(false);
       setChecking(false);
       return;

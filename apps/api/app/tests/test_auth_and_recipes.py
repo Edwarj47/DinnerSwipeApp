@@ -101,10 +101,21 @@ def test_change_password_export_and_delete_request(client: TestClient, db_sessio
     exported = client.get("/api/v1/auth/account/export", headers=headers)
     assert exported.status_code == 200
     exported_json = exported.json()
+    assert exported_json["export_format_version"] == "2026-08-09"
     assert exported_json["account"]["email"] == "account@example.com"
     assert exported_json["account"]["terms_accepted_at"]
     assert exported_json["account"]["privacy_accepted_at"]
+    assert "audit_events" not in exported_json
+    assert "account_activity" in exported_json
+    assert all("entity_id" not in event for event in exported_json["account_activity"])
+    assert all("payload" not in event for event in exported_json["account_activity"])
+    assert any(
+        event["event_type"] == "password_changed"
+        and event["details"] == {"source": "account_settings"}
+        for event in exported_json["account_activity"]
+    )
     assert "password_hash" not in str(exported_json)
+    assert "token_hash" not in str(exported_json)
 
     deletion = client.post(
         "/api/v1/auth/account/delete-request",
