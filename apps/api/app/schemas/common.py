@@ -147,6 +147,11 @@ class MacroSummary(ApiModel):
     recent_confirmations: list[MealMacroConfirmationOut]
 
 
+class OnboardingUpdate(ApiModel):
+    action: Literal["complete_onboarding", "complete_tutorial", "dismiss_tutorial"]
+    tutorial_version: str = Field(default="2026-08-09", min_length=1, max_length=40)
+
+
 class IngredientIn(ApiModel):
     original_text: str
     normalized_name: str | None = None

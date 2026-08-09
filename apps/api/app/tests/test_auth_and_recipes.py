@@ -42,6 +42,32 @@ def test_register_login_and_create_recipe(client: TestClient) -> None:
     assert len(listed.json()) == 1
 
 
+def test_profile_onboarding_state(client: TestClient, auth_headers: dict[str, str]) -> None:
+    profile = client.get("/api/v1/profile", headers=auth_headers)
+    assert profile.status_code == 200
+    assert profile.json()["tutorial_version_seen"] is None
+
+    dismissed = client.patch(
+        "/api/v1/profile/onboarding",
+        json={"action": "dismiss_tutorial", "tutorial_version": "test-tour"},
+        headers=auth_headers,
+    )
+    assert dismissed.status_code == 200
+    dismissed_json = dismissed.json()
+    assert dismissed_json["tutorial_dismissed_at"]
+    assert dismissed_json["tutorial_version_seen"] == "test-tour"
+
+    completed = client.patch(
+        "/api/v1/profile/onboarding",
+        json={"action": "complete_onboarding", "tutorial_version": "test-tour"},
+        headers=auth_headers,
+    )
+    assert completed.status_code == 200
+    completed_json = completed.json()
+    assert completed_json["onboarding_completed_at"]
+    assert completed_json["tutorial_version_seen"] == "test-tour"
+
+
 def test_change_password_export_and_delete_request(client: TestClient, db_session: Session) -> None:
     register = client.post(
         "/api/v1/auth/register",

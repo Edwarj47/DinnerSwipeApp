@@ -84,6 +84,10 @@ export type UserProfile = {
   budget_preference: string | null;
   walmart_zip: string | null;
   notification_preferences: Record<string, unknown>;
+  onboarding_completed_at?: string | null;
+  tutorial_completed_at?: string | null;
+  tutorial_dismissed_at?: string | null;
+  tutorial_version_seen?: string | null;
 };
 
 export type PremiumStatus = {

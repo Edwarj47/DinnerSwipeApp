@@ -11,6 +11,7 @@ import { HouseholdPanel } from "@/features/groups/HouseholdPanel";
 import { PremiumMacroPanel } from "@/features/premium/PremiumMacroPanel";
 import { apiFetch, clearAuthTokens, getRefreshToken, getToken, setAuthTokens } from "@/services/api";
 import { BiometricSettings, authenticateForUnlock, getBiometricSettings, setBiometricPreference } from "@/services/biometrics";
+import { openTutorial } from "@/services/tutorial";
 import { UserProfile } from "@/services/types";
 
 type ProfileSection = "account" | "meals" | "group" | "premium";
@@ -228,6 +229,7 @@ export default function ProfileScreen() {
                   {!authStatus.data.email_verified ? (
                     <Button label="Resend verification" icon="mail" onPress={() => resend.mutate()} />
                   ) : null}
+                  <Button label="Replay tour" icon="play-circle" onPress={openTutorial} />
                   <Button label="Sign out" icon="log-out" onPress={() => signOut.mutate()} />
                 </View>
               </View>

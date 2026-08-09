@@ -8,6 +8,7 @@ import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { MealCard } from "@/features/discover/MealCard";
+import { OnboardingNextStepCard } from "@/features/onboarding/OnboardingNextStepCard";
 import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
@@ -54,6 +55,7 @@ export default function DiscoverScreen() {
           if (restored) setIndex((value) => Math.max(0, value - 1));
         }} />
       </View>
+      <OnboardingNextStepCard />
       {isLoading ? <ActivityIndicator color={Colors.tomato} /> : null}
       {error ? <Text style={styles.error}>Sign in from Profile, then seed and refresh recipes.</Text> : null}
       {complete ? (

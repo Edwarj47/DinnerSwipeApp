@@ -137,6 +137,10 @@ class UserProfile(Base, TimestampMixin):
     budget_preference: Mapped[str | None] = mapped_column(String(32), nullable=True)
     walmart_zip: Mapped[str | None] = mapped_column(String(16), nullable=True)
     notification_preferences: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
+    onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tutorial_completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tutorial_dismissed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    tutorial_version_seen: Mapped[str | None] = mapped_column(String(40), nullable=True)
     user: Mapped[User] = relationship(back_populates="profile")
 
 
