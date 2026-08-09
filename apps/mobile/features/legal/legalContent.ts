@@ -12,12 +12,12 @@ export const privacySections = [
   {
     title: "Group Voting",
     body:
-      "Members of a dinner group can vote on recipe ideas. Group owners may see vote summaries, percentages, counts, winners and non-winning choices, and which member voted for each visible choice. Zero-count choices are not shown in owner vote detail charts."
+      "Members of a dinner group can vote on recipe ideas. Group owners may see vote summaries, percentages, counts, winners and non-winning choices, and which member voted for each visible choice. Zero-count choices are not shown in owner vote detail charts. Group owners can also configure whether member allergens and disliked ingredients are used as warnings or filters during group voting."
   },
   {
     title: "Preferences And Allergens",
     body:
-      "Cooking preferences, disliked ingredients, and allergens are stored per user. These settings are intended to help filter and annotate meal planning, but Dinner Swipe is not a medical, allergy, or nutrition safety system."
+      "Cooking preferences, disliked ingredients, and allergens are stored per user. When you join or use a dinner group, allergen and disliked-ingredient matches may be used to warn, block, or annotate recipe choices and may be visible to other group members or owners. These settings are intended to help filter and annotate meal planning, but Dinner Swipe is not a medical, allergy, or nutrition safety system."
   },
   {
     title: "How We Use Information",
@@ -50,7 +50,7 @@ export const termsSections = [
   {
     title: "Accounts And Groups",
     body:
-      "You are responsible for your account activity and group invite codes. Dinner group owners can view group-level vote results and voter detail for visible choices. Do not join or invite users to a group unless everyone involved has permission to participate."
+      "You are responsible for your account activity and group invite codes. Dinner group owners can view group-level vote results and voter detail for visible choices, manage group safety settings, and transfer ownership to another member. Do not join or invite users to a group unless everyone involved has permission to participate."
   },
   {
     title: "Recipes, Photos, And Sources",
@@ -60,7 +60,7 @@ export const termsSections = [
   {
     title: "Food, Allergy, And Nutrition Disclaimer",
     body:
-      "Dinner Swipe is not medical, nutritional, allergy, food-safety, or professional advice. Always review ingredients, labels, preparation steps, and allergen risks before cooking or serving food."
+      "Dinner Swipe is not medical, nutritional, allergy, food-safety, or professional advice. If you enter allergens or disliked ingredients and use group features, you acknowledge that related matches or warnings may be shared with group members. Always review ingredients, labels, preparation steps, and allergen risks before cooking or serving food."
   },
   {
     title: "Third-Party Links And Retailers",

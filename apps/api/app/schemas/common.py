@@ -309,11 +309,31 @@ class HouseholdOut(ApiModel):
     id: str
     name: str
     invite_code: str
+    allergen_filter_mode: Literal["off", "warn", "block"] = "warn"
+    dislike_filter_mode: Literal["off", "warn", "block"] = "warn"
+    current_user_role: str
     members: list[dict[str, str]]
 
 
 class HouseholdJoinRequest(ApiModel):
     invite_code: str = Field(min_length=4, max_length=16)
+
+
+class HouseholdSettingsUpdate(ApiModel):
+    allergen_filter_mode: Literal["off", "warn", "block"]
+    dislike_filter_mode: Literal["off", "warn", "block"]
+
+
+class HouseholdOwnerTransferRequest(ApiModel):
+    user_id: str = Field(min_length=1, max_length=36)
+
+
+class HouseholdVoteOptionOut(ApiModel):
+    recipe: RecipeOut
+    is_blocked: bool
+    warning_labels: list[str] = Field(default_factory=list)
+    blocked_labels: list[str] = Field(default_factory=list)
+    safety_notes: list[str] = Field(default_factory=list)
 
 
 class VoteRequest(ApiModel):

@@ -46,8 +46,20 @@ export type Household = {
   id: string;
   name: string;
   invite_code: string;
+  allergen_filter_mode: SafetyFilterMode;
+  dislike_filter_mode: SafetyFilterMode;
   current_user_role: string;
   members: { id: string; email: string; role: string }[];
+};
+
+export type SafetyFilterMode = "off" | "warn" | "block";
+
+export type VoteOption = {
+  recipe: Recipe;
+  is_blocked: boolean;
+  warning_labels: string[];
+  blocked_labels: string[];
+  safety_notes: string[];
 };
 
 export type VoteSummary = {

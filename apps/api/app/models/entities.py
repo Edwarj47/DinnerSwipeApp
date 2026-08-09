@@ -110,6 +110,8 @@ class Household(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
     invite_code: Mapped[str | None] = mapped_column(String(16), unique=True, nullable=True)
+    allergen_filter_mode: Mapped[str] = mapped_column(String(16), default="warn", nullable=False)
+    dislike_filter_mode: Mapped[str] = mapped_column(String(16), default="warn", nullable=False)
 
 
 class HouseholdMember(Base, TimestampMixin):
