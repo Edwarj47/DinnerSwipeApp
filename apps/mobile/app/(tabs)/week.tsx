@@ -119,7 +119,7 @@ export default function WeekScreen() {
                   <Text style={styles.day}>{slot.slot_date ? formatAssignedDate(slot.slot_date) : "Unassigned"}</Text>
                   <Text style={styles.meal}>{slot.recipe_name ?? slotLabel(slot.slot_type)}</Text>
                   <Text style={styles.meta}>
-                    Serves {slot.servings} - {slot.is_locked ? "locked" : "replaceable"}
+                    Serves {slot.servings} - {slot.is_locked ? "kept" : "open to changes"}
                     {slot.recipe_total_minutes ? ` - ${slot.recipe_total_minutes} min` : ""}
                   </Text>
                 </View>
@@ -129,7 +129,7 @@ export default function WeekScreen() {
                   variant={slot.recipe_id ? "secondary" : "primary"}
                   onPress={() => {
                     if (!slot.recipe_id) {
-                      router.push("/");
+                      openSlotPicker(router, slot, "Pick dinner");
                       return;
                     }
                     setExpandedSlotId(isExpanded ? null : slot.id);
@@ -162,10 +162,15 @@ export default function WeekScreen() {
                       <Text style={styles.servings}>{slot.servings}</Text>
                       <Button label="+" icon="add" onPress={() => update.mutate({ slot, patch: { servings: slot.servings + 1 } })} />
                     </View>
-                    <Button label={slot.is_locked ? "Unlock" : "Lock"} icon={slot.is_locked ? "lock-open" : "lock-closed"} onPress={() => update.mutate({ slot, patch: { is_locked: !slot.is_locked } })} />
+                    <Button label={slot.is_locked ? "Unlock" : "Keep"} icon={slot.is_locked ? "lock-open" : "lock-closed"} onPress={() => update.mutate({ slot, patch: { is_locked: !slot.is_locked } })} />
                     <Button label="Up" icon="arrow-up" onPress={() => move.mutate({ slot, direction: -1 })} />
                     <Button label="Down" icon="arrow-down" onPress={() => move.mutate({ slot, direction: 1 })} />
                   </View>
+                  <Text style={styles.lockHint}>
+                    {slot.is_locked
+                      ? "Kept meals stay fixed for future auto-pick or group-match replacement tools."
+                      : "Open meals can be changed now and by future auto-pick tools."}
+                  </Text>
                   <View style={styles.actions}>
                     {slot.recipe_id && premiumActive ? (
                       <>
@@ -174,7 +179,7 @@ export default function WeekScreen() {
                       </>
                     ) : null}
                     {slot.recipe_id ? <Button label="Remove" icon="trash" variant="danger" onPress={() => remove.mutate(slot.id)} /> : null}
-                    <Button label="Replace" icon="swap-horizontal" onPress={() => router.push("/")} />
+                    <Button label="Replace" icon="swap-horizontal" onPress={() => openSlotPicker(router, slot, slot.recipe_name ?? "this dinner")} />
                   </View>
                 </>
               ) : null}
@@ -217,6 +222,16 @@ function slotLabel(type: WeeklySlot["slot_type"]) {
   return "Choose a meal";
 }
 
+function openSlotPicker(router: ReturnType<typeof useRouter>, slot: WeeklySlot, replaceName: string) {
+  router.push({
+    pathname: "/",
+    params: {
+      replace_slot_id: slot.id,
+      replace_name: replaceName
+    }
+  });
+}
+
 const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
   title: { fontSize: 32, fontWeight: "900", color: Colors.ink },
@@ -251,5 +266,6 @@ const styles = StyleSheet.create({
   controls: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
   stepper: { flexDirection: "row", alignItems: "center", gap: 8 },
   servings: { minWidth: 28, textAlign: "center", color: Colors.ink, fontWeight: "900", fontSize: 18 },
+  lockHint: { color: Colors.muted, lineHeight: 19, fontSize: 13 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 }
 });

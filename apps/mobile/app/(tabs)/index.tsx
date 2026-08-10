@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link } from "expo-router";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
@@ -15,16 +15,37 @@ import { Recipe, WeeklyPlan } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
 
 export default function DiscoverScreen() {
+  const router = useRouter();
+  const params = useLocalSearchParams<{ replace_slot_id?: string; replace_name?: string }>();
   const queryClient = useQueryClient();
   const { sessionId, addSwipe, undo, selectedRecipes, history } = usePlannerStore();
   const [index, setIndex] = useState(0);
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [status, setStatus] = useState("");
   const { data, isLoading, error } = useQuery({ queryKey: ["recipes"], queryFn: () => apiFetch<Recipe[]>("/api/v1/recipes") });
+  const replaceSlotId = typeof params.replace_slot_id === "string" ? params.replace_slot_id : "";
+  const replaceName = typeof params.replace_name === "string" ? params.replace_name : "this slot";
+  const isReplacingSlot = Boolean(replaceSlotId);
   const swipe = useMutation({
     mutationFn: (payload: { recipe_id: string; action: string; session_id: string }) =>
       apiFetch("/api/v1/recipes/swipes", { method: "POST", body: JSON.stringify(payload) }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["weekly-plan"] })
+  });
+  const replaceSlot = useMutation({
+    mutationFn: ({ slotId, recipeId }: { slotId: string; recipeId: string }) =>
+      apiFetch(`/api/v1/weekly-plans/current/slots/${slotId}`, {
+        method: "PUT",
+        body: JSON.stringify({ slot_type: "meal", recipe_id: recipeId })
+      }),
+    onSuccess: async () => {
+      setStatus("Dinner replaced.");
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["weekly-plan"] }),
+        queryClient.invalidateQueries({ queryKey: ["grocery"] })
+      ]);
+      router.replace("/week");
+    },
+    onError: (error) => setStatus(error instanceof Error ? error.message : "Unable to replace this dinner.")
   });
   const undoPlannedMeal = useMutation({
     mutationFn: async (recipeId: string) => {
@@ -52,15 +73,23 @@ export default function DiscoverScreen() {
   const recipes = data ?? [];
   const current = recipes[index];
   const target = 5;
-  const complete = selectedRecipes.length >= target;
-  const progressText = `${Math.min(selectedRecipes.length, target)} of ${target} dinners`;
+  const complete = !isReplacingSlot && selectedRecipes.length >= target;
+  const progressText = isReplacingSlot ? `Replacing ${replaceName}` : `${Math.min(selectedRecipes.length, target)} of ${target} dinners`;
   const lastAction = history[history.length - 1];
-  const canUndoPlannedMeal = lastAction?.action === "add" && !undoPlannedMeal.isPending;
+  const canUndoPlannedMeal = !isReplacingSlot && lastAction?.action === "add" && !undoPlannedMeal.isPending;
 
-  const headline = useMemo(() => (complete ? "Week filled" : "Find dinners"), [complete]);
+  const headline = useMemo(
+    () => (isReplacingSlot ? "Pick replacement" : complete ? "Week filled" : "Find dinners"),
+    [complete, isReplacingSlot]
+  );
 
   function act(action: "add" | "skip" | "favorite" | "hide") {
     if (!current) return;
+    if (isReplacingSlot && action === "add") {
+      replaceSlot.mutate({ slotId: replaceSlotId, recipeId: current.id });
+      setIndex((value) => value + 1);
+      return;
+    }
     addSwipe({ recipe: current, action });
     swipe.mutate({ recipe_id: current.id, action, session_id: sessionId });
     setIndex((value) => value + 1);
