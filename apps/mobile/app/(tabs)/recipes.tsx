@@ -97,7 +97,7 @@ export default function RecipesScreen() {
         options={[
           { label: "Library", value: "library" },
           { label: "Add", value: "add" },
-          { label: "Review", value: "review" }
+          { label: "Needs Work", value: "review" }
         ]}
       />
       {pageMode === "add" ? (
@@ -123,7 +123,7 @@ export default function RecipesScreen() {
         <>
           <TextInput accessibilityLabel="Search recipes" value={q} onChangeText={setQ} placeholder="Search saved recipes" style={styles.search} />
           <View style={styles.listHeader}>
-            <Text style={styles.sectionTitle}>{pageMode === "review" ? "Needs review" : "Recipe library"}</Text>
+            <Text style={styles.sectionTitle}>{pageMode === "review" ? "Recipes needing attention" : "Recipe library"}</Text>
             <Text style={styles.count}>{visibleRecipes.length}</Text>
           </View>
         </>
@@ -131,7 +131,7 @@ export default function RecipesScreen() {
       {pageMode !== "add" && !visibleRecipes.length ? (
         <View style={styles.emptyPanel}>
           <Text style={styles.emptyTitle}>{pageMode === "review" ? "Nothing needs review" : "No recipes found"}</Text>
-          <Text style={styles.empty}>{pageMode === "review" ? "Imported and ingested recipes that need attention will appear here." : "Try another search or add a recipe."}</Text>
+          <Text style={styles.empty}>{pageMode === "review" ? "Recipes already in your library that still have warnings will appear here." : "Try another search or add a recipe."}</Text>
         </View>
       ) : null}
       {pageMode !== "add" ? visibleRecipes.map((recipe: Recipe) => (

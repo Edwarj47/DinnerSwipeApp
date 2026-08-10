@@ -68,7 +68,10 @@ class OpenAIResponsesProvider(AiNormalizationProvider):
                     "content": (
                         "Normalize only recipe content present in the supplied candidate. "
                         "Do not invent missing ingredients, instructions, timing, "
-                        "source, or images."
+                        "source, or images. Return warnings only for missing or contradictory "
+                        "user-facing recipe fields that still need manual review. Do not warn "
+                        "about optional internal fields such as timer_minutes, null timers, "
+                        "or cooking-time ranges that are preserved in the instruction text."
                     ),
                 },
                 {"role": "user", "content": str(candidate)[:12000]},

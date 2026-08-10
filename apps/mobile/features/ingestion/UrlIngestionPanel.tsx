@@ -19,16 +19,6 @@ type Candidate = {
   confidence?: Record<string, unknown>;
 };
 
-const EXAMPLE_LINKS = [
-  { label: "Pico", url: "https://www.joyfulhealthyeats.com/pico-de-gallo/" },
-  { label: "Fajitas", url: "https://www.joyfulhealthyeats.com/easy-sheet-pan-chicken-fajitas/" },
-  { label: "Shrimp tacos", url: "https://natashaskitchen.com/bang-bang-shrimp-tacos/" },
-  { label: "Alfredo", url: "https://valentinascorner.com/crockpot-chicken-alfredo/" },
-  { label: "Chicken thighs", url: "https://easychickenrecipes.com/air-fryer-chicken-thighs/" },
-  { label: "Turkey prep", url: "https://sweetpeasandsaffron.com/korean-turkey-meal-prep/" },
-  { label: "Mousse", url: "https://at-my-table.com/high-protein-chocolate-mousse/#recipe" }
-];
-
 export function UrlIngestionPanel() {
   const queryClient = useQueryClient();
   const [url, setUrl] = useState("");
@@ -129,8 +119,7 @@ export function UrlIngestionPanel() {
     await queryClient.invalidateQueries({ queryKey: ["url-ingestion-history"] });
   }
 
-  const warnings = candidate?.validation_warnings ?? [];
-  const confidence = candidate?.confidence ?? {};
+  const warnings = friendlyWarnings(candidate?.validation_warnings ?? []);
   const hasIngredients = splitReviewLines(editIngredients).length > 0;
   const hasInstructions = splitReviewLines(editInstructions).length > 0;
   const canApprove = Boolean(candidate && editName.trim().length > 1 && hasIngredients && hasInstructions && candidate.status !== "approved" && candidate.status !== "rejected");
@@ -142,34 +131,32 @@ export function UrlIngestionPanel() {
         <Text style={styles.badge}>Review required</Text>
       </View>
       <TextInput accessibilityLabel="Recipe URL" value={url} onChangeText={setUrl} placeholder="Paste a recipe link" autoCapitalize="none" style={styles.input} />
-      <View style={styles.quickLinks}>
-        {EXAMPLE_LINKS.map((item) => (
-          <Button key={item.url} label={item.label} icon="restaurant" onPress={() => setUrl(item.url)} />
-        ))}
-      </View>
       <Button label="Fetch recipe" icon="link" variant="primary" onPress={() => void submit().catch((error) => setStatus(String(error)))} />
       {candidate ? (
         <View style={styles.review}>
           <View style={styles.reviewHeader}>
-            <Text style={styles.reviewTitle}>Review candidate</Text>
+            <Text style={styles.reviewTitle}>Review recipe</Text>
             <Text style={[styles.statusPill, candidate.status === "approved" ? styles.approvedPill : candidate.status === "rejected" ? styles.rejectedPill : null]}>{candidate.status.replaceAll("_", " ")}</Text>
           </View>
           {editPhoto ? <Image source={{ uri: editPhoto }} style={styles.photo} contentFit="cover" /> : <View style={styles.emptyPhoto}><Text style={styles.emptyPhotoText}>Photo required or approve placeholder</Text></View>}
+          <Text style={styles.inputLabel}>Name</Text>
           <TextInput accessibilityLabel="Review recipe name" value={editName} onChangeText={setEditName} style={styles.input} />
+          <Text style={styles.inputLabel}>Photo</Text>
           <TextInput accessibilityLabel="Review recipe photo URL" value={editPhoto} onChangeText={setEditPhoto} autoCapitalize="none" style={styles.input} />
           <Text style={styles.meta}>{candidate.source_url}</Text>
           <View style={styles.metrics}>
             <Metric label="Ingredients" value={String(splitReviewLines(editIngredients).length)} />
             <Metric label="Steps" value={String(splitReviewLines(editInstructions).length)} />
-            <Metric label="Warnings" value={String(warnings.length)} />
           </View>
-          <View style={styles.confidenceRow}>
-            {Object.entries(confidence).slice(0, 4).map(([key, value]) => (
-              <Text key={key} style={styles.confidenceChip}>{key}: {String(value)}</Text>
-            ))}
-          </View>
-          <Text style={warnings.length ? styles.warningText : styles.meta}>{warnings.join("; ") || "No blocking validation warnings returned."}</Text>
+          {warnings.length ? (
+            <View style={styles.noticeBox}>
+              <Text style={styles.noticeTitle}>Needs a quick look</Text>
+              {warnings.map((warning) => <Text key={warning} style={styles.noticeText}>{warning}</Text>)}
+            </View>
+          ) : null}
+          <Text style={styles.inputLabel}>Ingredients</Text>
           <TextInput accessibilityLabel="Review ingredients" value={editIngredients} onChangeText={setEditIngredients} multiline style={[styles.input, styles.area]} />
+          <Text style={styles.inputLabel}>Instructions</Text>
           <TextInput accessibilityLabel="Review instructions" value={editInstructions} onChangeText={setEditInstructions} multiline style={[styles.input, styles.area]} />
           <View style={styles.reviewActions}>
             <Button label="Approve" icon="checkmark-circle" variant="primary" disabled={!canApprove} onPress={() => void approve().catch((error) => setStatus(String(error)))} />
@@ -185,7 +172,7 @@ export function UrlIngestionPanel() {
             <View key={item.id} style={styles.historyRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.historyName}>{item.recipe_name ?? "Untitled draft"}</Text>
-                <Text style={styles.meta}>{item.status.replaceAll("_", " ")} • {(item.warnings ?? []).length} warning{(item.warnings ?? []).length === 1 ? "" : "s"}</Text>
+                <Text style={styles.meta}>{item.status.replaceAll("_", " ")} • {friendlyWarnings(item.warnings ?? []).length} note{friendlyWarnings(item.warnings ?? []).length === 1 ? "" : "s"}</Text>
               </View>
               <Button label="Open" icon="open" onPress={() => void openCandidate(item.id).catch((error) => setStatus(String(error)))} />
             </View>
@@ -199,6 +186,43 @@ export function UrlIngestionPanel() {
 
 function splitReviewLines(value: string) {
   return value.split(/\n|;/).map((item) => item.trim()).filter(Boolean);
+}
+
+function friendlyWarnings(messages: string[]) {
+  const seen = new Set<string>();
+  const cleaned: string[] = [];
+  for (const raw of messages) {
+    const message = readableWarning(raw);
+    if (!message || seen.has(message)) continue;
+    seen.add(message);
+    cleaned.push(message);
+  }
+  return cleaned;
+}
+
+function readableWarning(raw: string) {
+  const value = raw.trim();
+  const lower = value.toLowerCase();
+  if (!value) return "";
+  if (lower.includes("timer_minutes") || lower.includes("single integer")) return "";
+  if (lower.includes("ai ingestion is disabled") || lower.includes("openai_api_key")) {
+    return "Automatic cleanup is not configured yet. Review the recipe before approving.";
+  }
+  if (lower.includes("ai normalization failed")) {
+    return "Automatic cleanup had trouble with this page. Review the recipe before approving.";
+  }
+  if (lower.includes("ai normalization returned invalid")) {
+    return "Automatic cleanup returned an unexpected format. Review the recipe before approving.";
+  }
+  if (lower === "missing photo") return "Add a photo link or approve a placeholder.";
+  if (lower === "unsupported photo url") return "Use a secure image link or leave the photo blank for a placeholder.";
+  if (lower === "blocked photo url") return "That photo link is blocked. Use another image or approve a placeholder.";
+  if (lower === "empty ingredients") return "Add at least one ingredient.";
+  if (lower === "empty instructions") return "Add at least one instruction step.";
+  if (lower === "missing name") return "Add a recipe name.";
+  if (lower === "missing servings") return "Serving size was not found. You can still approve after reviewing.";
+  if (lower === "missing timing information") return "";
+  return value.replaceAll("_", " ");
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
@@ -216,9 +240,9 @@ const styles = StyleSheet.create({
   title: { fontSize: 19, fontWeight: "900", color: Colors.ink },
   badge: { color: Colors.tomato, fontWeight: "900" },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12 },
-  area: { minHeight: 120, paddingTop: 12, textAlignVertical: "top" },
-  quickLinks: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  review: { gap: 8 },
+  inputLabel: { color: Colors.ink, fontWeight: "900", marginTop: 2 },
+  area: { minHeight: 132, paddingTop: 12, paddingBottom: 12, textAlignVertical: "top", lineHeight: 21 },
+  review: { gap: 10 },
   reviewHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   reviewTitle: { color: Colors.ink, fontSize: 17, fontWeight: "900" },
   statusPill: { color: Colors.tomatoDark, backgroundColor: Colors.softRed, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, fontWeight: "900", overflow: "hidden", textTransform: "capitalize" },
@@ -231,9 +255,9 @@ const styles = StyleSheet.create({
   metric: { flex: 1, minHeight: 60, borderRadius: 8, backgroundColor: Colors.softRed, alignItems: "center", justifyContent: "center" },
   metricValue: { color: Colors.tomatoDark, fontSize: 18, fontWeight: "900" },
   metricLabel: { color: Colors.muted, fontSize: 11, fontWeight: "800" },
-  confidenceRow: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  confidenceChip: { color: Colors.muted, backgroundColor: Colors.softRed, borderRadius: 999, paddingHorizontal: 9, paddingVertical: 4, fontSize: 12, fontWeight: "700", overflow: "hidden" },
-  warningText: { color: Colors.danger, fontWeight: "700", lineHeight: 20 },
+  noticeBox: { borderRadius: 8, borderWidth: 1, borderColor: "#f2c7bd", backgroundColor: "#fff8f4", padding: 10, gap: 4 },
+  noticeTitle: { color: Colors.ink, fontWeight: "900" },
+  noticeText: { color: Colors.muted, lineHeight: 19 },
   reviewActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   history: { gap: 8, borderTopColor: Colors.border, borderTopWidth: 1, paddingTop: 10 },
   historyTitle: { color: Colors.ink, fontWeight: "900" },
