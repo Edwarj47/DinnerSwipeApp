@@ -354,9 +354,14 @@ function TagEditor({
   onChange: (values: string[]) => void;
 }) {
   const [draft, setDraft] = useState("");
+  const [inputError, setInputError] = useState("");
 
   function addRawValue(raw: string) {
-    const additions = cleanList(raw.split(","));
+    if (raw.includes(",")) {
+      setInputError("Add one item at a time.");
+      return;
+    }
+    const additions = cleanList([raw]);
     if (!additions.length) return;
     const existing = new Set(values.map((item) => item.toLowerCase()));
     const next = [...values];
@@ -366,18 +371,13 @@ function TagEditor({
         next.push(item);
       }
     }
+    setInputError("");
     onChange(next);
   }
 
   function handleChange(text: string) {
-    if (!text.includes(",")) {
-      setDraft(text);
-      return;
-    }
-    const parts = text.split(",");
-    const trailing = parts.pop() ?? "";
-    addRawValue(parts.join(","));
-    setDraft(trailing.trimStart());
+    setDraft(text);
+    setInputError(text.includes(",") ? "Add one item at a time." : "");
   }
 
   function submitDraft() {
@@ -420,8 +420,9 @@ function TagEditor({
           ))}
         </View>
       ) : (
-        <Text style={styles.tagHint}>Add one at a time, or paste a comma-separated list.</Text>
+        <Text style={styles.tagHint}>Add one item at a time. Tap a chip to remove it.</Text>
       )}
+      {inputError ? <Text style={styles.tagError}>{inputError}</Text> : null}
     </View>
   );
 }
@@ -489,6 +490,7 @@ const styles = StyleSheet.create({
   chipText: { color: Colors.tomatoDark, fontWeight: "900" },
   chipRemove: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 18, lineHeight: 20 },
   tagHint: { color: Colors.muted, lineHeight: 19, fontSize: 13 },
+  tagError: { color: Colors.danger, lineHeight: 19, fontSize: 13, fontWeight: "700" },
   toggleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14 },
   toggleCopy: { flex: 1, gap: 4 },
   toggleTitle: { color: Colors.ink, fontWeight: "900", fontSize: 16 },

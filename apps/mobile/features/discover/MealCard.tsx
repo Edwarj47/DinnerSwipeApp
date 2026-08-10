@@ -1,4 +1,6 @@
+import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
+import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -7,22 +9,52 @@ import Animated, {
   runOnJS,
   useAnimatedStyle,
   useSharedValue,
-  withSpring
+  withSpring,
+  withTiming
 } from "react-native-reanimated";
 
-import { Button } from "@/components/Button";
 import { Colors, shadow } from "@/components/theme";
 import { Recipe } from "@/services/types";
 
+type MealAction = "add" | "skip" | "favorite" | "hide";
+
 type Props = {
   recipe: Recipe;
-  onAction: (action: "add" | "skip" | "favorite" | "hide") => void;
+  onAction: (action: MealAction) => void;
   onOpen: () => void;
 };
 
+const ACTIONS: {
+  value: MealAction;
+  label: string;
+  hint: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  tone: "primary" | "neutral" | "danger";
+  exitX: number;
+  exitY: number;
+}[] = [
+  { value: "add", label: "Plan it", hint: "adds to This Week", icon: "add-circle", tone: "primary", exitX: 620, exitY: 20 },
+  { value: "skip", label: "Skip", hint: "not this session", icon: "close-circle", tone: "neutral", exitX: -620, exitY: 20 },
+  { value: "favorite", label: "Favorite", hint: "save for later", icon: "heart", tone: "primary", exitX: 0, exitY: -760 },
+  { value: "hide", label: "Never show", hint: "hide suggestion", icon: "eye-off", tone: "danger", exitX: 0, exitY: 760 }
+];
+
 export function MealCard({ recipe, onAction, onOpen }: Props) {
+  const [isLeaving, setIsLeaving] = useState(false);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+
+  function choose(action: MealAction) {
+    if (isLeaving) return;
+    const target = ACTIONS.find((item) => item.value === action);
+    if (!target) return;
+    setIsLeaving(true);
+    translateX.value = withTiming(target.exitX, { duration: 220 });
+    translateY.value = withTiming(target.exitY, { duration: 220 }, (finished) => {
+      if (finished) runOnJS(onAction)(action);
+    });
+  }
+
   const gesture = Gesture.Pan()
     .onUpdate((event) => {
       translateX.value = event.translationX;
@@ -33,16 +65,18 @@ export function MealCard({ recipe, onAction, onOpen }: Props) {
       const y = translateY.value;
       const absX = Math.abs(x);
       const absY = Math.abs(y);
-      translateX.value = withSpring(0);
-      translateY.value = withSpring(0);
-      if (absX < 90 && absY < 90) return;
-      if (absX >= absY) {
-        if (x > 90) runOnJS(onAction)("add");
-        if (x < -90) runOnJS(onAction)("skip");
+      if (absX < 90 && absY < 90) {
+        translateX.value = withSpring(0);
+        translateY.value = withSpring(0);
         return;
       }
-      if (y < -90) runOnJS(onAction)("favorite");
-      if (y > 90) runOnJS(onAction)("hide");
+      if (absX >= absY) {
+        if (x > 90) runOnJS(choose)("add");
+        if (x < -90) runOnJS(choose)("skip");
+        return;
+      }
+      if (y < -90) runOnJS(choose)("favorite");
+      if (y > 90) runOnJS(choose)("hide");
     });
   const animated = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { rotate: `${translateX.value / 24}deg` }]
@@ -92,14 +126,37 @@ export function MealCard({ recipe, onAction, onOpen }: Props) {
             <Text numberOfLines={2} style={styles.ingredients}>
               {recipe.ingredients.map((item) => item.normalized_name).slice(0, 6).join(", ")}
             </Text>
-            <View style={styles.actions}>
-              <Button label="Skip" icon="close" onPress={() => onAction("skip")} />
-              <Button label="Plan" icon="add" variant="primary" onPress={() => onAction("add")} />
-              <Button label="Fav" icon="heart" onPress={() => onAction("favorite")} />
-              <Button label="Hide" icon="eye-off" variant="danger" onPress={() => onAction("hide")} />
-            </View>
           </View>
         </Pressable>
+        <View style={styles.picklist}>
+          <Text style={styles.picklistTitle}>Choose</Text>
+          <View style={styles.optionGrid}>
+            {ACTIONS.map((item) => (
+              <Pressable
+                key={item.value}
+                accessibilityRole="button"
+                accessibilityLabel={`${item.label}: ${item.hint}`}
+                disabled={isLeaving}
+                onPress={() => choose(item.value)}
+                style={[
+                  styles.option,
+                  item.tone === "primary" ? styles.optionPrimary : null,
+                  item.tone === "danger" ? styles.optionDanger : null
+                ]}
+              >
+                <Ionicons
+                  name={item.icon}
+                  size={19}
+                  color={item.tone === "danger" ? Colors.danger : item.tone === "primary" ? Colors.tomato : Colors.ink}
+                />
+                <View style={styles.optionText}>
+                  <Text style={styles.optionLabel}>{item.label}</Text>
+                  <Text style={styles.optionHint}>{item.hint}</Text>
+                </View>
+              </Pressable>
+            ))}
+          </View>
+        </View>
         <Animated.View pointerEvents="none" style={[styles.swipeBadge, styles.planBadge, planIndicator]}>
           <Text style={[styles.swipeBadgeText, styles.planBadgeText]}>PLAN</Text>
           <Text style={styles.swipeHint}>Add to week</Text>
@@ -130,7 +187,25 @@ const styles = StyleSheet.create({
   favorite: { color: Colors.basil, fontWeight: "800", fontSize: 12, textTransform: "uppercase" },
   meta: { color: Colors.muted, fontSize: 14 },
   ingredients: { color: Colors.ink, fontSize: 15, lineHeight: 21 },
-  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  picklist: { borderTopWidth: 1, borderTopColor: Colors.border, padding: 12, gap: 9, backgroundColor: "#fffaf8" },
+  picklistTitle: { color: Colors.ink, fontWeight: "900", fontSize: 13, textTransform: "uppercase" },
+  optionGrid: { gap: 8 },
+  option: {
+    minHeight: 52,
+    borderRadius: 8,
+    borderColor: Colors.border,
+    borderWidth: 1,
+    backgroundColor: Colors.surface,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    paddingHorizontal: 12
+  },
+  optionPrimary: { borderColor: "#f1bab6", backgroundColor: Colors.softRed },
+  optionDanger: { borderColor: "#efbbb7", backgroundColor: "#fff2f0" },
+  optionText: { flex: 1 },
+  optionLabel: { color: Colors.ink, fontWeight: "900", fontSize: 15 },
+  optionHint: { color: Colors.muted, fontSize: 12, marginTop: 1 },
   swipeBadge: {
     position: "absolute",
     borderRadius: 8,
