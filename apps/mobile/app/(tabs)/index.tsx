@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useLocalSearchParams, useRouter } from "expo-router";
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { BrandLogo } from "@/components/BrandLogo";
@@ -84,6 +84,10 @@ export default function DiscoverScreen() {
     [complete, isReplacingSlot]
   );
 
+  useEffect(() => {
+    setStatus("");
+  }, [replaceSlotId]);
+
   function act(action: "add" | "skip" | "favorite" | "hide") {
     if (!current) return;
     if (isReplacingSlot && action === "add") {
@@ -110,22 +114,24 @@ export default function DiscoverScreen() {
       <View style={styles.header}>
         <View style={styles.brand}>
           <BrandLogo size={46} />
-          <View>
-            <Text style={styles.eyebrow}>{progressText}</Text>
-            <Text style={styles.title}>{headline}</Text>
+          <View style={styles.brandText}>
+            <Text numberOfLines={1} style={styles.eyebrow}>{progressText}</Text>
+            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={styles.title}>{headline}</Text>
           </View>
         </View>
-        <Button
-          label="Undo"
-          icon="arrow-undo"
-          disabled={!canUndoPlannedMeal}
-          onPress={() => {
-            const restored = undo();
-            if (restored?.action !== "add") return;
-            setIndex((value) => Math.max(0, value - 1));
-            undoPlannedMeal.mutate(restored.recipe.id);
-          }}
-        />
+        {!isReplacingSlot ? (
+          <Button
+            label="Undo"
+            icon="arrow-undo"
+            disabled={!canUndoPlannedMeal}
+            onPress={() => {
+              const restored = undo();
+              if (restored?.action !== "add") return;
+              setIndex((value) => Math.max(0, value - 1));
+              undoPlannedMeal.mutate(restored.recipe.id);
+            }}
+          />
+        ) : null}
       </View>
       <OnboardingNextStepCard />
       {status ? <Text style={styles.status}>{status}</Text> : null}
@@ -155,8 +161,9 @@ export default function DiscoverScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16 },
-  brand: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 10 },
+  brand: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 },
+  brandText: { flex: 1, minWidth: 0 },
   eyebrow: { color: Colors.basil, fontWeight: "800", textTransform: "uppercase", fontSize: 12 },
   title: { color: Colors.ink, fontSize: 32, fontWeight: "900" },
   status: { color: Colors.basil, fontWeight: "800", marginBottom: 10 },
