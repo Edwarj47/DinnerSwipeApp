@@ -1,6 +1,5 @@
-import { Ionicons } from "@expo/vector-icons";
 import { Image } from "expo-image";
-import { useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
@@ -18,42 +17,45 @@ import { Recipe } from "@/services/types";
 
 type MealAction = "add" | "skip" | "favorite" | "hide";
 
+export type MealCardHandle = {
+  choose: (action: MealAction) => void;
+};
+
 type Props = {
   recipe: Recipe;
   onAction: (action: MealAction) => void;
   onOpen: () => void;
 };
 
-const ACTIONS: {
-  value: MealAction;
-  label: string;
-  hint: string;
-  icon: keyof typeof Ionicons.glyphMap;
-  tone: "primary" | "neutral" | "danger";
-  exitX: number;
-  exitY: number;
-}[] = [
-  { value: "add", label: "Plan it", hint: "adds to This Week", icon: "add-circle", tone: "primary", exitX: 620, exitY: 20 },
-  { value: "skip", label: "Skip", hint: "not this session", icon: "close-circle", tone: "neutral", exitX: -620, exitY: 20 },
-  { value: "favorite", label: "Favorite", hint: "save for later", icon: "heart", tone: "primary", exitX: 0, exitY: -760 },
-  { value: "hide", label: "Never show", hint: "hide suggestion", icon: "eye-off", tone: "danger", exitX: 0, exitY: 760 }
-];
+const EXIT_TARGETS: Record<MealAction, { x: number; y: number }> = {
+  add: { x: 620, y: 20 },
+  skip: { x: -620, y: 20 },
+  favorite: { x: 0, y: -760 },
+  hide: { x: 0, y: 760 }
+};
 
-export function MealCard({ recipe, onAction, onOpen }: Props) {
+export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ recipe, onAction, onOpen }, ref) {
   const [isLeaving, setIsLeaving] = useState(false);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
 
-  function choose(action: MealAction) {
+  useEffect(() => {
+    translateX.value = 0;
+    translateY.value = 0;
+    setIsLeaving(false);
+  }, [recipe.id, translateX, translateY]);
+
+  const choose = useCallback((action: MealAction) => {
     if (isLeaving) return;
-    const target = ACTIONS.find((item) => item.value === action);
-    if (!target) return;
+    const target = EXIT_TARGETS[action];
     setIsLeaving(true);
-    translateX.value = withTiming(target.exitX, { duration: 220 });
-    translateY.value = withTiming(target.exitY, { duration: 220 }, (finished) => {
+    translateX.value = withTiming(target.x, { duration: 220 });
+    translateY.value = withTiming(target.y, { duration: 220 }, (finished) => {
       if (finished) runOnJS(onAction)(action);
     });
-  }
+  }, [isLeaving, onAction, translateX, translateY]);
+
+  useImperativeHandle(ref, () => ({ choose }), [choose]);
 
   const gesture = Gesture.Pan()
     .onUpdate((event) => {
@@ -128,35 +130,6 @@ export function MealCard({ recipe, onAction, onOpen }: Props) {
             </Text>
           </View>
         </Pressable>
-        <View style={styles.picklist}>
-          <Text style={styles.picklistTitle}>Choose</Text>
-          <View style={styles.optionGrid}>
-            {ACTIONS.map((item) => (
-              <Pressable
-                key={item.value}
-                accessibilityRole="button"
-                accessibilityLabel={`${item.label}: ${item.hint}`}
-                disabled={isLeaving}
-                onPress={() => choose(item.value)}
-                style={[
-                  styles.option,
-                  item.tone === "primary" ? styles.optionPrimary : null,
-                  item.tone === "danger" ? styles.optionDanger : null
-                ]}
-              >
-                <Ionicons
-                  name={item.icon}
-                  size={19}
-                  color={item.tone === "danger" ? Colors.danger : item.tone === "primary" ? Colors.tomato : Colors.ink}
-                />
-                <View style={styles.optionText}>
-                  <Text style={styles.optionLabel}>{item.label}</Text>
-                  <Text style={styles.optionHint}>{item.hint}</Text>
-                </View>
-              </Pressable>
-            ))}
-          </View>
-        </View>
         <Animated.View pointerEvents="none" style={[styles.swipeBadge, styles.planBadge, planIndicator]}>
           <Text style={[styles.swipeBadgeText, styles.planBadgeText]}>PLAN</Text>
           <Text style={styles.swipeHint}>Add to week</Text>
@@ -176,7 +149,7 @@ export function MealCard({ recipe, onAction, onOpen }: Props) {
       </Animated.View>
     </GestureDetector>
   );
-}
+});
 
 const styles = StyleSheet.create({
   card: { backgroundColor: Colors.surface, borderRadius: 8, overflow: "hidden", ...shadow },
@@ -187,25 +160,6 @@ const styles = StyleSheet.create({
   favorite: { color: Colors.basil, fontWeight: "800", fontSize: 12, textTransform: "uppercase" },
   meta: { color: Colors.muted, fontSize: 14 },
   ingredients: { color: Colors.ink, fontSize: 15, lineHeight: 21 },
-  picklist: { borderTopWidth: 1, borderTopColor: Colors.border, padding: 12, gap: 9, backgroundColor: "#fffaf8" },
-  picklistTitle: { color: Colors.ink, fontWeight: "900", fontSize: 13, textTransform: "uppercase" },
-  optionGrid: { gap: 8 },
-  option: {
-    minHeight: 52,
-    borderRadius: 8,
-    borderColor: Colors.border,
-    borderWidth: 1,
-    backgroundColor: Colors.surface,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    paddingHorizontal: 12
-  },
-  optionPrimary: { borderColor: "#f1bab6", backgroundColor: Colors.softRed },
-  optionDanger: { borderColor: "#efbbb7", backgroundColor: "#fff2f0" },
-  optionText: { flex: 1 },
-  optionLabel: { color: Colors.ink, fontWeight: "900", fontSize: 15 },
-  optionHint: { color: Colors.muted, fontSize: 12, marginTop: 1 },
   swipeBadge: {
     position: "absolute",
     borderRadius: 8,

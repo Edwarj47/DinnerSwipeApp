@@ -19,13 +19,16 @@ import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
 
+type RecipeAction = "add" | "skip" | "favorite" | "hide";
+
 type Props = {
   recipe: Recipe | null;
   visible: boolean;
   onClose: () => void;
+  onAction?: (action: RecipeAction) => void;
 };
 
-export function RecipeDetailSheet({ recipe, visible, onClose }: Props) {
+export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props) {
   const queryClient = useQueryClient();
   const { sessionId, addSwipe } = usePlannerStore();
   const dragToClose = useMemo(
@@ -41,7 +44,7 @@ export function RecipeDetailSheet({ recipe, visible, onClose }: Props) {
       }),
     [onClose]
   );
-  const action = useMutation({
+  const actionMutation = useMutation({
     mutationFn: (payload: { recipe_id: string; action: "add" | "favorite" | "hide" }) =>
       apiFetch("/api/v1/recipes/swipes", { method: "POST", body: JSON.stringify({ ...payload, session_id: sessionId }) }),
     onSuccess: async (_result, variables) => {
@@ -63,10 +66,18 @@ export function RecipeDetailSheet({ recipe, visible, onClose }: Props) {
 
   if (!recipe) return null;
 
-  function doAction(kind: "add" | "favorite" | "hide") {
+  function doAction(kind: RecipeAction) {
     if (!recipe) return;
+    if (onAction) {
+      onAction(kind);
+      return;
+    }
+    if (kind === "skip") {
+      onClose();
+      return;
+    }
     addSwipe({ recipe, action: kind });
-    action.mutate({ recipe_id: recipe.id, action: kind });
+    actionMutation.mutate({ recipe_id: recipe.id, action: kind });
   }
 
   return (
@@ -112,9 +123,10 @@ export function RecipeDetailSheet({ recipe, visible, onClose }: Props) {
               <Stat label="Level" value={recipe.difficulty} />
             </View>
             <View style={styles.actions}>
-              <Button label="Plan" icon="add-circle" variant="primary" onPress={() => doAction("add")} />
+              <Button label="Plan it" icon="add-circle" variant="primary" onPress={() => doAction("add")} />
+              {onAction ? <Button label="Skip" icon="close-circle" onPress={() => doAction("skip")} /> : null}
               <Button label="Favorite" icon="heart" onPress={() => doAction("favorite")} />
-              <Button label="Hide" icon="eye-off" variant="danger" onPress={() => doAction("hide")} />
+              <Button label="Never show" icon="eye-off" variant="danger" onPress={() => doAction("hide")} />
             </View>
             <View style={styles.votePanel}>
               <Text style={styles.sectionTitle}>Group vote</Text>
