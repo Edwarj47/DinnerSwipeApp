@@ -250,6 +250,9 @@ class WeeklyPlanOut(ApiModel):
     slots: list[dict[str, Any]]
 
 
+GroceryRetailer = Literal["walmart", "publix", "kroger", "instacart"]
+
+
 class ProfileUpdate(ApiModel):
     household_size: int = Field(default=2, ge=1, le=20)
     weekly_meal_target: int = Field(default=5, ge=1, le=14)
@@ -261,6 +264,7 @@ class ProfileUpdate(ApiModel):
     favorite_proteins: list[str] = Field(default_factory=list)
     budget_preference: str | None = None
     walmart_zip: str | None = None
+    preferred_grocery_retailer: GroceryRetailer = "walmart"
     notification_preferences: dict[str, Any] = Field(default_factory=dict)
 
 
@@ -286,6 +290,9 @@ class GroceryItemOut(ApiModel):
     category: str
     is_checked: bool
     walmart_search_url: str | None
+    retailer_name: str
+    retailer_display_name: str
+    retailer_search_url: str | None
     match_status: str
     notes: str | None
 

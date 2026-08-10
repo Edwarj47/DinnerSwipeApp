@@ -29,7 +29,7 @@ Open `http://127.0.0.1:19006`, register from Profile, then use Discover.
 - Account password change, JSON data export, password-confirmed deletion request, and basic auth rate limiting
 - Database-backed refresh-token rotation/revocation and first-run sign-in gate
 - Swipeable meal cards with accessible action buttons
-- Favorites, hidden meals, weekly plan slots, pantry exclusions, grocery aggregation, and Walmart search links
+- Favorites, hidden meals, weekly plan slots, pantry exclusions, grocery aggregation, and configurable retailer search links
 - CSV/XLSX upload, column mapping suggestions, validation, duplicate checks, preview, partial import, confirmation, and CSV error export
 - Public recipe URL ingestion with SSRF protections, JSON-LD extraction, metadata fallback, conservative HTML hints, AI normalization adapter, and approval gate
 - Manual recipe creation with phone-friendly details, photo upload/preview, validation counts, and starter templates
@@ -47,7 +47,7 @@ Open `http://127.0.0.1:19006`, register from Profile, then use Discover.
 - PostgreSQL for Dinner Swipe is separate from existing VPS databases.
 - OpenAI ingestion is disabled unless `AI_INGESTION_ENABLED=true` and `OPENAI_API_KEY` are configured in the ignored local `.env`.
 - Stripe billing is disabled unless the Stripe account is verified and `STRIPE_ENABLED=true` plus Stripe secrets and price IDs are configured in the ignored local `.env`.
-- Walmart MVP support is search-link generation only. No login, cart automation, checkout, or scraping is implemented.
+- Retailer MVP support is search-link generation only. No login, cart automation, checkout, or scraping is implemented.
 - Placeholder recipe images are development-only and should be replaced or copied into controlled storage before production.
 
 ## Common Commands

@@ -9,8 +9,21 @@ import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 
-type GroceryItem = { id: string; display_name: string; quantity: number | null; unit: string | null; category: string; is_checked: boolean; walmart_search_url?: string; match_status: string; notes?: string | null };
+type GroceryItem = {
+  id: string;
+  display_name: string;
+  quantity: number | null;
+  unit: string | null;
+  category: string;
+  is_checked: boolean;
+  walmart_search_url?: string;
+  retailer_display_name?: string;
+  retailer_search_url?: string;
+  match_status: string;
+  notes?: string | null;
+};
 type PantryItem = { id: string; normalized_name: string; category: string };
+type GroceryListResponse = { items: GroceryItem[]; retailer_display_name?: string };
 type GroceryMode = "list" | "add" | "pantry";
 
 export default function GroceryScreen() {
@@ -22,7 +35,7 @@ export default function GroceryScreen() {
   const [manualQty, setManualQty] = useState("");
   const [manualUnit, setManualUnit] = useState("");
   const [pantryName, setPantryName] = useState("");
-  const { data } = useQuery<{ items: GroceryItem[] }>({ queryKey: ["grocery"], queryFn: () => apiFetch<{ items: GroceryItem[] }>("/api/v1/grocery-lists/current") });
+  const { data } = useQuery<GroceryListResponse>({ queryKey: ["grocery"], queryFn: () => apiFetch<GroceryListResponse>("/api/v1/grocery-lists/current") });
   const { data: pantry } = useQuery<PantryItem[]>({ queryKey: ["pantry"], queryFn: () => apiFetch<PantryItem[]>("/api/v1/grocery-lists/pantry") });
   const grouped = useMemo(() => groupItems(data?.items ?? []), [data?.items]);
   const itemsLeft = data?.items.filter((item: GroceryItem) => !item.is_checked).length ?? 0;
@@ -86,7 +99,7 @@ export default function GroceryScreen() {
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Grocery List</Text>
-          <Text style={styles.subtitle}>{itemsLeft} left to grab</Text>
+          <Text style={styles.subtitle}>{itemsLeft} left to grab • {data?.retailer_display_name ?? "Walmart"} links</Text>
         </View>
         <Button label="Regenerate" icon="sync" onPress={() => regen.mutate()} />
       </View>
@@ -149,7 +162,13 @@ export default function GroceryScreen() {
                   <View style={styles.itemControls}>
                   <Button label="-" icon="remove" onPress={() => patchItem.mutate({ item, patch: { quantity: Math.max(0, (item.quantity ?? 1) - 1) } })} />
                   <Button label="+" icon="add" onPress={() => patchItem.mutate({ item, patch: { quantity: (item.quantity ?? 0) + 1 } })} />
-                  {item.walmart_search_url ? <Button label="Walmart" icon="search" onPress={() => Linking.openURL(item.walmart_search_url!)} /> : null}
+                  {retailerUrl(item) ? (
+                    <Button
+                      label={item.retailer_display_name ?? data?.retailer_display_name ?? "Walmart"}
+                      icon="search"
+                      onPress={() => Linking.openURL(retailerUrl(item)!)}
+                    />
+                  ) : null}
                   <Button label="Delete" icon="trash" variant="danger" onPress={() => deleteItem.mutate(item)} />
                   </View>
                 ) : null}
@@ -181,6 +200,10 @@ function groupItems(items: GroceryItem[]) {
 function formatQuantity(item: GroceryItem) {
   if (item.quantity === null) return item.unit ? item.unit : "Quantity needs review";
   return `${item.quantity} ${item.unit ?? ""}`.trim();
+}
+
+function retailerUrl(item: GroceryItem) {
+  return item.retailer_search_url ?? item.walmart_search_url ?? null;
 }
 
 const styles = StyleSheet.create({

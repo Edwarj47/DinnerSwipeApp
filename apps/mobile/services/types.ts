@@ -95,6 +95,7 @@ export type UserProfile = {
   favorite_proteins: string[];
   budget_preference: string | null;
   walmart_zip: string | null;
+  preferred_grocery_retailer: "walmart" | "publix" | "kroger" | "instacart";
   notification_preferences: Record<string, unknown>;
   onboarding_completed_at?: string | null;
   tutorial_completed_at?: string | null;

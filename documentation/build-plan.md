@@ -29,7 +29,7 @@
 - [x] Grocery categories
 - [x] Manual item additions
 - [x] Check-off and quantity editing endpoints
-- [x] Walmart search-link adapter
+- [x] Configurable retailer search-link adapters
 - [ ] Preferred product selection UI is implemented as stored metadata, not a live product picker
 
 ## Phase 4: Spreadsheet Import
@@ -68,4 +68,3 @@
 - [x] Security checklist
 - [ ] Store submission setup is documentation only
 - [ ] Production OpenAI credentials, app signing, and domain routing require external account setup
-

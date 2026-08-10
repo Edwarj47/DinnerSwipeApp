@@ -138,6 +138,7 @@ class UserProfile(Base, TimestampMixin):
     favorite_proteins: Mapped[list[str]] = mapped_column(JSON, default=list)
     budget_preference: Mapped[str | None] = mapped_column(String(32), nullable=True)
     walmart_zip: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    preferred_grocery_retailer: Mapped[str] = mapped_column(String(32), default="walmart")
     notification_preferences: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
     onboarding_completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     tutorial_completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

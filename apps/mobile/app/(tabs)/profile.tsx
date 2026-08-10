@@ -16,6 +16,14 @@ import { UserProfile } from "@/services/types";
 
 type ProfileSection = "account" | "meals" | "group" | "premium";
 type AccountAction = "overview" | "reset" | "data" | "delete";
+type GroceryRetailer = UserProfile["preferred_grocery_retailer"];
+
+const GROCERY_RETAILER_OPTIONS: { label: string; value: GroceryRetailer }[] = [
+  { label: "Walmart", value: "walmart" },
+  { label: "Publix", value: "publix" },
+  { label: "Kroger", value: "kroger" },
+  { label: "Instacart", value: "instacart" }
+];
 
 export default function ProfileScreen() {
   const queryClient = useQueryClient();
@@ -32,6 +40,7 @@ export default function ProfileScreen() {
   const [maxCookMinutes, setMaxCookMinutes] = useState("");
   const [allergens, setAllergens] = useState<string[]>([]);
   const [dislikes, setDislikes] = useState<string[]>([]);
+  const [preferredRetailer, setPreferredRetailer] = useState<GroceryRetailer>("walmart");
   const [status, setStatus] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
@@ -66,6 +75,7 @@ export default function ProfileScreen() {
     setMaxCookMinutes(profile.data.max_cook_minutes ? String(profile.data.max_cook_minutes) : "");
     setAllergens(profile.data.allergens);
     setDislikes(profile.data.disliked_ingredients);
+    setPreferredRetailer(profile.data.preferred_grocery_retailer ?? "walmart");
   }, [profile.data]);
   const auth = useMutation({
     mutationFn: (mode: "login" | "register") =>
@@ -157,6 +167,7 @@ export default function ProfileScreen() {
           favorite_proteins: profile.data?.favorite_proteins ?? [],
           budget_preference: profile.data?.budget_preference ?? null,
           walmart_zip: profile.data?.walmart_zip ?? null,
+          preferred_grocery_retailer: preferredRetailer,
           notification_preferences: profile.data?.notification_preferences ?? {}
         })
       }),
@@ -164,6 +175,7 @@ export default function ProfileScreen() {
       setStatus("Preferences saved.");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["profile"] }),
+        queryClient.invalidateQueries({ queryKey: ["grocery"] }),
         queryClient.invalidateQueries({ queryKey: ["recipes"] }),
         queryClient.invalidateQueries({ queryKey: ["weekly-plan"] })
       ]);
@@ -320,6 +332,16 @@ export default function ProfileScreen() {
             <TextInput accessibilityLabel="Weekly dinner target" value={weeklyTarget} onChangeText={setWeeklyTarget} keyboardType="number-pad" placeholder="Weekly meals" style={[styles.input, styles.gridInput]} />
             <TextInput accessibilityLabel="Maximum preferred cook time" value={maxCookMinutes} onChangeText={setMaxCookMinutes} keyboardType="number-pad" placeholder="Max cook minutes" style={[styles.input, styles.gridInput]} />
           </View>
+          <View style={styles.retailerPicker}>
+            <Text style={styles.inputLabel}>Preferred grocery</Text>
+            <SegmentedControl
+              accessibilityLabel="Preferred grocery retailer"
+              value={preferredRetailer}
+              onChange={setPreferredRetailer}
+              options={GROCERY_RETAILER_OPTIONS}
+            />
+            <Text style={styles.meta}>Grocery list search buttons will open your selected store.</Text>
+          </View>
           <TagEditor
             label="Allergens"
             placeholder="Add an allergen"
@@ -470,6 +492,7 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 4 },
   deleteBox: { borderWidth: 1, borderColor: "#f0b6b2", backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 9 },
   deleteTitle: { color: Colors.danger, fontWeight: "900" },
+  retailerPicker: { gap: 8 },
   tagEditor: { gap: 8 },
   inputLabel: { color: Colors.ink, fontWeight: "900" },
   tagInputRow: { flexDirection: "row", alignItems: "center", gap: 8 },

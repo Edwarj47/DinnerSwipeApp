@@ -8,7 +8,7 @@ from app.models.entities import GroceryList, GroceryListItem, PantryItem
 from app.schemas.common import GroceryManualItemIn, PantryItemIn
 from app.services.parsing import normalize_name
 from app.services.recipes import get_or_create_current_plan, regenerate_grocery_list
-from app.services.retailers import WalmartSearchLinkAdapter
+from app.services.retailers import WalmartSearchLinkAdapter, get_retailer_adapter
 
 router = APIRouter(prefix="/grocery-lists", tags=["grocery-lists"])
 
@@ -39,9 +39,12 @@ def list_current(
         .where(GroceryListItem.grocery_list_id == grocery.id)
         .order_by(GroceryListItem.category, GroceryListItem.display_name)
     ).all()
+    adapter = get_retailer_adapter(current_user.profile.preferred_grocery_retailer)
     return {
         "id": grocery.id,
         "weekly_plan_id": plan.id,
+        "retailer_name": adapter.retailer_name,
+        "retailer_display_name": adapter.display_name,
         "items": [
             {
                 "id": item.id,
@@ -52,6 +55,9 @@ def list_current(
                 "category": item.category,
                 "is_checked": item.is_checked,
                 "walmart_search_url": item.walmart_search_url,
+                "retailer_name": adapter.retailer_name,
+                "retailer_display_name": adapter.display_name,
+                "retailer_search_url": adapter.build_search_url(item.normalized_name),
                 "match_status": item.match_status,
                 "notes": item.notes,
             }

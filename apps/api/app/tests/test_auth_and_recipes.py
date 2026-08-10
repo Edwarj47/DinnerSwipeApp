@@ -105,6 +105,7 @@ def test_change_password_export_and_delete_request(client: TestClient, db_sessio
     assert exported_json["account"]["email"] == "account@example.com"
     assert exported_json["account"]["terms_accepted_at"]
     assert exported_json["account"]["privacy_accepted_at"]
+    assert exported_json["profile"]["preferred_grocery_retailer"] == "walmart"
     assert "audit_events" not in exported_json
     assert "account_activity" in exported_json
     assert all("entity_id" not in event for event in exported_json["account_activity"])

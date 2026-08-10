@@ -25,6 +25,7 @@ def get_profile(current_user: CurrentUser) -> dict[str, object]:
         "favorite_proteins": profile.favorite_proteins,
         "budget_preference": profile.budget_preference,
         "walmart_zip": profile.walmart_zip,
+        "preferred_grocery_retailer": profile.preferred_grocery_retailer,
         "notification_preferences": profile.notification_preferences,
         "onboarding_completed_at": profile.onboarding_completed_at,
         "tutorial_completed_at": profile.tutorial_completed_at,

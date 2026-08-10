@@ -72,6 +72,31 @@ def test_manual_grocery_item_and_pantry_exclusion(
     manual = next(item for item in current["items"] if item["display_name"] == "Paper towels")
     assert manual["match_status"] == "manual"
     assert "walmart.com" in manual["walmart_search_url"]
+    assert current["retailer_display_name"] == "Walmart"
+    assert "walmart.com" in manual["retailer_search_url"]
+
+
+def test_preferred_grocery_retailer_changes_search_links(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    profile = client.get("/api/v1/profile", headers=auth_headers).json()
+    profile["preferred_grocery_retailer"] = "publix"
+    updated_profile = client.put("/api/v1/profile", headers=auth_headers, json=profile)
+    assert updated_profile.status_code == 200
+
+    added = client.post(
+        "/api/v1/grocery-lists/current/items",
+        headers=auth_headers,
+        json={"display_name": "Chicken breast", "quantity": 1, "unit": "lb"},
+    )
+    assert added.status_code == 200
+
+    current = client.get("/api/v1/grocery-lists/current", headers=auth_headers).json()
+    manual = next(item for item in current["items"] if item["display_name"] == "Chicken breast")
+    assert current["retailer_display_name"] == "Publix"
+    assert manual["retailer_display_name"] == "Publix"
+    assert "publix.com/search/products" in manual["retailer_search_url"]
+    assert "walmart.com" in manual["walmart_search_url"]
 
 
 def test_grocery_item_update_is_account_scoped(

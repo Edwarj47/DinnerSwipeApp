@@ -331,6 +331,7 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
             "favorite_proteins": profile.favorite_proteins if profile else [],
             "budget_preference": profile.budget_preference if profile else None,
             "walmart_zip": profile.walmart_zip if profile else None,
+            "preferred_grocery_retailer": profile.preferred_grocery_retailer if profile else "walmart",
             "notification_preferences": profile.notification_preferences if profile else {},
         },
         "household": {

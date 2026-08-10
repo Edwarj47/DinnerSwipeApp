@@ -27,7 +27,7 @@ export const privacySections = [
   {
     title: "Third-Party Services",
     body:
-      "Dinner Swipe may use hosting, database, email, analytics, AI, app-build, and infrastructure providers. Walmart links are search links only. Dinner Swipe does not automate Walmart login, cart actions, or checkout."
+      "Dinner Swipe may use hosting, database, email, analytics, AI, app-build, and infrastructure providers. Retailer links are search links only. Dinner Swipe does not automate retailer login, cart actions, or checkout."
   },
   {
     title: "Sharing",
