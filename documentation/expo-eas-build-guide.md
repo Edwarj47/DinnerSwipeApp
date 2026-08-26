@@ -14,6 +14,17 @@ cd /home/codexvps/Desktop/projects/dinner-swipe
 infrastructure/scripts/eas-build-android-development.sh
 ```
 
+Android development build reconnect:
+
+```bash
+cd /home/codexvps/Desktop/projects/dinner-swipe
+infrastructure/scripts/current-expo-tunnel.sh
+```
+
+Paste the printed `http://...exp.direct` URL into the Dinner Swipe development
+build's manual URL field. Do not use the default `10.0.0.25:8081` placeholder
+unless Metro is running from a computer on the same Wi-Fi network as the phone.
+
 The EAS profiles point native builds at `https://dinner.dcss.dev` through `EXPO_PUBLIC_API_URL`. Change this only when preparing staging or production domain variants.
 
 The Expo project is connected with EAS project ID:

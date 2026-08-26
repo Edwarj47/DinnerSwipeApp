@@ -85,5 +85,6 @@ For the planned VPS route, point `https://dinner.dcss.dev` at the local web serv
 - `documentation/azure-migration-guide.md`
 - `documentation/secrets-and-public-repo.md`
 - `documentation/premium-macro-tracker.md`
+- `documentation/store-release-and-cicd-roadmap.md`
 - `documentation/privacy-policy.md`
 - `documentation/terms-of-service.md`
