@@ -1,12 +1,24 @@
 from __future__ import annotations
 
-from fastapi import APIRouter
-from sqlalchemy import select
+from datetime import timedelta
+
+from fastapi import APIRouter, Query
+from sqlalchemy import or_, select
 
 from app.api.deps import CurrentUser, DbDep
 from app.models.entities import UrlIngestionCandidate
 from app.schemas.common import UrlApprovalRequest, UrlIngestRequest
-from app.services.url_ingestion import approve_url_candidate, ingest_url, reject_url_candidate
+from app.services.url_ingestion import (
+    RECYCLED_CANDIDATE_STATUSES,
+    URL_CANDIDATE_RECYCLE_DAYS,
+    approve_url_candidate,
+    candidate_can_restore,
+    ingest_url,
+    recycle_restore_until,
+    reject_url_candidate,
+    restore_url_candidate,
+    utcnow_naive,
+)
 
 router = APIRouter(prefix="/url-ingestion", tags=["url-ingestion"])
 
@@ -29,36 +41,53 @@ def get_candidate(candidate_id: str, db: DbDep, current_user: CurrentUser) -> di
     candidate = db.get(UrlIngestionCandidate, candidate_id)
     if not candidate or candidate.user_id != current_user.id:
         return {"status": "not_found"}
-    return {
+    return serialize_candidate(candidate)
+
+
+@router.get("")
+def list_candidates(
+    db: DbDep, current_user: CurrentUser, recycled: bool = Query(default=False)
+) -> list[dict[str, object]]:
+    query = select(UrlIngestionCandidate).where(UrlIngestionCandidate.user_id == current_user.id)
+    if recycled:
+        cutoff = utcnow_naive() - timedelta(days=URL_CANDIDATE_RECYCLE_DAYS)
+        query = query.where(
+            UrlIngestionCandidate.status.in_(RECYCLED_CANDIDATE_STATUSES),
+            or_(
+                UrlIngestionCandidate.rejected_at.is_(None),
+                UrlIngestionCandidate.rejected_at >= cutoff,
+            ),
+        )
+    else:
+        query = query.where(UrlIngestionCandidate.status.notin_(RECYCLED_CANDIDATE_STATUSES))
+    rows = db.scalars(query.order_by(UrlIngestionCandidate.created_at.desc())).all()
+    return [serialize_candidate(row, summary=True) for row in rows]
+
+
+def serialize_candidate(
+    candidate: UrlIngestionCandidate, summary: bool = False
+) -> dict[str, object]:
+    payload: dict[str, object] = {
         "id": candidate.id,
         "source_url": candidate.source_url,
         "status": candidate.status,
+        "recipe_name": candidate.extracted_data.get("name"),
+        "warnings": candidate.validation_warnings,
+        "created_at": candidate.created_at,
+        "rejected_at": candidate.rejected_at,
+        "restore_until": recycle_restore_until(candidate)
+        if candidate.status in RECYCLED_CANDIDATE_STATUSES and candidate_can_restore(candidate)
+        else None,
+    }
+    if summary:
+        return payload
+    return payload | {
         "extracted_data": candidate.extracted_data,
         "raw_snapshot": candidate.raw_snapshot,
         "confidence": candidate.confidence,
         "validation_warnings": candidate.validation_warnings,
         "approved_recipe_id": candidate.approved_recipe_id,
     }
-
-
-@router.get("")
-def list_candidates(db: DbDep, current_user: CurrentUser) -> list[dict[str, object]]:
-    rows = db.scalars(
-        select(UrlIngestionCandidate)
-        .where(UrlIngestionCandidate.user_id == current_user.id)
-        .order_by(UrlIngestionCandidate.created_at.desc())
-    ).all()
-    return [
-        {
-            "id": row.id,
-            "source_url": row.source_url,
-            "status": row.status,
-            "recipe_name": row.extracted_data.get("name"),
-            "warnings": row.validation_warnings,
-            "created_at": row.created_at,
-        }
-        for row in rows
-    ]
 
 
 @router.post("/{candidate_id}/approve")
@@ -73,3 +102,8 @@ def approve(
 @router.post("/{candidate_id}/reject")
 def reject(candidate_id: str, db: DbDep, current_user: CurrentUser) -> dict[str, str]:
     return reject_url_candidate(db, current_user, candidate_id)
+
+
+@router.post("/{candidate_id}/restore")
+def restore(candidate_id: str, db: DbDep, current_user: CurrentUser) -> dict[str, str]:
+    return restore_url_candidate(db, current_user, candidate_id)

@@ -10,8 +10,10 @@ import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { ImportPanel } from "@/features/imports/ImportPanel";
 import { UrlIngestionPanel } from "@/features/ingestion/UrlIngestionPanel";
+import { UrlRecycleBinPanel } from "@/features/ingestion/UrlRecycleBinPanel";
 import { ManualRecipePanel } from "@/features/recipes/ManualRecipePanel";
 import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
+import { formatDifficulty, formatMealType } from "@/features/recipes/recipeDisplay";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 
@@ -119,6 +121,7 @@ export default function RecipesScreen() {
           {addMode === "file" ? <ImportPanel /> : null}
         </>
       ) : null}
+      {pageMode === "review" ? <UrlRecycleBinPanel /> : null}
       {pageMode !== "add" ? (
         <>
           <TextInput accessibilityLabel="Search recipes" value={q} onChangeText={setQ} placeholder="Search saved recipes" style={styles.search} />
@@ -151,7 +154,7 @@ export default function RecipesScreen() {
           <Image source={{ uri: recipe.photo_url ?? undefined }} style={styles.thumb} contentFit="cover" />
           <View style={styles.body}>
             <Text style={styles.name}>{recipe.name}</Text>
-            <Text style={styles.meta}>{recipe.total_minutes ?? "?"} min • {recipe.difficulty} • {recipe.meal_type}</Text>
+            <Text style={styles.meta}>{recipe.total_minutes ?? "?"} min • {formatDifficulty(recipe.difficulty)} • {formatMealType(recipe.meal_type)}</Text>
             {recipe.validation_warnings.length ? <Text style={styles.warning}>{recipe.validation_warnings[0]}</Text> : null}
           </View>
         </Pressable>

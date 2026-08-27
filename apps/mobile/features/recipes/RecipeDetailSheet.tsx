@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { useMemo } from "react";
+import { useMemo, type ReactNode } from "react";
 import {
   Linking,
   Modal,
@@ -15,6 +15,7 @@ import {
 
 import { Button } from "@/components/Button";
 import { Colors, shadow } from "@/components/theme";
+import { formatDifficulty, formatMealType, formatSourceType } from "@/features/recipes/recipeDisplay";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
@@ -105,7 +106,7 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
             />
             <View style={styles.titleRow}>
               <View style={{ flex: 1 }}>
-                <Text style={styles.kicker}>{recipe.meal_type} - {recipe.source_type}</Text>
+                <Text style={styles.kicker}>{formatMealType(recipe.meal_type)} • {formatSourceType(recipe.source_type)}</Text>
                 <Text style={styles.title}>{recipe.name}</Text>
               </View>
               {recipe.is_favorite ? (
@@ -120,13 +121,41 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
               <Stat label="Total" value={`${recipe.total_minutes ?? "?"} min`} />
               <Stat label="Prep" value={`${recipe.prep_minutes ?? "?"} min`} />
               <Stat label="Serves" value={String(recipe.servings)} />
-              <Stat label="Level" value={recipe.difficulty} />
+              <Stat label="Level" value={formatDifficulty(recipe.difficulty)} />
             </View>
-            <View style={styles.actions}>
-              <Button label="Plan it" icon="add-circle" variant="primary" onPress={() => doAction("add")} />
-              {onAction ? <Button label="Skip" icon="close-circle" onPress={() => doAction("skip")} /> : null}
-              <Button label="Favorite" icon="heart" onPress={() => doAction("favorite")} />
-              <Button label="Never show" icon="eye-off" variant="danger" onPress={() => doAction("hide")} />
+            <View style={styles.actionPanel}>
+              <Text style={styles.actionTitle}>Choose</Text>
+              <View style={styles.actionGrid}>
+                <ActionTile
+                  title="Plan it"
+                  subtitle="add to this week"
+                  icon="add-circle"
+                  tone="primary"
+                  onPress={() => doAction("add")}
+                />
+                {onAction ? (
+                  <ActionTile
+                    title="Skip"
+                    subtitle="not this session"
+                    icon="close-circle"
+                    onPress={() => doAction("skip")}
+                  />
+                ) : null}
+                <ActionTile
+                  title="Favorite"
+                  subtitle="save for later"
+                  icon="heart"
+                  tone="soft"
+                  onPress={() => doAction("favorite")}
+                />
+                <ActionTile
+                  title="Never show"
+                  subtitle="hide suggestion"
+                  icon="eye-off"
+                  tone="danger"
+                  onPress={() => doAction("hide")}
+                />
+              </View>
             </View>
             <View style={styles.votePanel}>
               <Text style={styles.sectionTitle}>Group vote</Text>
@@ -173,13 +202,55 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
 function Stat({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.stat}>
-      <Text style={styles.statValue}>{value}</Text>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.statValue}>
+        {value}
+      </Text>
       <Text style={styles.statLabel}>{label}</Text>
     </View>
   );
 }
 
-function RecipeSection({ title, children }: { title: string; children: React.ReactNode }) {
+function ActionTile({
+  title,
+  subtitle,
+  icon,
+  tone = "default",
+  onPress
+}: {
+  title: string;
+  subtitle: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  tone?: "default" | "primary" | "soft" | "danger";
+  onPress: () => void;
+}) {
+  const isPrimary = tone === "primary" || tone === "danger";
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityHint={subtitle}
+      onPress={onPress}
+      style={[
+        styles.actionTile,
+        tone === "primary" ? styles.actionTilePrimary : null,
+        tone === "soft" ? styles.actionTileSoft : null,
+        tone === "danger" ? styles.actionTileDanger : null
+      ]}
+    >
+      <Ionicons name={icon} size={19} color={isPrimary ? "#fff" : Colors.ink} />
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text numberOfLines={1} style={[styles.actionTileTitle, isPrimary ? styles.actionTileTitleLight : null]}>
+          {title}
+        </Text>
+        <Text numberOfLines={1} style={[styles.actionTileSubtitle, isPrimary ? styles.actionTileSubtitleLight : null]}>
+          {subtitle}
+        </Text>
+      </View>
+    </Pressable>
+  );
+}
+
+function RecipeSection({ title, children }: { title: string; children: ReactNode }) {
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -203,10 +274,20 @@ const styles = StyleSheet.create({
   favoriteBadge: { flexDirection: "row", gap: 5, alignItems: "center", backgroundColor: Colors.tomato, borderRadius: 999, paddingHorizontal: 10, minHeight: 30 },
   favoriteText: { color: "#fff", fontWeight: "900", fontSize: 12 },
   stats: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  stat: { flex: 1, minWidth: 72, backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 10 },
-  statValue: { color: Colors.ink, fontWeight: "900", fontSize: 16, textTransform: "capitalize" },
+  stat: { width: "48%", minHeight: 64, backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 10, justifyContent: "center" },
+  statValue: { color: Colors.ink, fontWeight: "900", fontSize: 17, textTransform: "capitalize" },
   statLabel: { color: Colors.muted, fontWeight: "800", fontSize: 11, textTransform: "uppercase", marginTop: 2 },
-  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  actionPanel: { backgroundColor: Colors.surface, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, padding: 12, gap: 10 },
+  actionTitle: { color: Colors.ink, fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
+  actionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  actionTile: { width: "48%", minHeight: 62, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, backgroundColor: Colors.surface, paddingHorizontal: 11, paddingVertical: 9 },
+  actionTilePrimary: { backgroundColor: Colors.tomato, borderColor: Colors.tomato },
+  actionTileSoft: { backgroundColor: Colors.softRed, borderColor: "#f0c7c4" },
+  actionTileDanger: { backgroundColor: Colors.danger, borderColor: Colors.danger },
+  actionTileTitle: { color: Colors.ink, fontWeight: "900", fontSize: 15 },
+  actionTileTitleLight: { color: "#fff" },
+  actionTileSubtitle: { color: Colors.muted, marginTop: 1, fontSize: 12 },
+  actionTileSubtitleLight: { color: "rgba(255,255,255,0.82)" },
   votePanel: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 10 },
   voteActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   section: { backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 14, gap: 10 },

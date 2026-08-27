@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import Any, cast
 
 from fastapi import HTTPException
@@ -16,6 +17,9 @@ from app.models.entities import IngestionJob, UrlIngestionCandidate, User
 from app.schemas.common import RecipeCreate
 from app.services.recipes import create_recipe
 from app.services.validation import validate_recipe_payload
+
+URL_CANDIDATE_RECYCLE_DAYS = 15
+RECYCLED_CANDIDATE_STATUSES = {"recycled", "rejected"}
 
 
 async def ingest_url(db: Session, user: User, url: str) -> UrlIngestionCandidate:
@@ -77,6 +81,8 @@ def approve_url_candidate(
     candidate = db.get(UrlIngestionCandidate, candidate_id)
     if not candidate or candidate.user_id != user.id:
         raise HTTPException(status_code=404, detail="Candidate not found")
+    if candidate.status in RECYCLED_CANDIDATE_STATUSES:
+        raise HTTPException(status_code=400, detail="Restore this draft before approving it")
     payload = edits or RecipeCreate(
         **candidate.extracted_data,
         accept_placeholder_photo=accept_placeholder_photo,
@@ -96,9 +102,40 @@ def reject_url_candidate(db: Session, user: User, candidate_id: str) -> dict[str
     candidate = db.get(UrlIngestionCandidate, candidate_id)
     if not candidate or candidate.user_id != user.id:
         raise HTTPException(status_code=404, detail="Candidate not found")
-    candidate.status = "rejected"
+    candidate.status = "recycled"
+    candidate.rejected_at = utcnow_naive()
+    db.commit()
+    return {
+        "status": candidate.status,
+        "restore_until": recycle_restore_until(candidate).isoformat(),
+    }
+
+
+def restore_url_candidate(db: Session, user: User, candidate_id: str) -> dict[str, str]:
+    candidate = db.get(UrlIngestionCandidate, candidate_id)
+    if not candidate or candidate.user_id != user.id:
+        raise HTTPException(status_code=404, detail="Candidate not found")
+    if candidate.status not in RECYCLED_CANDIDATE_STATUSES:
+        raise HTTPException(status_code=400, detail="Draft is not in the recycle bin")
+    if not candidate_can_restore(candidate):
+        raise HTTPException(status_code=410, detail="Draft restore window has expired")
+    candidate.status = "requires_review"
+    candidate.rejected_at = None
     db.commit()
     return {"status": candidate.status}
+
+
+def recycle_restore_until(candidate: UrlIngestionCandidate) -> datetime:
+    rejected_at = candidate.rejected_at or candidate.updated_at or candidate.created_at
+    return rejected_at + timedelta(days=URL_CANDIDATE_RECYCLE_DAYS)
+
+
+def candidate_can_restore(candidate: UrlIngestionCandidate) -> bool:
+    return recycle_restore_until(candidate) >= utcnow_naive()
+
+
+def utcnow_naive() -> datetime:
+    return datetime.now(UTC).replace(tzinfo=None)
 
 
 def _user_facing_warnings(messages: list[str]) -> list[str]:

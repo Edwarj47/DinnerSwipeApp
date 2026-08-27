@@ -13,6 +13,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { Colors, shadow } from "@/components/theme";
+import { formatDifficulty, formatMealType, formatSourceType } from "@/features/recipes/recipeDisplay";
 import { Recipe } from "@/services/types";
 
 type MealAction = "add" | "skip" | "favorite" | "hide";
@@ -119,10 +120,10 @@ export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ re
           <View style={styles.body}>
             <View style={styles.header}>
               <Text style={styles.title}>{recipe.name}</Text>
-              <Text style={styles.favorite}>{recipe.is_favorite ? "Favorite" : recipe.source_type}</Text>
+              <Text style={styles.favorite}>{recipe.is_favorite ? "Favorite" : formatSourceType(recipe.source_type)}</Text>
             </View>
             <Text style={styles.meta}>
-              {recipe.total_minutes ?? "?"} min • prep {recipe.prep_minutes ?? "?"} • {recipe.difficulty} • {recipe.meal_type}
+              {recipe.total_minutes ?? "?"} min • prep {recipe.prep_minutes ?? "?"} • {formatDifficulty(recipe.difficulty)} • {formatMealType(recipe.meal_type)}
             </Text>
             <Text style={styles.meta}>Serves {recipe.servings}</Text>
             <Text numberOfLines={2} style={styles.ingredients}>

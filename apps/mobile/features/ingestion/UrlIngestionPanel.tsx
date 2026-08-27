@@ -5,6 +5,7 @@ import { StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
 import { Colors } from "@/components/theme";
+import { formatCandidateStatus } from "@/features/recipes/recipeDisplay";
 import { apiFetch } from "@/services/api";
 
 type Candidate = {
@@ -17,6 +18,8 @@ type Candidate = {
   extracted_data?: Record<string, unknown>;
   validation_warnings?: string[];
   confidence?: Record<string, unknown>;
+  rejected_at?: string | null;
+  restore_until?: string | null;
 };
 
 export function UrlIngestionPanel() {
@@ -114,9 +117,14 @@ export function UrlIngestionPanel() {
   async function reject() {
     if (!candidate) return;
     await apiFetch(`/api/v1/url-ingestion/${candidate.id}/reject`, { method: "POST" });
-    setStatus("Draft rejected.");
-    setCandidate({ ...candidate, status: "rejected" });
+    setStatus("Draft moved to the recycle bin for 15 days.");
+    setCandidate(null);
+    setEditName("");
+    setEditPhoto("");
+    setEditIngredients("");
+    setEditInstructions("");
     await queryClient.invalidateQueries({ queryKey: ["url-ingestion-history"] });
+    await queryClient.invalidateQueries({ queryKey: ["url-ingestion-recycle-bin"] });
   }
 
   const warnings = friendlyWarnings(candidate?.validation_warnings ?? []);
@@ -136,7 +144,7 @@ export function UrlIngestionPanel() {
         <View style={styles.review}>
           <View style={styles.reviewHeader}>
             <Text style={styles.reviewTitle}>Review recipe</Text>
-            <Text style={[styles.statusPill, candidate.status === "approved" ? styles.approvedPill : candidate.status === "rejected" ? styles.rejectedPill : null]}>{candidate.status.replaceAll("_", " ")}</Text>
+            <Text style={[styles.statusPill, candidate.status === "approved" ? styles.approvedPill : ["rejected", "recycled"].includes(candidate.status) ? styles.rejectedPill : null]}>{formatCandidateStatus(candidate.status)}</Text>
           </View>
           {editPhoto ? <Image source={{ uri: editPhoto }} style={styles.photo} contentFit="cover" /> : <View style={styles.emptyPhoto}><Text style={styles.emptyPhotoText}>Photo required or approve placeholder</Text></View>}
           <Text style={styles.inputLabel}>Name</Text>
@@ -172,7 +180,7 @@ export function UrlIngestionPanel() {
             <View key={item.id} style={styles.historyRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.historyName}>{item.recipe_name ?? "Untitled draft"}</Text>
-                <Text style={styles.meta}>{item.status.replaceAll("_", " ")} • {friendlyWarnings(item.warnings ?? []).length} note{friendlyWarnings(item.warnings ?? []).length === 1 ? "" : "s"}</Text>
+                <Text style={styles.meta}>{formatCandidateStatus(item.status)} • {friendlyWarnings(item.warnings ?? []).length} note{friendlyWarnings(item.warnings ?? []).length === 1 ? "" : "s"}</Text>
               </View>
               <Button label="Open" icon="open" onPress={() => void openCandidate(item.id).catch((error) => setStatus(String(error)))} />
             </View>

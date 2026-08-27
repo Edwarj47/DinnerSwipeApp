@@ -456,6 +456,7 @@ class UrlIngestionCandidate(Base, TimestampMixin):
     status: Mapped[str] = mapped_column(String(32), default="requires_review")
     validation_warnings: Mapped[list[str]] = mapped_column(JSON, default=list)
     approved_recipe_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
+    rejected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class ValidationResult(Base, TimestampMixin):
