@@ -34,8 +34,8 @@ services:
       - dinner_swipe_media:/app/media
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/v1/health').read()"]
-      interval: 20s
-      timeout: 5s
+      interval: 30s
+      timeout: 10s
       retries: 5
     restart: unless-stopped
     profiles: ["development", "production"]
@@ -74,4 +74,3 @@ services:
 volumes:
   dinner_swipe_postgres_data:
   dinner_swipe_media:
-

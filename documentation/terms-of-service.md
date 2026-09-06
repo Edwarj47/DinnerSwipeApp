@@ -16,6 +16,10 @@ You are responsible for recipe content and photos you create, upload, import, ap
 
 Dinner Swipe is not medical, nutritional, allergy, food-safety, or professional advice. Always review ingredients, labels, preparation steps, and allergen risks before cooking or serving food.
 
+## Subscriptions
+
+Dinner Swipe may offer a Basic subscription for continued app access after a free trial and a Premium subscription for macro tracking. Paid subscriptions are authorized through the billing checkout flow, renew until cancelled, and are subject to the price and trial terms shown at checkout. App terms acceptance alone does not authorize a card charge.
+
 ## Third-Party Links And Retailers
 
 The app may link to public recipe websites and retailer search pages. Third-party sites control their own content, pricing, policies, availability, and privacy practices. Dinner Swipe does not automate checkout or guarantee product matches.

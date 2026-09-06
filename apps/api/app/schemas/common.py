@@ -66,6 +66,16 @@ class AccountDeletionRequest(ApiModel):
     confirmation: str = Field(pattern="^DELETE$")
 
 
+class SubscriptionPlanStatus(ApiModel):
+    tier: Literal["basic", "premium"]
+    plan_key: str
+    display_name: str
+    description: str
+    monthly_price_cents: int
+    stripe_configured: bool
+    active: bool
+
+
 class PremiumStatus(ApiModel):
     active: bool
     plan_key: str = "macro_tracker_monthly"
@@ -76,10 +86,26 @@ class PremiumStatus(ApiModel):
     billing_management_available: bool = False
     current_period_end: datetime | None = None
     cancel_at_period_end: bool = False
+    current_tier: Literal["none", "trial", "basic", "premium"] = "none"
+    basic_active: bool = False
+    basic_subscription_active: bool = False
+    premium_active: bool = False
+    trial_active: bool = False
+    trial_ends_at: datetime | None = None
+    trial_days_remaining: int = 0
+    basic_monthly_price_cents: int = 599
+    premium_monthly_price_cents: int = 999
+    basic_stripe_configured: bool = False
+    premium_stripe_configured: bool = False
+    plans: list[SubscriptionPlanStatus] = Field(default_factory=list)
 
 
 class PremiumWaiverRequest(ApiModel):
     code: str = Field(min_length=3, max_length=80)
+
+
+class SubscriptionCheckoutRequest(ApiModel):
+    tier: Literal["basic", "premium"] = "premium"
 
 
 class CheckoutSessionOut(ApiModel):

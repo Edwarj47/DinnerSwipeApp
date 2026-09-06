@@ -27,7 +27,12 @@ export const privacySections = [
   {
     title: "Third-Party Services",
     body:
-      "Dinner Swipe may use hosting, database, email, analytics, AI, app-build, and infrastructure providers. Retailer links are search links only. Dinner Swipe does not automate retailer login, cart actions, or checkout."
+      "Dinner Swipe may use hosting, database, email, analytics, AI, app-build, payment, and infrastructure providers. Retailer links are search links only. Dinner Swipe does not automate retailer login, cart actions, or checkout."
+  },
+  {
+    title: "Subscription And Billing Data",
+    body:
+      "Dinner Swipe may store subscription status, plan tier, billing provider identifiers, billing events, trial timing, and support records. Payment cards and checkout are handled by the billing provider and are not stored directly by Dinner Swipe."
   },
   {
     title: "Sharing",
@@ -61,6 +66,11 @@ export const termsSections = [
     title: "Food, Allergy, And Nutrition Disclaimer",
     body:
       "Dinner Swipe is not medical, nutritional, allergy, food-safety, or professional advice. If you enter allergens or disliked ingredients and use group features, you acknowledge that related matches or warnings may be shared with group members. Always review ingredients, labels, preparation steps, and allergen risks before cooking or serving food."
+  },
+  {
+    title: "Subscriptions",
+    body:
+      "Dinner Swipe may offer a Basic subscription for app access after a free trial and a Premium subscription for macro tracking. Paid subscriptions are authorized through the billing checkout flow, renew until cancelled, and are subject to the price and trial terms shown at checkout. App terms acceptance alone does not authorize a card charge."
   },
   {
     title: "Third-Party Links And Retailers",

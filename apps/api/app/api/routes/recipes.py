@@ -6,7 +6,7 @@ from fastapi import APIRouter, HTTPException, Query, UploadFile
 from sqlalchemy import or_, select
 from sqlalchemy.orm import selectinload
 
-from app.api.deps import CurrentUser, DbDep
+from app.api.deps import BasicUser, DbDep
 from app.core.config import settings
 from app.models.entities import Favorite, HiddenRecipe, Recipe
 from app.schemas.common import RecipeCreate, RecipeOut, SwipeRequest
@@ -25,7 +25,7 @@ ALLOWED_IMAGE_TYPES = {"image/jpeg": ".jpg", "image/png": ".png", "image/webp": 
 @router.get("", response_model=list[RecipeOut])
 def list_recipes(
     db: DbDep,
-    current_user: CurrentUser,
+    current_user: BasicUser,
     q: str | None = None,
     include_hidden: bool = False,
     max_total_minutes: int | None = Query(default=None, ge=1, le=1440),
@@ -51,14 +51,14 @@ def list_recipes(
 
 @router.post("", response_model=RecipeOut)
 def create_recipe_route(
-    payload: RecipeCreate, db: DbDep, current_user: CurrentUser
+    payload: RecipeCreate, db: DbDep, current_user: BasicUser
 ) -> dict[str, object]:
     recipe = create_recipe(db, payload, current_user)
     return serialize_recipe(recipe, current_user.id, db)
 
 
 @router.post("/photo-upload")
-async def upload_recipe_photo(file: UploadFile, current_user: CurrentUser) -> dict[str, str]:
+async def upload_recipe_photo(file: UploadFile, current_user: BasicUser) -> dict[str, str]:
     suffix = ALLOWED_IMAGE_TYPES.get(file.content_type or "")
     if not suffix:
         raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are supported")
@@ -81,7 +81,7 @@ async def upload_recipe_photo(file: UploadFile, current_user: CurrentUser) -> di
 
 
 @router.get("/{recipe_id}", response_model=RecipeOut)
-def get_recipe(recipe_id: str, db: DbDep, current_user: CurrentUser) -> dict[str, object]:
+def get_recipe(recipe_id: str, db: DbDep, current_user: BasicUser) -> dict[str, object]:
     recipe = db.scalar(
         select(Recipe)
         .options(
@@ -101,7 +101,7 @@ def get_recipe(recipe_id: str, db: DbDep, current_user: CurrentUser) -> dict[str
 
 
 @router.post("/{recipe_id}/archive")
-def archive_recipe(recipe_id: str, db: DbDep, current_user: CurrentUser) -> dict[str, str]:
+def archive_recipe(recipe_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
     recipe = db.get(Recipe, recipe_id)
     if not recipe or recipe.owner_user_id != current_user.id:
         raise HTTPException(status_code=404, detail="Recipe not found")
@@ -111,13 +111,13 @@ def archive_recipe(recipe_id: str, db: DbDep, current_user: CurrentUser) -> dict
 
 
 @router.post("/swipes")
-def swipe(payload: SwipeRequest, db: DbDep, current_user: CurrentUser) -> dict[str, str]:
+def swipe(payload: SwipeRequest, db: DbDep, current_user: BasicUser) -> dict[str, str]:
     record_swipe(db, current_user, payload.recipe_id, payload.action, payload.session_id)
     return {"status": "recorded"}
 
 
 @router.post("/{recipe_id}/favorite")
-def favorite(recipe_id: str, db: DbDep, current_user: CurrentUser) -> dict[str, str]:
+def favorite(recipe_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
     if not db.scalar(
         select(Favorite).where(Favorite.user_id == current_user.id, Favorite.recipe_id == recipe_id)
     ):

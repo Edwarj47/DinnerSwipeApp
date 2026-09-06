@@ -41,9 +41,14 @@ class Settings(BaseSettings):
     stripe_enabled: bool = False
     stripe_secret_key: str = ""
     stripe_webhook_secret: str = ""
+    stripe_basic_price_id: str = ""
     stripe_premium_price_id: str = ""
     stripe_expected_account_id: str = ""
+    stripe_api_version: str = "2026-07-29.dahlia"
+    basic_monthly_price_cents: int = 599
+    basic_free_trial_days: int = 30
     premium_monthly_price_cents: int = 999
+    basic_waiver_codes: str = ""
     premium_waiver_codes: str = ""
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
@@ -67,8 +72,48 @@ class Settings(BaseSettings):
             self.stripe_enabled
             and self.stripe_secret_key
             and self.stripe_webhook_secret
+            and (self.stripe_basic_price_id or self.stripe_premium_price_id)
+        )
+
+    @property
+    def stripe_basic_configured(self) -> bool:
+        return bool(
+            self.stripe_enabled
+            and self.stripe_secret_key
+            and self.stripe_webhook_secret
+            and self.stripe_basic_price_id
+        )
+
+    @property
+    def stripe_premium_configured(self) -> bool:
+        return bool(
+            self.stripe_enabled
+            and self.stripe_secret_key
+            and self.stripe_webhook_secret
             and self.stripe_premium_price_id
         )
+
+    def stripe_price_id_for_tier(self, tier: str) -> str:
+        if tier == "basic":
+            return self.stripe_basic_price_id
+        if tier == "premium":
+            return self.stripe_premium_price_id
+        return ""
+
+    def stripe_configured_for_tier(self, tier: str) -> bool:
+        if tier == "basic":
+            return self.stripe_basic_configured
+        if tier == "premium":
+            return self.stripe_premium_configured
+        return False
+
+    @property
+    def basic_waiver_code_list(self) -> list[str]:
+        return [
+            code.strip().lower()
+            for code in self.basic_waiver_codes.split(",")
+            if code.strip()
+        ]
 
     @property
     def premium_waiver_code_list(self) -> list[str]:

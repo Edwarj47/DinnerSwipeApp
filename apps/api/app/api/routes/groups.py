@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import CurrentUser, DbDep, VerifiedUser
+from app.api.deps import BasicUser, DbDep, VerifiedBasicUser
 from app.schemas.common import (
     HouseholdJoinRequest,
     HouseholdOut,
@@ -25,20 +25,20 @@ router = APIRouter(prefix="/households", tags=["households"])
 
 
 @router.get("/current", response_model=HouseholdOut)
-def get_current_household(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
+def get_current_household(db: DbDep, current_user: BasicUser) -> dict[str, object]:
     return serialize_household(db, current_user)
 
 
 @router.post("/join", response_model=HouseholdOut)
 def join_current_household(
-    payload: HouseholdJoinRequest, db: DbDep, current_user: VerifiedUser
+    payload: HouseholdJoinRequest, db: DbDep, current_user: VerifiedBasicUser
 ) -> dict[str, object]:
     return join_household(db, current_user, payload.invite_code)
 
 
 @router.patch("/current/settings", response_model=HouseholdOut)
 def update_current_household_settings(
-    payload: HouseholdSettingsUpdate, db: DbDep, current_user: VerifiedUser
+    payload: HouseholdSettingsUpdate, db: DbDep, current_user: VerifiedBasicUser
 ) -> dict[str, object]:
     return update_household_settings(
         db,
@@ -50,7 +50,7 @@ def update_current_household_settings(
 
 @router.post("/current/transfer-owner", response_model=HouseholdOut)
 def transfer_current_household_owner(
-    payload: HouseholdOwnerTransferRequest, db: DbDep, current_user: VerifiedUser
+    payload: HouseholdOwnerTransferRequest, db: DbDep, current_user: VerifiedBasicUser
 ) -> dict[str, object]:
     return transfer_household_owner(db, current_user, payload.user_id)
 
@@ -58,7 +58,7 @@ def transfer_current_household_owner(
 @router.get("/current/vote-options", response_model=list[HouseholdVoteOptionOut])
 def current_vote_options(
     db: DbDep,
-    current_user: CurrentUser,
+    current_user: BasicUser,
     max_total_minutes: int | None = Query(default=None, ge=0, le=1440),
     limit: int = Query(default=12, ge=1, le=50),
 ) -> list[dict[str, object]]:
@@ -66,10 +66,10 @@ def current_vote_options(
 
 
 @router.get("/current/votes")
-def current_votes(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
+def current_votes(db: DbDep, current_user: BasicUser) -> dict[str, object]:
     return vote_summary(db, current_user)
 
 
 @router.post("/current/votes")
-def vote(payload: VoteRequest, db: DbDep, current_user: VerifiedUser) -> dict[str, object]:
+def vote(payload: VoteRequest, db: DbDep, current_user: VerifiedBasicUser) -> dict[str, object]:
     return record_weekly_vote(db, current_user, payload.recipe_id, payload.vote)

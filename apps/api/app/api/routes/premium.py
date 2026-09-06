@@ -15,13 +15,16 @@ from app.schemas.common import (
     MealMacroConfirmationOut,
     PremiumStatus,
     PremiumWaiverRequest,
+    SubscriptionCheckoutRequest,
 )
 from app.services.billing import (
+    PREMIUM_TIER,
     create_checkout_session,
     create_customer_portal_session,
     handle_stripe_event,
     redeem_waiver_code,
     serialize_premium_status,
+    serialize_subscription_status,
     verify_stripe_event,
 )
 from app.services.macros import (
@@ -41,6 +44,18 @@ def premium_status(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
     return serialize_premium_status(db, current_user)
 
 
+@router.get("/subscription/status", response_model=PremiumStatus)
+def subscription_status(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
+    return serialize_subscription_status(db, current_user)
+
+
+@router.post("/subscription/waiver-code", response_model=PremiumStatus)
+def apply_subscription_waiver_code(
+    payload: PremiumWaiverRequest, db: DbDep, current_user: CurrentUser
+) -> dict[str, object]:
+    return redeem_waiver_code(db, current_user, payload.code)
+
+
 @router.post("/premium/waiver-code", response_model=PremiumStatus)
 def apply_waiver_code(
     payload: PremiumWaiverRequest, db: DbDep, current_user: CurrentUser
@@ -48,9 +63,16 @@ def apply_waiver_code(
     return redeem_waiver_code(db, current_user, payload.code)
 
 
+@router.post("/subscription/checkout-session", response_model=CheckoutSessionOut)
+def subscription_checkout_session(
+    payload: SubscriptionCheckoutRequest, db: DbDep, current_user: CurrentUser
+) -> dict[str, str]:
+    return {"checkout_url": create_checkout_session(db, current_user, payload.tier)}
+
+
 @router.post("/premium/checkout-session", response_model=CheckoutSessionOut)
 def checkout_session(db: DbDep, current_user: CurrentUser) -> dict[str, str]:
-    return {"checkout_url": create_checkout_session(db, current_user)}
+    return {"checkout_url": create_checkout_session(db, current_user, PREMIUM_TIER)}
 
 
 @router.post("/premium/billing-portal-session", response_model=BillingPortalSessionOut)

@@ -22,6 +22,10 @@ make mobile-web
 
 Open `http://127.0.0.1:19006`, register from Profile, then use Discover.
 
+Use Node 20 for Expo web exports and EAS-related local tooling. The VPS global
+Node may be newer, but the production web Docker image pins Node 20 for Expo
+SDK 51 build stability.
+
 ## What Works
 
 - Expo Router mobile web, Android, iOS-ready app shell

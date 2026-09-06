@@ -20,6 +20,10 @@ Members of a dinner group can vote on recipe ideas. Group owners may see vote su
 
 Cooking preferences, disliked ingredients, and allergens are stored per user. These settings are intended to help filter and annotate meal planning, but Dinner Swipe is not a medical, allergy, or nutrition safety system.
 
+## Subscription And Billing Data
+
+Dinner Swipe may store subscription status, plan tier, billing provider identifiers, billing events, trial timing, and support records. Payment cards and checkout are handled by the billing provider and are not stored directly by Dinner Swipe.
+
 ## Contact
 
 Privacy questions can be sent to dinnerswipe@dcss.dev.

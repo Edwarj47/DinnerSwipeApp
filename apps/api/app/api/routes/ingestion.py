@@ -5,7 +5,7 @@ from datetime import timedelta
 from fastapi import APIRouter, Query
 from sqlalchemy import or_, select
 
-from app.api.deps import CurrentUser, DbDep
+from app.api.deps import BasicUser, DbDep
 from app.models.entities import UrlIngestionCandidate
 from app.schemas.common import UrlApprovalRequest, UrlIngestRequest
 from app.services.url_ingestion import (
@@ -25,7 +25,7 @@ router = APIRouter(prefix="/url-ingestion", tags=["url-ingestion"])
 
 @router.post("")
 async def submit_urls(
-    payload: UrlIngestRequest, db: DbDep, current_user: CurrentUser
+    payload: UrlIngestRequest, db: DbDep, current_user: BasicUser
 ) -> dict[str, object]:
     candidates = []
     for url in payload.urls:
@@ -37,7 +37,7 @@ async def submit_urls(
 
 
 @router.get("/{candidate_id}")
-def get_candidate(candidate_id: str, db: DbDep, current_user: CurrentUser) -> dict[str, object]:
+def get_candidate(candidate_id: str, db: DbDep, current_user: BasicUser) -> dict[str, object]:
     candidate = db.get(UrlIngestionCandidate, candidate_id)
     if not candidate or candidate.user_id != current_user.id:
         return {"status": "not_found"}
@@ -46,7 +46,7 @@ def get_candidate(candidate_id: str, db: DbDep, current_user: CurrentUser) -> di
 
 @router.get("")
 def list_candidates(
-    db: DbDep, current_user: CurrentUser, recycled: bool = Query(default=False)
+    db: DbDep, current_user: BasicUser, recycled: bool = Query(default=False)
 ) -> list[dict[str, object]]:
     query = select(UrlIngestionCandidate).where(UrlIngestionCandidate.user_id == current_user.id)
     if recycled:
@@ -92,7 +92,7 @@ def serialize_candidate(
 
 @router.post("/{candidate_id}/approve")
 def approve(
-    candidate_id: str, payload: UrlApprovalRequest, db: DbDep, current_user: CurrentUser
+    candidate_id: str, payload: UrlApprovalRequest, db: DbDep, current_user: BasicUser
 ) -> dict[str, object]:
     return approve_url_candidate(
         db, current_user, candidate_id, payload.accept_placeholder_photo, payload.edits
@@ -100,10 +100,10 @@ def approve(
 
 
 @router.post("/{candidate_id}/reject")
-def reject(candidate_id: str, db: DbDep, current_user: CurrentUser) -> dict[str, str]:
+def reject(candidate_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
     return reject_url_candidate(db, current_user, candidate_id)
 
 
 @router.post("/{candidate_id}/restore")
-def restore(candidate_id: str, db: DbDep, current_user: CurrentUser) -> dict[str, str]:
+def restore(candidate_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
     return restore_url_candidate(db, current_user, candidate_id)

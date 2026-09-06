@@ -38,7 +38,9 @@ This keeps the live route stable while allowing fast rebuilds. It also avoids ch
 - Add a deploy script that performs:
   - `git fetch`
   - checkout of the requested commit
-  - `docker compose --profile production build`
+  - API/worker image build
+  - Expo web export with Node 20
+  - static nginx image build from `apps/mobile/dist`
   - database backup before migrations
   - Alembic migrations
   - `docker compose --profile production up -d`
@@ -47,6 +49,10 @@ This keeps the live route stable while allowing fast rebuilds. It also avoids ch
   - checkout previous known-good commit
   - rebuild/restart Dinner Swipe services
   - restore database only when a failed migration made that necessary
+
+For the current VPS, prefer `infrastructure/scripts/build-web-static.sh` for
+fast web-only deploys. Full Docker dependency installs are slow on this host and
+should move to GitHub Actions or Azure Container Registry builds.
 
 ## Development Build Path
 
@@ -128,7 +134,12 @@ npx eas-cli@latest build --platform ios --profile production
 
 ## Premium and Billing Decision
 
-Dinner Swipe currently has a Stripe-ready premium foundation. For store release, billing must be handled carefully:
+Dinner Swipe currently has a Stripe-ready subscription foundation:
+
+- Basic web subscription: app access after the first free month, planned at `5.99 USD/month`.
+- Premium web subscription: Basic plus macro tracking, planned at `9.99 USD/month`.
+
+For store release, billing must be handled carefully:
 
 - Web subscriptions can use Stripe.
 - Native iOS premium digital features generally need Apple In-App Purchase if purchasing is offered inside the app.
@@ -137,9 +148,10 @@ Dinner Swipe currently has a Stripe-ready premium foundation. For store release,
 Recommended MVP path:
 
 1. Keep native beta free while testing.
-2. Keep Stripe checkout for web only.
-3. Show premium status in native, but do not link to external Stripe checkout from native builds.
-4. Add native subscription support before public native monetization.
+2. Keep Stripe checkout for web subscriptions.
+3. Use local UAT codes only for private testers, then rotate or remove them.
+4. Show subscription status in native, but do not link to external Stripe checkout from public native builds.
+5. Add native subscription support before public native monetization.
 
 ## Store Assets Needed
 

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
+import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
@@ -27,7 +28,7 @@ export default function WeekScreen() {
   const [status, setStatus] = useState("");
   const [expandedSlotId, setExpandedSlotId] = useState<string | null>(null);
   const { data, isLoading } = useQuery({ queryKey: ["weekly-plan"], queryFn: () => apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current") });
-  const premium = useQuery({ queryKey: ["premium-status"], queryFn: () => apiFetch<PremiumStatus>("/api/v1/premium/status"), retry: false });
+  const subscription = useQuery({ queryKey: ["subscription-status"], queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status"), retry: false });
   const sortedSlots = useMemo(() => [...(data?.slots ?? [])].sort((a, b) => a.sort_order - b.sort_order), [data?.slots]);
   const dayOptions = useMemo(() => (data ? weekDates(data.week_start) : []), [data]);
   const remove = useMutation({
@@ -85,8 +86,21 @@ export default function WeekScreen() {
     },
     onError: (error) => setStatus(String(error))
   });
+  const startPremiumCheckout = useMutation({
+    mutationFn: () =>
+      apiFetch<{ checkout_url: string }>("/api/v1/subscription/checkout-session", {
+        method: "POST",
+        body: JSON.stringify({ tier: "premium" })
+      }),
+    onSuccess: async (data) => {
+      setStatus("Opening Premium checkout.");
+      await Linking.openURL(data.checkout_url);
+    },
+    onError: (error) => setStatus(error instanceof Error ? error.message : String(error))
+  });
   const plannedCount = sortedSlots.filter((slot) => slot.slot_type === "meal" && slot.recipe_id).length;
-  const premiumActive = Boolean(premium.data?.active);
+  const premiumActive = Boolean(subscription.data?.premium_active ?? subscription.data?.active);
+  const premiumCheckoutReady = Boolean(subscription.data?.premium_stripe_configured);
 
   return (
     <Screen>
@@ -104,7 +118,29 @@ export default function WeekScreen() {
         <View style={[styles.progressFill, { width: `${Math.min(100, ((plannedCount || 0) / Math.max(1, data?.meal_target ?? 1)) * 100)}%` }]} />
       </View>
       {status ? <Text style={styles.status}>{status}</Text> : null}
-      {!premiumActive ? <Text style={styles.premiumNote}>Premium macro tracking is managed from Profile.</Text> : null}
+      {!premiumActive ? (
+        <View style={styles.premiumBanner}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.premiumTitle}>Premium macro tracking is managed from Profile.</Text>
+            <Text style={styles.premiumNote}>
+              Upgrade when you want meal confirmations, macro targets, and weekly nutrition totals.
+            </Text>
+          </View>
+          <Button
+            label={premiumCheckoutReady ? "Subscribe" : "Profile"}
+            icon={premiumCheckoutReady ? "card" : "person-circle"}
+            variant="primary"
+            disabled={startPremiumCheckout.isPending}
+            onPress={() => {
+              if (premiumCheckoutReady) {
+                startPremiumCheckout.mutate();
+                return;
+              }
+              router.push({ pathname: "/profile", params: { section: "premium" } });
+            }}
+          />
+        </View>
+      ) : null}
       <View style={styles.list}>
         {sortedSlots.map((slot, index) => {
           const isExpanded = expandedSlotId === slot.id;
@@ -239,7 +275,9 @@ const styles = StyleSheet.create({
   progressTrack: { height: 8, backgroundColor: Colors.border, borderRadius: 999, overflow: "hidden", marginBottom: 10 },
   progressFill: { height: "100%", backgroundColor: Colors.tomato, borderRadius: 999 },
   status: { color: Colors.basil, fontWeight: "800", marginBottom: 10 },
-  premiumNote: { color: Colors.muted, fontWeight: "700", marginBottom: 10 },
+  premiumBanner: { flexDirection: "row", gap: 10, alignItems: "center", backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 10 },
+  premiumTitle: { color: Colors.ink, fontWeight: "900" },
+  premiumNote: { color: Colors.muted, lineHeight: 19, fontSize: 13, marginTop: 3 },
   list: { gap: 10 },
   row: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 12, gap: 12 },
   rowExpanded: { borderColor: "#f0b6b2" },

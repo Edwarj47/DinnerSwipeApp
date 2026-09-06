@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbDep
+from app.api.deps import BasicUser, DbDep
 from app.models.entities import WeeklyPlanSlot
 from app.schemas.common import WeeklySlotUpdate
 from app.services.recipes import get_or_create_current_plan, serialize_plan
@@ -12,14 +12,14 @@ router = APIRouter(prefix="/weekly-plans", tags=["weekly-plans"])
 
 
 @router.get("/current")
-def current_plan(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
+def current_plan(db: DbDep, current_user: BasicUser) -> dict[str, object]:
     plan = get_or_create_current_plan(db, current_user)
     return serialize_plan(db, plan)
 
 
 @router.put("/current/slots/{slot_id}")
 def update_slot(
-    slot_id: str, payload: WeeklySlotUpdate, db: DbDep, current_user: CurrentUser
+    slot_id: str, payload: WeeklySlotUpdate, db: DbDep, current_user: BasicUser
 ) -> dict[str, object]:
     plan = get_or_create_current_plan(db, current_user)
     slot = db.scalar(
@@ -39,7 +39,7 @@ def update_slot(
 
 
 @router.delete("/current/slots/{slot_id}")
-def remove_slot(slot_id: str, db: DbDep, current_user: CurrentUser) -> dict[str, object]:
+def remove_slot(slot_id: str, db: DbDep, current_user: BasicUser) -> dict[str, object]:
     plan = get_or_create_current_plan(db, current_user)
     slot = db.scalar(
         select(WeeklyPlanSlot).where(

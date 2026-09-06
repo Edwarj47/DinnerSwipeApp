@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 from app.core.security import decode_token
 from app.database.session import get_db
 from app.models.entities import User
+from app.services.billing import require_basic_access
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/v1/auth/login")
 DbDep = Annotated[Session, Depends(get_db)]
@@ -33,5 +34,17 @@ def get_verified_user(current_user: Annotated[User, Depends(get_current_user)]) 
     return current_user
 
 
+def get_basic_user(db: DbDep, current_user: Annotated[User, Depends(get_current_user)]) -> User:
+    return require_basic_access(db, current_user)
+
+
+def get_verified_basic_user(
+    db: DbDep, current_user: Annotated[User, Depends(get_verified_user)]
+) -> User:
+    return require_basic_access(db, current_user)
+
+
 CurrentUser = Annotated[User, Depends(get_current_user)]
 VerifiedUser = Annotated[User, Depends(get_verified_user)]
+BasicUser = Annotated[User, Depends(get_basic_user)]
+VerifiedBasicUser = Annotated[User, Depends(get_verified_basic_user)]

@@ -8,6 +8,7 @@ Current source-of-truth packaging:
 - Worker image: `infrastructure/docker/api.Dockerfile` with command `python -m app.workers.runner`
 - Web image: `infrastructure/docker/web.Dockerfile`
 - Web static export command: `npm run build:web -w apps/mobile`
+- Expo web build runtime: Node 20 for Expo SDK 51 compatibility
 - Database migrations: `cd apps/api && alembic upgrade head`
 
 ## Recommended Azure Shape

@@ -103,6 +103,18 @@ export type UserProfile = {
   tutorial_version_seen?: string | null;
 };
 
+export type SubscriptionTier = "basic" | "premium";
+
+export type SubscriptionPlanStatus = {
+  tier: SubscriptionTier;
+  plan_key: string;
+  display_name: string;
+  description: string;
+  monthly_price_cents: number;
+  stripe_configured: boolean;
+  active: boolean;
+};
+
 export type PremiumStatus = {
   active: boolean;
   plan_key: string;
@@ -113,6 +125,18 @@ export type PremiumStatus = {
   billing_management_available: boolean;
   current_period_end?: string | null;
   cancel_at_period_end: boolean;
+  current_tier: "none" | "trial" | "basic" | "premium";
+  basic_active: boolean;
+  basic_subscription_active: boolean;
+  premium_active: boolean;
+  trial_active: boolean;
+  trial_ends_at?: string | null;
+  trial_days_remaining: number;
+  basic_monthly_price_cents: number;
+  premium_monthly_price_cents: number;
+  basic_stripe_configured: boolean;
+  premium_stripe_configured: boolean;
+  plans: SubscriptionPlanStatus[];
 };
 
 export type MacroTarget = {

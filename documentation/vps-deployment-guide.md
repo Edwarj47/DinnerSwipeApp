@@ -12,6 +12,23 @@ Do not place `OPENAI_API_KEY`, `JWT_SECRET`, or database passwords in tracked fi
 
 PostgreSQL is not publicly exposed. The API and web services bind to localhost by default for reverse-proxy use.
 
+## Fast Web Redeploy On VPS
+
+For quick UI changes, avoid rebuilding the full npm dependency layer on the VPS:
+
+```bash
+infrastructure/scripts/build-web-static.sh
+docker compose --profile production up -d dinner-swipe-web
+```
+
+This exports Expo web with Node 20 in a temporary container using the existing
+workspace dependencies, then builds the nginx image from `apps/mobile/dist`.
+Use the full Compose build in CI or when dependency versions change.
+
+The Android development-client helper defaults to `--host localhost` to avoid
+opening Expo/ngrok tunnels from the VPS. Use EAS builds or the deployed mobile
+web app for off-network UAT.
+
 Backups:
 
 ```bash

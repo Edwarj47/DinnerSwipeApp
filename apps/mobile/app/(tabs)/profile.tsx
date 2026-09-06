@@ -27,7 +27,7 @@ const GROCERY_RETAILER_OPTIONS: { label: string; value: GroceryRetailer }[] = [
 
 export default function ProfileScreen() {
   const queryClient = useQueryClient();
-  const params = useLocalSearchParams<{ reset_token?: string }>();
+  const params = useLocalSearchParams<{ reset_token?: string; section?: string }>();
   const router = useRouter();
   const [section, setSection] = useState<ProfileSection>("account");
   const [accountAction, setAccountAction] = useState<AccountAction>("overview");
@@ -52,6 +52,11 @@ export default function ProfileScreen() {
       setAccountAction("reset");
     }
   }, [params.reset_token]);
+  useEffect(() => {
+    if (params.section === "account" || params.section === "meals" || params.section === "group" || params.section === "premium") {
+      setSection(params.section);
+    }
+  }, [params.section]);
   const refreshBiometricSettings = useCallback(async () => {
     setBiometricSettings(await getBiometricSettings());
   }, []);

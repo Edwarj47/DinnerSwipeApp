@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbDep
+from app.api.deps import BasicUser, DbDep
 from app.models.entities import GroceryList, GroceryListItem, PantryItem
 from app.schemas.common import GroceryManualItemIn, PantryItemIn
 from app.services.parsing import normalize_name
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/grocery-lists", tags=["grocery-lists"])
 
 
 @router.post("/current/regenerate")
-def regenerate(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
+def regenerate(db: DbDep, current_user: BasicUser) -> dict[str, object]:
     plan = get_or_create_current_plan(db, current_user)
     grocery = regenerate_grocery_list(db, current_user, plan)
     return list_current(db, current_user, grocery.id)
@@ -22,7 +22,7 @@ def regenerate(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
 
 @router.get("/current")
 def list_current(
-    db: DbDep, current_user: CurrentUser, grocery_id: str | None = None
+    db: DbDep, current_user: BasicUser, grocery_id: str | None = None
 ) -> dict[str, object]:
     plan = get_or_create_current_plan(db, current_user)
     grocery = db.get(GroceryList, grocery_id) if grocery_id else None
@@ -66,7 +66,7 @@ def list_current(
     }
 
 
-def _owned_grocery_item(db: DbDep, current_user: CurrentUser, item_id: str) -> GroceryListItem:
+def _owned_grocery_item(db: DbDep, current_user: BasicUser, item_id: str) -> GroceryListItem:
     item = db.scalar(
         select(GroceryListItem)
         .join(GroceryList, GroceryList.id == GroceryListItem.grocery_list_id)
@@ -79,7 +79,7 @@ def _owned_grocery_item(db: DbDep, current_user: CurrentUser, item_id: str) -> G
 
 @router.post("/current/items")
 def add_manual_item(
-    payload: GroceryManualItemIn, db: DbDep, current_user: CurrentUser
+    payload: GroceryManualItemIn, db: DbDep, current_user: BasicUser
 ) -> dict[str, str]:
     plan = get_or_create_current_plan(db, current_user)
     grocery = db.scalar(
@@ -111,7 +111,7 @@ def add_manual_item(
 
 @router.patch("/items/{item_id}")
 def update_item(
-    item_id: str, payload: dict[str, object], db: DbDep, current_user: CurrentUser
+    item_id: str, payload: dict[str, object], db: DbDep, current_user: BasicUser
 ) -> dict[str, str]:
     item = _owned_grocery_item(db, current_user, item_id)
     allowed = {"is_checked", "quantity", "unit", "display_name", "notes"}
@@ -123,7 +123,7 @@ def update_item(
 
 
 @router.delete("/items/{item_id}")
-def delete_item(item_id: str, db: DbDep, current_user: CurrentUser) -> dict[str, str]:
+def delete_item(item_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
     item = _owned_grocery_item(db, current_user, item_id)
     db.delete(item)
     db.commit()
@@ -131,7 +131,7 @@ def delete_item(item_id: str, db: DbDep, current_user: CurrentUser) -> dict[str,
 
 
 @router.get("/pantry")
-def pantry(db: DbDep, current_user: CurrentUser) -> list[dict[str, object]]:
+def pantry(db: DbDep, current_user: BasicUser) -> list[dict[str, object]]:
     items = db.scalars(select(PantryItem).where(PantryItem.user_id == current_user.id)).all()
     return [
         {"id": item.id, "normalized_name": item.normalized_name, "category": item.category}
@@ -140,7 +140,7 @@ def pantry(db: DbDep, current_user: CurrentUser) -> list[dict[str, object]]:
 
 
 @router.post("/pantry")
-def add_pantry(payload: PantryItemIn, db: DbDep, current_user: CurrentUser) -> dict[str, str]:
+def add_pantry(payload: PantryItemIn, db: DbDep, current_user: BasicUser) -> dict[str, str]:
     normalized_name = normalize_name(payload.normalized_name)
     if not normalized_name:
         raise HTTPException(status_code=400, detail="Pantry item name is required")
@@ -163,7 +163,7 @@ def add_pantry(payload: PantryItemIn, db: DbDep, current_user: CurrentUser) -> d
 
 
 @router.delete("/pantry/{item_id}")
-def delete_pantry(item_id: str, db: DbDep, current_user: CurrentUser) -> dict[str, str]:
+def delete_pantry(item_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
     item = db.scalar(
         select(PantryItem).where(PantryItem.id == item_id, PantryItem.user_id == current_user.id)
     )
