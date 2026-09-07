@@ -5,7 +5,7 @@ import math
 import random
 import secrets
 import string
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Any, Literal, cast
 
 import structlog
@@ -71,19 +71,13 @@ def is_premium_active(subscription: UserSubscription | None) -> bool:
     return subscription_plan_rank(subscription) >= PLAN_RANK[PREMIUM_PLAN_KEY]
 
 
-def basic_trial_ends_at(user: User) -> datetime | None:
-    trial_days = max(0, settings.basic_free_trial_days)
-    if trial_days == 0:
-        return None
-    return user.created_at + timedelta(days=trial_days)
-
-
-def trial_days_remaining(user: User, now: datetime | None = None) -> int:
-    trial_end = basic_trial_ends_at(user)
-    if not trial_end:
+def subscription_days_remaining(
+    subscription: UserSubscription | None, now: datetime | None = None
+) -> int:
+    if not subscription or not subscription.current_period_end:
         return 0
     now = now or datetime.utcnow()
-    remaining_seconds = (trial_end - now).total_seconds()
+    remaining_seconds = (subscription.current_period_end - now).total_seconds()
     if remaining_seconds <= 0:
         return 0
     return max(1, math.ceil(remaining_seconds / 86_400))
@@ -91,16 +85,14 @@ def trial_days_remaining(user: User, now: datetime | None = None) -> int:
 
 def is_basic_access_active(db: Session, user: User) -> bool:
     subscription = subscription_for_user(db, user)
-    if subscription_plan_rank(subscription) >= PLAN_RANK[BASIC_PLAN_KEY]:
-        return True
-    return trial_days_remaining(user) > 0
+    return subscription_plan_rank(subscription) >= PLAN_RANK[BASIC_PLAN_KEY]
 
 
 def require_basic_access(db: Session, user: User) -> User:
     if not is_basic_access_active(db, user):
         raise HTTPException(
             status_code=402,
-            detail="Your free month has ended. Subscribe to Basic to keep using Dinner Swipe.",
+            detail="Start Basic with a card on file to keep using Dinner Swipe.",
         )
     return user
 
@@ -114,17 +106,21 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
     plan_rank = subscription_plan_rank(subscription)
     premium_active = plan_rank >= PLAN_RANK[PREMIUM_PLAN_KEY]
     subscribed_basic = plan_rank >= PLAN_RANK[BASIC_PLAN_KEY]
-    remaining_trial_days = 0 if subscribed_basic else trial_days_remaining(user)
-    trial_end = basic_trial_ends_at(user)
-    trial_active = remaining_trial_days > 0
-    basic_active = subscribed_basic or trial_active
+    trial_active = bool(
+        subscription
+        and subscription.status == "trialing"
+        and plan_rank >= PLAN_RANK[BASIC_PLAN_KEY]
+    )
+    trial_end = subscription.current_period_end if trial_active and subscription else None
+    remaining_trial_days = subscription_days_remaining(subscription) if trial_active else 0
+    basic_active = subscribed_basic
     current_tier: CurrentTier = (
         "premium"
         if premium_active
-        else "basic"
-        if subscribed_basic
         else "trial"
         if trial_active
+        else "basic"
+        if subscribed_basic
         else "none"
     )
     active_plan_key = subscription.plan_key if subscription else None
@@ -132,10 +128,8 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
         # Backward compatible fields for the existing premium macro UI.
         "active": premium_active,
         "plan_key": active_plan_key or (BASIC_PLAN_KEY if trial_active else ""),
-        "status": (
-            subscription.status if subscription else ("trialing" if trial_active else "inactive")
-        ),
-        "source": subscription.source if subscription else ("free_trial" if trial_active else None),
+        "status": subscription.status if subscription else "inactive",
+        "source": subscription.source if subscription else None,
         "monthly_price_cents": settings.premium_monthly_price_cents,
         "stripe_configured": settings.stripe_premium_configured,
         "billing_management_available": bool(
@@ -144,7 +138,7 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
             and subscription.stripe_customer_id
             and settings.stripe_configured
         ),
-        "current_period_end": subscription.current_period_end if subscription else trial_end,
+        "current_period_end": subscription.current_period_end if subscription else None,
         "cancel_at_period_end": subscription.cancel_at_period_end if subscription else False,
         # New tier-aware fields.
         "current_tier": current_tier,
@@ -252,9 +246,12 @@ def create_checkout_session(db: Session, user: User, tier: SubscriptionTier = PR
     metadata = {"user_id": user.id, "plan_key": plan_key, "tier": tier}
     subscription_data: dict[str, Any] = {"metadata": metadata}
     if tier == BASIC_TIER:
-        remaining_days = trial_days_remaining(user)
-        if remaining_days > 0:
-            subscription_data["trial_period_days"] = remaining_days
+        trial_days = max(0, settings.basic_free_trial_days)
+        if trial_days > 0:
+            subscription_data["trial_period_days"] = trial_days
+            subscription_data["trial_settings"] = {
+                "end_behavior": {"missing_payment_method": "cancel"}
+            }
     params: dict[str, Any] = {
         "mode": "subscription",
         "line_items": [{"price": settings.stripe_price_id_for_tier(tier), "quantity": 1}],
@@ -266,6 +263,8 @@ def create_checkout_session(db: Session, user: User, tier: SubscriptionTier = PR
         "subscription_data": subscription_data,
         "integration_identifier": f"dinner_swipe_{tier}_{_random_letters(8)}",
     }
+    if tier == BASIC_TIER and settings.basic_free_trial_days > 0:
+        params["payment_method_collection"] = "always"
     if subscription and subscription.stripe_customer_id:
         params["customer"] = subscription.stripe_customer_id
     else:
@@ -283,9 +282,10 @@ def create_customer_portal_session(db: Session, user: User) -> str:
     if not subscription or subscription.source != "stripe" or not subscription.stripe_customer_id:
         raise HTTPException(status_code=409, detail="No Stripe billing account is linked")
     return_url = f"{settings.app_public_url.rstrip('/')}/profile?subscription=manage"
-    session = client.v1.billing_portal.sessions.create(
-        {"customer": subscription.stripe_customer_id, "return_url": return_url}
-    )
+    params = {"customer": subscription.stripe_customer_id, "return_url": return_url}
+    if settings.stripe_portal_configuration_id:
+        params["configuration"] = settings.stripe_portal_configuration_id
+    session = client.v1.billing_portal.sessions.create(params)
     url = getattr(session, "url", None)
     if not url:
         raise HTTPException(status_code=502, detail="Stripe did not return a portal URL")
@@ -348,7 +348,9 @@ def _handle_checkout_completed(db: Session, session: dict[str, Any]) -> None:
         subscription = UserSubscription(user_id=user.id)
         db.add(subscription)
     subscription.plan_key = plan_key
-    subscription.status = "active"
+    subscription.status = (
+        "trialing" if tier == BASIC_TIER and settings.basic_free_trial_days > 0 else "active"
+    )
     subscription.source = "stripe"
     subscription.stripe_customer_id = _nullable_str(session.get("customer"))
     subscription.stripe_subscription_id = _nullable_str(session.get("subscription"))

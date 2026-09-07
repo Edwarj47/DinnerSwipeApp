@@ -8,6 +8,9 @@ from app.api.deps import CurrentUser, DbDep
 from app.schemas.common import (
     BillingPortalSessionOut,
     CheckoutSessionOut,
+    MacroAnalytics,
+    MacroEntryUpdate,
+    MacroExport,
     MacroSummary,
     MacroTargetIn,
     MacroTargetOut,
@@ -29,10 +32,15 @@ from app.services.billing import (
 )
 from app.services.macros import (
     create_confirmation,
+    delete_macro_entry,
     get_or_create_targets,
+    list_macro_entries,
+    macro_analytics,
+    macro_export,
     macro_summary,
     serialize_confirmation,
     serialize_targets,
+    update_macro_entry,
     update_targets,
 )
 
@@ -95,6 +103,49 @@ def get_macro_summary(
     db: DbDep, current_user: CurrentUser, days: int = Query(default=7, ge=1, le=90)
 ) -> dict[str, object]:
     return macro_summary(db, current_user, days)
+
+
+@router.get("/macros/entries", response_model=list[MealMacroConfirmationOut])
+def get_macro_entries(
+    db: DbDep,
+    current_user: CurrentUser,
+    days: int = Query(default=7, ge=1, le=90),
+) -> list[dict[str, object]]:
+    return [serialize_confirmation(db, row) for row in list_macro_entries(db, current_user, days)]
+
+
+@router.post("/macros/entries", response_model=MealMacroConfirmationOut)
+def create_macro_entry(
+    payload: MealMacroConfirmationIn, db: DbDep, current_user: CurrentUser
+) -> dict[str, object]:
+    return serialize_confirmation(db, create_confirmation(db, current_user, payload))
+
+
+@router.put("/macros/entries/{entry_id}", response_model=MealMacroConfirmationOut)
+def put_macro_entry(
+    entry_id: str, payload: MacroEntryUpdate, db: DbDep, current_user: CurrentUser
+) -> dict[str, object]:
+    return serialize_confirmation(db, update_macro_entry(db, current_user, entry_id, payload))
+
+
+@router.delete("/macros/entries/{entry_id}")
+def remove_macro_entry(entry_id: str, db: DbDep, current_user: CurrentUser) -> dict[str, str]:
+    delete_macro_entry(db, current_user, entry_id)
+    return {"status": "deleted"}
+
+
+@router.get("/macros/analytics", response_model=MacroAnalytics)
+def get_macro_analytics(
+    db: DbDep, current_user: CurrentUser, days: int = Query(default=30, ge=1, le=90)
+) -> dict[str, object]:
+    return macro_analytics(db, current_user, days)
+
+
+@router.get("/macros/export", response_model=MacroExport)
+def get_macro_export(
+    db: DbDep, current_user: CurrentUser, days: int = Query(default=30, ge=1, le=90)
+) -> dict[str, object]:
+    return macro_export(db, current_user, days)
 
 
 @router.get("/macros/targets", response_model=MacroTargetOut)

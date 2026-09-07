@@ -23,7 +23,9 @@ upsert_env() {
 printf 'This writes Stripe settings to %s with 0600 permissions.\n' "$env_file"
 printf 'Use test-mode Stripe values first, then rotate to live mode only before launch.\n\n'
 
-read -r -p "Stripe price ID for Dinner Swipe Premium: " stripe_price_id
+read -r -p "Stripe price ID for Dinner Swipe Basic: " stripe_basic_price_id
+read -r -p "Stripe price ID for Dinner Swipe Premium: " stripe_premium_price_id
+read -r -p "Stripe billing portal configuration ID (optional): " stripe_portal_configuration_id
 read -r -s -p "Stripe secret key: " stripe_secret_key
 printf '\n'
 read -r -s -p "Stripe webhook signing secret: " stripe_webhook_secret
@@ -31,13 +33,17 @@ printf '\n'
 read -r -p "Expected Stripe account ID [$expected_account_id]: " account_id
 account_id="${account_id:-$expected_account_id}"
 
-if [[ -z "$stripe_price_id" || -z "$stripe_secret_key" || -z "$stripe_webhook_secret" ]]; then
+if [[ -z "$stripe_basic_price_id" || -z "$stripe_premium_price_id" || -z "$stripe_secret_key" || -z "$stripe_webhook_secret" ]]; then
   echo "Missing one or more required Stripe values." >&2
   exit 1
 fi
 
 upsert_env "STRIPE_ENABLED" "true"
-upsert_env "STRIPE_PREMIUM_PRICE_ID" "$stripe_price_id"
+upsert_env "STRIPE_BASIC_PRICE_ID" "$stripe_basic_price_id"
+upsert_env "STRIPE_PREMIUM_PRICE_ID" "$stripe_premium_price_id"
+if [[ -n "$stripe_portal_configuration_id" ]]; then
+  upsert_env "STRIPE_PORTAL_CONFIGURATION_ID" "$stripe_portal_configuration_id"
+fi
 upsert_env "STRIPE_SECRET_KEY" "$stripe_secret_key"
 upsert_env "STRIPE_WEBHOOK_SECRET" "$stripe_webhook_secret"
 upsert_env "STRIPE_EXPECTED_ACCOUNT_ID" "$account_id"

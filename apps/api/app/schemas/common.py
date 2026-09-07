@@ -131,9 +131,25 @@ class MacroTargetOut(MacroTargetIn):
 class MealMacroConfirmationIn(ApiModel):
     recipe_id: str | None = None
     weekly_plan_slot_id: str | None = None
+    entry_name: str | None = Field(default=None, min_length=1, max_length=160)
+    meal_label: str | None = Field(default=None, max_length=32)
     meal_date: date | None = None
     status: Literal["ate", "skipped"] = "ate"
     servings_consumed: float = Field(default=1, ge=0, le=20)
+    calories: float | None = Field(default=None, ge=0, le=20000)
+    protein_g: float | None = Field(default=None, ge=0, le=1000)
+    carbs_g: float | None = Field(default=None, ge=0, le=2000)
+    fat_g: float | None = Field(default=None, ge=0, le=1000)
+    fiber_g: float | None = Field(default=None, ge=0, le=500)
+    notes: str | None = Field(default=None, max_length=500)
+
+
+class MacroEntryUpdate(ApiModel):
+    entry_name: str | None = Field(default=None, min_length=1, max_length=160)
+    meal_label: str | None = Field(default=None, max_length=32)
+    meal_date: date | None = None
+    status: Literal["ate", "skipped"] | None = None
+    servings_consumed: float | None = Field(default=None, ge=0, le=20)
     calories: float | None = Field(default=None, ge=0, le=20000)
     protein_g: float | None = Field(default=None, ge=0, le=1000)
     carbs_g: float | None = Field(default=None, ge=0, le=2000)
@@ -147,6 +163,8 @@ class MealMacroConfirmationOut(ApiModel):
     recipe_id: str | None
     recipe_name: str | None
     weekly_plan_slot_id: str | None
+    entry_name: str | None
+    meal_label: str | None
     meal_date: date
     status: str
     servings_consumed: float
@@ -171,6 +189,40 @@ class MacroSummary(ApiModel):
     skipped_meals: int
     unmatched_meals: int
     recent_confirmations: list[MealMacroConfirmationOut]
+
+
+class MacroDayTotal(ApiModel):
+    meal_date: date
+    calories: float
+    protein_g: float
+    carbs_g: float
+    fat_g: float
+    fiber_g: float
+    eaten_meals: int
+    skipped_meals: int
+    entry_count: int
+
+
+class MacroAnalytics(ApiModel):
+    days: int
+    start_date: date
+    end_date: date
+    totals: dict[str, float]
+    averages: dict[str, float]
+    targets: MacroTargetOut
+    days_logged: int
+    eaten_meals: int
+    skipped_meals: int
+    unmatched_meals: int
+    daily_totals: list[MacroDayTotal]
+
+
+class MacroExport(ApiModel):
+    exported_at: datetime
+    export_format_version: str = "2026-09-07"
+    days: int
+    analytics: MacroAnalytics
+    entries: list[MealMacroConfirmationOut]
 
 
 class OnboardingUpdate(ApiModel):

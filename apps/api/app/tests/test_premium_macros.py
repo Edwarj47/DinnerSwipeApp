@@ -13,13 +13,13 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
-from app.models.entities import User
+from app.models.entities import User, UserSubscription
 
 
 def test_premium_waiver_unlocks_macro_tracking(
     client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    monkeypatch.setattr(settings, "premium_waiver_codes", "development")
+    monkeypatch.setattr(settings, "premium_waiver_codes", "premium-unit-test-code")
     status = client.get("/api/v1/premium/status", headers=auth_headers)
     assert status.status_code == 200
     assert status.json()["active"] is False
@@ -34,7 +34,7 @@ def test_premium_waiver_unlocks_macro_tracking(
     unlocked = client.post(
         "/api/v1/premium/waiver-code",
         headers=auth_headers,
-        json={"code": "development"},
+        json={"code": "premium-unit-test-code"},
     )
     assert unlocked.status_code == 200
     assert unlocked.json()["active"] is True
@@ -99,34 +99,102 @@ def test_premium_waiver_unlocks_macro_tracking(
     assert body["eaten_meals"] == 1
     assert body["skipped_meals"] == 1
 
+    manual_entry = client.post(
+        "/api/v1/macros/entries",
+        headers=auth_headers,
+        json={
+            "entry_name": "Protein shake",
+            "meal_label": "snack",
+            "status": "ate",
+            "calories": 300,
+            "protein_g": 40,
+            "carbs_g": 12,
+            "fat_g": 6,
+            "fiber_g": 2,
+            "notes": "Post workout",
+        },
+    )
+    assert manual_entry.status_code == 200
+    entry_body = manual_entry.json()
+    assert entry_body["entry_name"] == "Protein shake"
+    assert entry_body["meal_label"] == "snack"
 
-def test_basic_trial_allows_access_then_expires(
-    client: TestClient, auth_headers: dict[str, str], db_session: Session
+    updated_entry = client.put(
+        f"/api/v1/macros/entries/{entry_body['id']}",
+        headers=auth_headers,
+        json={"calories": 325, "protein_g": 42, "notes": "Adjusted serving"},
+    )
+    assert updated_entry.status_code == 200
+    assert updated_entry.json()["calories"] == 325
+    assert updated_entry.json()["macro_source"] == "manual"
+
+    entries = client.get("/api/v1/macros/entries?days=30", headers=auth_headers)
+    assert entries.status_code == 200
+    assert any(item["entry_name"] == "Protein shake" for item in entries.json())
+
+    analytics = client.get("/api/v1/macros/analytics?days=30", headers=auth_headers)
+    assert analytics.status_code == 200
+    assert analytics.json()["totals"]["calories"] >= 845
+
+    exported = client.get("/api/v1/macros/export?days=30", headers=auth_headers)
+    assert exported.status_code == 200
+    assert exported.json()["export_format_version"] == "2026-09-07"
+    assert any(item["entry_name"] == "Protein shake" for item in exported.json()["entries"])
+
+    deleted = client.delete(f"/api/v1/macros/entries/{entry_body['id']}", headers=auth_headers)
+    assert deleted.status_code == 200
+    assert deleted.json()["status"] == "deleted"
+
+
+def test_basic_access_requires_subscription_or_stripe_trial(
+    client: TestClient, db_session: Session
 ) -> None:
-    status = client.get("/api/v1/subscription/status", headers=auth_headers)
+    registered = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": "nosub@example.com",
+            "password": "change-me-123",
+            "terms_accepted": True,
+            "privacy_accepted": True,
+        },
+    )
+    token = registered.json()["access_token"]
+    headers = {"Authorization": f"Bearer {token}"}
+
+    status = client.get("/api/v1/subscription/status", headers=headers)
     assert status.status_code == 200
     body = status.json()
-    assert body["current_tier"] == "trial"
-    assert body["basic_active"] is True
+    assert body["current_tier"] == "none"
+    assert body["basic_active"] is False
     assert body["premium_active"] is False
-    assert body["trial_days_remaining"] > 0
+    assert body["trial_days_remaining"] == 0
 
-    recipes = client.get("/api/v1/recipes", headers=auth_headers)
-    assert recipes.status_code == 200
+    blocked_recipes = client.get("/api/v1/recipes", headers=headers)
+    assert blocked_recipes.status_code == 402
+    assert "card on file" in blocked_recipes.json()["detail"]
 
-    user = db_session.query(User).filter_by(email="owner@example.com").one()
-    user.created_at = datetime.utcnow() - timedelta(days=settings.basic_free_trial_days + 1)
+    user = db_session.query(User).filter_by(email="nosub@example.com").one()
+    db_session.add(
+        UserSubscription(
+            user_id=user.id,
+            plan_key="basic_monthly",
+            status="trialing",
+            source="stripe",
+            stripe_customer_id="cus_trial",
+            stripe_subscription_id="sub_trial",
+            current_period_end=datetime.utcnow() + timedelta(days=30),
+        )
+    )
     db_session.commit()
 
-    expired_recipes = client.get("/api/v1/recipes", headers=auth_headers)
-    assert expired_recipes.status_code == 402
-    assert "free month has ended" in expired_recipes.json()["detail"]
-
-    still_can_manage_profile = client.get("/api/v1/profile", headers=auth_headers)
+    trial_status = client.get("/api/v1/subscription/status", headers=headers).json()
+    assert trial_status["current_tier"] == "trial"
+    assert trial_status["basic_active"] is True
+    assert trial_status["trial_days_remaining"] > 0
+    recipes = client.get("/api/v1/recipes", headers=headers)
+    assert recipes.status_code == 200
+    still_can_manage_profile = client.get("/api/v1/profile", headers=headers)
     assert still_can_manage_profile.status_code == 200
-    expired_status = client.get("/api/v1/subscription/status", headers=auth_headers)
-    assert expired_status.status_code == 200
-    assert expired_status.json()["current_tier"] == "none"
 
 
 def test_basic_and_premium_access_codes_unlock_expected_tiers(
@@ -212,7 +280,7 @@ def test_stripe_account_mismatch_blocks_checkout(
     assert "Stripe account mismatch" in response.text
 
 
-def test_basic_checkout_uses_basic_price_and_remaining_trial(
+def test_basic_checkout_uses_basic_price_and_card_required_trial(
     client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     captured: dict[str, Any] = {}
@@ -263,7 +331,12 @@ def test_basic_checkout_uses_basic_price_and_remaining_trial(
     params = captured["params"]
     assert params["line_items"] == [{"price": "price_basic", "quantity": 1}]
     assert params["subscription_data"]["metadata"]["tier"] == "basic"
-    assert 1 <= params["subscription_data"]["trial_period_days"] <= settings.basic_free_trial_days
+    assert params["subscription_data"]["trial_period_days"] == settings.basic_free_trial_days
+    missing_payment_method = params["subscription_data"]["trial_settings"]["end_behavior"][
+        "missing_payment_method"
+    ]
+    assert missing_payment_method == "cancel"
+    assert params["payment_method_collection"] == "always"
     assert "payment_method_types" not in params
     assert captured["stripe_version"] == settings.stripe_api_version
 

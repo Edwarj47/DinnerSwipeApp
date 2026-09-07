@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -74,7 +76,10 @@ def test_unverified_user_cannot_join_or_vote(
 
 
 def test_group_vote_summary_uses_shared_household_plan_and_owner_voter_detail(
-    client: TestClient, auth_headers: dict[str, str], db_session: Session
+    client: TestClient,
+    auth_headers: dict[str, str],
+    db_session: Session,
+    grant_basic_access: Callable[[str], object],
 ) -> None:
     household = client.get("/api/v1/households/current", headers=auth_headers).json()
     recipe = client.post(
@@ -101,6 +106,7 @@ def test_group_vote_summary_uses_shared_household_plan_and_owner_voter_detail(
     member_user = db_session.query(User).filter_by(email="group-member@example.com").one()
     member_user.email_verified = True
     db_session.commit()
+    grant_basic_access("group-member@example.com")
     member_headers = {"Authorization": f"Bearer {member.json()['access_token']}"}
     joined = client.post(
         "/api/v1/households/join",
@@ -191,7 +197,10 @@ def test_group_safety_settings_warn_and_block_vote_options(
 
 
 def test_owner_can_transfer_household_ownership(
-    client: TestClient, auth_headers: dict[str, str], db_session: Session
+    client: TestClient,
+    auth_headers: dict[str, str],
+    db_session: Session,
+    grant_basic_access: Callable[[str], object],
 ) -> None:
     household = client.get("/api/v1/households/current", headers=auth_headers).json()
     member = client.post(
@@ -206,6 +215,7 @@ def test_owner_can_transfer_household_ownership(
     member_user = db_session.query(User).filter_by(email="new-owner@example.com").one()
     member_user.email_verified = True
     db_session.commit()
+    grant_basic_access("new-owner@example.com")
     member_headers = {"Authorization": f"Bearer {member.json()['access_token']}"}
     joined = client.post(
         "/api/v1/households/join",

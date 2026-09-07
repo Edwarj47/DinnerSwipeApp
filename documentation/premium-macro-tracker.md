@@ -7,16 +7,19 @@ Dinner Swipe now has two entitlement tiers:
 
 ## Current Implementation
 
-- New accounts receive a Basic access trial from their account creation timestamp.
+- New accounts can register without a card, but app workflows require Basic access.
+- The Basic free month starts through Stripe Checkout with a card on file.
 - Basic access gates app workflows such as recipes, weekly plans, grocery lists, imports, URL ingestion, and group voting.
 - Profile, authentication, email verification, legal pages, account export, and subscription status remain reachable without active Basic access.
 - Subscription entitlement storage is local in `user_subscriptions`.
 - Premium includes Basic access.
-- Meal confirmations are stored in `meal_macro_confirmations`.
+- Meal confirmations and manual daily macro entries are stored in `meal_macro_confirmations`.
 - Macro targets are stored in `macro_profile_targets`.
 - Recipe-level macro profiles are prepared in `recipe_macro_profiles`.
 - Weekly planned meals can be marked as eaten or skipped by Premium users.
+- Premium users can add, edit, delete, and export manual macro entries.
 - Macro totals can use manually provided macro values or reviewed recipe macro profiles.
+- Macro analytics include daily totals, 30-day totals, averages, days logged, and unmatched meal counts.
 - Recipes without macro profiles are tracked as unmatched and require review.
 
 Automatic nutrition extraction from recipe ingredients is not complete. The MVP macro feature is a reviewed tracking foundation, not a nutrition or medical system.
@@ -41,7 +44,7 @@ Use Stripe Checkout and Billing for paid web subscriptions:
 
 - Product: Dinner Swipe Basic
 - Price: `5.99 USD/month`
-- Free trial: 30 days
+- Free trial: 30 days through Checkout with `payment_method_collection=always`
 - Product: Dinner Swipe Premium
 - Price: `9.99 USD/month`
 - Checkout mode: `subscription`
@@ -64,6 +67,7 @@ STRIPE_SECRET_KEY=
 STRIPE_WEBHOOK_SECRET=
 STRIPE_BASIC_PRICE_ID=
 STRIPE_PREMIUM_PRICE_ID=
+STRIPE_PORTAL_CONFIGURATION_ID=
 STRIPE_EXPECTED_ACCOUNT_ID=
 STRIPE_API_VERSION=2026-07-29.dahlia
 BASIC_MONTHLY_PRICE_CENTS=599
@@ -89,7 +93,9 @@ Stripe-sourced users can open the Stripe-hosted Customer Portal from Profile. Th
 POST /api/v1/premium/billing-portal-session
 ```
 
-Configure the Customer Portal in Stripe Dashboard before enabling this for live users. Basic-to-Premium upgrades for an existing Stripe Basic subscription should be handled through the portal so Stripe can handle proration and subscription changes instead of creating a second subscription.
+Configure the Customer Portal in Stripe Dashboard or store the Dinner Swipe portal configuration ID in `STRIPE_PORTAL_CONFIGURATION_ID`. Basic-to-Premium upgrades for an existing Stripe Basic subscription should be handled through the portal so Stripe can handle proration and subscription changes instead of creating a second subscription.
+
+Customers must be able to update payment methods and cancel in the portal. The recommended cancellation behavior is cancel-at-period-end so app access remains consistent through the paid period or active trial.
 
 ## Native App Store Note
 
@@ -104,4 +110,4 @@ Stripe Checkout is appropriate for web subscriptions. Before public iOS or Andro
 - Verify webhook signatures before processing events.
 - Keep subscription entitlement checks server-side.
 - Treat macro values from imported or AI-derived recipes as requiring review before nutritional use.
-- Consider Stripe Tax and tax registrations before charging a broader public audience.
+- Before charging broadly, confirm tax obligations. Stripe Tax threshold monitoring is a low-friction starting point when no registrations are active; enable tax collection only where DCSS is registered or otherwise obligated.

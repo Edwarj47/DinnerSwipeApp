@@ -101,8 +101,8 @@ export function SubscriptionGate({ children }: Props) {
             <Text style={styles.kicker}>Dinner Swipe</Text>
             <Text style={styles.title}>Keep planning dinners together.</Text>
             <Text style={styles.subtitle}>
-              Your free month has ended. Subscribe to Basic to keep recipes, weekly planning,
-              grocery lists, and group voting active.
+              Start Basic with a card on file. Your first month is free; billing begins after
+              the trial unless canceled.
             </Text>
           </View>
           <View style={styles.panel}>
@@ -110,7 +110,7 @@ export function SubscriptionGate({ children }: Props) {
               name="Basic"
               priceCents={basicPlan?.monthly_price_cents ?? subscription.data.basic_monthly_price_cents}
               detail="App access, recipe saving, group voting, weekly plans, and grocery lists."
-              badge="First month free"
+              badge="Card required"
             />
             <PlanRow
               name="Premium"
@@ -131,6 +131,10 @@ export function SubscriptionGate({ children }: Props) {
               disabled={!subscription.data.premium_stripe_configured || startCheckout.isPending}
               onPress={() => startCheckout.mutate("premium")}
             />
+            <Text style={styles.nativeNote}>
+              Terms acceptance alone does not authorize a card charge. Billing starts only through
+              the Stripe Checkout flow.
+            </Text>
             <View style={styles.codeBox}>
               <Text style={styles.codeTitle}>Testing access code</Text>
               <View style={styles.codeRow}>

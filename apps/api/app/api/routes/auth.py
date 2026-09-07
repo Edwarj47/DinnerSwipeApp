@@ -23,6 +23,7 @@ from app.models.entities import (
     GroceryListItem,
     Household,
     HouseholdMember,
+    MealMacroConfirmation,
     Recipe,
     UrlIngestionCandidate,
     User,
@@ -298,6 +299,11 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
     candidates = db.scalars(
         select(UrlIngestionCandidate).where(UrlIngestionCandidate.user_id == current_user.id)
     ).all()
+    macro_entries = db.scalars(
+        select(MealMacroConfirmation)
+        .where(MealMacroConfirmation.user_id == current_user.id)
+        .order_by(MealMacroConfirmation.meal_date.desc(), MealMacroConfirmation.created_at.desc())
+    ).all()
     audit_events = db.scalars(
         select(AuditEvent)
         .where(AuditEvent.user_id == current_user.id)
@@ -404,6 +410,27 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
                 "created_at": candidate.created_at.isoformat(),
             }
             for candidate in candidates
+        ],
+        "macro_entries": [
+            {
+                "id": entry.id,
+                "entry_name": entry.entry_name,
+                "meal_label": entry.meal_label,
+                "meal_date": entry.meal_date.isoformat(),
+                "status": entry.status,
+                "servings_consumed": entry.servings_consumed,
+                "recipe_id": entry.recipe_id,
+                "weekly_plan_slot_id": entry.weekly_plan_slot_id,
+                "calories": entry.calories,
+                "protein_g": entry.protein_g,
+                "carbs_g": entry.carbs_g,
+                "fat_g": entry.fat_g,
+                "fiber_g": entry.fiber_g,
+                "macro_source": entry.macro_source,
+                "notes": entry.notes,
+                "created_at": entry.created_at.isoformat(),
+            }
+            for entry in macro_entries
         ],
         "account_activity": [_audit_event_for_account_export(event) for event in audit_events],
     }

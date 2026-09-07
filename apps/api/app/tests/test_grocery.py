@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from collections.abc import Callable
+
 from fastapi.testclient import TestClient
 
 
@@ -100,7 +102,7 @@ def test_preferred_grocery_retailer_changes_search_links(
 
 
 def test_grocery_item_update_is_account_scoped(
-    client: TestClient, auth_headers: dict[str, str]
+    client: TestClient, auth_headers: dict[str, str], grant_basic_access: Callable[[str], object]
 ) -> None:
     added = client.post(
         "/api/v1/grocery-lists/current/items",
@@ -117,6 +119,7 @@ def test_grocery_item_update_is_account_scoped(
             "privacy_accepted": True,
         },
     )
+    grant_basic_access("other-shopper@example.com")
     other_headers = {"Authorization": f"Bearer {other.json()['access_token']}"}
 
     blocked_patch = client.patch(

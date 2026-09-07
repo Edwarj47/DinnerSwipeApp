@@ -82,7 +82,11 @@ export default function WeekScreen() {
       }),
     onSuccess: async () => {
       setStatus("Meal logged.");
-      await queryClient.invalidateQueries({ queryKey: ["macro-summary"] });
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: ["macro-summary"] }),
+        queryClient.invalidateQueries({ queryKey: ["macro-entries"] }),
+        queryClient.invalidateQueries({ queryKey: ["macro-analytics"] })
+      ]);
     },
     onError: (error) => setStatus(String(error))
   });

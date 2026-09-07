@@ -153,6 +153,8 @@ export type MacroConfirmation = {
   recipe_id?: string | null;
   recipe_name?: string | null;
   weekly_plan_slot_id?: string | null;
+  entry_name?: string | null;
+  meal_label?: string | null;
   meal_date: string;
   status: "ate" | "skipped";
   servings_consumed: number;
@@ -177,6 +179,40 @@ export type MacroSummary = {
   skipped_meals: number;
   unmatched_meals: number;
   recent_confirmations: MacroConfirmation[];
+};
+
+export type MacroDayTotal = {
+  meal_date: string;
+  calories: number;
+  protein_g: number;
+  carbs_g: number;
+  fat_g: number;
+  fiber_g: number;
+  eaten_meals: number;
+  skipped_meals: number;
+  entry_count: number;
+};
+
+export type MacroAnalytics = {
+  days: number;
+  start_date: string;
+  end_date: string;
+  totals: Record<"calories" | "protein_g" | "carbs_g" | "fat_g" | "fiber_g", number>;
+  averages: Record<"calories" | "protein_g" | "carbs_g" | "fat_g" | "fiber_g", number>;
+  targets: MacroTarget;
+  days_logged: number;
+  eaten_meals: number;
+  skipped_meals: number;
+  unmatched_meals: number;
+  daily_totals: MacroDayTotal[];
+};
+
+export type MacroExport = {
+  exported_at: string;
+  export_format_version: string;
+  days: number;
+  analytics: MacroAnalytics;
+  entries: MacroConfirmation[];
 };
 
 export type WeeklyPlan = {

@@ -43,6 +43,7 @@ class Settings(BaseSettings):
     stripe_webhook_secret: str = ""
     stripe_basic_price_id: str = ""
     stripe_premium_price_id: str = ""
+    stripe_portal_configuration_id: str = ""
     stripe_expected_account_id: str = ""
     stripe_api_version: str = "2026-07-29.dahlia"
     basic_monthly_price_cents: int = 599

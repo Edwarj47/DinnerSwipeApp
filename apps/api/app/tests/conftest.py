@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Generator
+from collections.abc import Callable, Generator
 
 os.environ["DATABASE_URL"] = "sqlite:///:memory:"
 os.environ["JWT_SECRET"] = "test-secret-value-that-is-long-enough"
@@ -17,7 +17,7 @@ from app.database.session import get_db
 from app.main import app
 from app.models import entities  # noqa: F401
 from app.models.base import Base
-from app.models.entities import User
+from app.models.entities import User, UserSubscription
 
 
 @pytest.fixture(autouse=True)
@@ -68,6 +68,33 @@ def auth_headers(client: TestClient, db_session: Session) -> dict[str, str]:
     )
     user = db_session.query(User).filter_by(email="owner@example.com").one()
     user.email_verified = True
+    db_session.add(
+        UserSubscription(
+            user_id=user.id,
+            plan_key="basic_monthly",
+            status="active",
+            source="waiver_code",
+            metadata_json={"fixture": "basic_access"},
+        )
+    )
     db_session.commit()
     token = response.json()["access_token"]
     return {"Authorization": f"Bearer {token}"}
+
+
+@pytest.fixture()
+def grant_basic_access(db_session: Session) -> Callable[[str], UserSubscription]:
+    def grant(email: str) -> UserSubscription:
+        user = db_session.query(User).filter_by(email=email).one()
+        subscription = UserSubscription(
+            user_id=user.id,
+            plan_key="basic_monthly",
+            status="active",
+            source="waiver_code",
+            metadata_json={"fixture": "basic_access"},
+        )
+        db_session.add(subscription)
+        db_session.commit()
+        return subscription
+
+    return grant

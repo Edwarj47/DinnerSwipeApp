@@ -304,6 +304,8 @@ class MealMacroConfirmation(Base, TimestampMixin):
     weekly_plan_slot_id: Mapped[str | None] = mapped_column(
         ForeignKey("weekly_plan_slots.id"), nullable=True, index=True
     )
+    entry_name: Mapped[str | None] = mapped_column(String(160), nullable=True)
+    meal_label: Mapped[str | None] = mapped_column(String(32), nullable=True)
     meal_date: Mapped[date] = mapped_column(Date, index=True)
     status: Mapped[str] = mapped_column(String(16), default="ate")
     servings_consumed: Mapped[float] = mapped_column(Float, default=1.0)
