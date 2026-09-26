@@ -15,14 +15,14 @@ Reviewed 2026-09-26. Configuration is not evidence of a finished native build.
 - GitHub repo: `git@github.com:Edwarj47/DinnerSwipeApp.git`
 - Existing CI: backend lint/typecheck/tests, frontend lint/typecheck/tests/web build, Docker build validation.
 - Native app: Expo SDK 51 / React Native 0.74.5. A supported SDK/toolchain upgrade is still needed for store submission.
-- Android preview: explicit standalone APK profile, local helper, and manual-only GitHub workflow are now present. No fresh APK has been built for these updates yet.
-- EAS access was verified during this task. The most recent existing Android build is an older development client, not this preview.
-- GitHub EAS secrets, store accounts/signing, and physical-device behavior have not been verified as ready.
+- Android preview: build 6 completed successfully using the standalone APK profile and existing EAS signing key. APK integrity, bundled JavaScript, package/version, and API URL were checked. Physical-phone verification is pending; see the [build record and phone checklist](android-preview-uat.md).
+- EAS access and Android signing-key availability are verified. This does not verify iOS signing or physical-device behavior.
+- The owner confirmed on 2026-09-26 that neither Google Play nor Apple developer enrollment is complete. GitHub EAS secrets and iOS signing still need setup/verification.
 - Preview currently uses the live API; isolated staging and EAS Update are not configured.
 
 ## Next Milestones
 
-1. Build and install the standalone Android preview APK; complete a physical-phone smoke test without Metro.
+1. Install the completed standalone Android preview APK (build 6) and complete a physical-phone smoke test without Metro.
 2. Set up a separate staging API/database, Stripe sandbox, and preview application identity before wider UAT or billing tests. Keep production data and credentials separate.
 3. Upgrade Expo and native dependencies, then add EAS Update with compatible runtime versions and separate preview/production channels. Rebuild both platforms and test update rollback.
 4. Configure store accounts, signing, regional billing, account deletion, privacy disclosures, support, crash monitoring, and review assets.

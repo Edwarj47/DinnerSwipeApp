@@ -2,6 +2,10 @@
 
 ## Phone Testing Without Metro
 
+Android preview build 6 completed on 2026-09-26. Its artifact checks and pending
+physical-device tests are recorded in the [UAT checklist](android-preview-uat.md).
+The install link is shared privately rather than committed to this repository.
+
 Use the **preview** profile for regular phone UAT. It produces a standalone
 Android APK with its JavaScript bundled inside, not the development-server
 launcher. It does not require Metro, ngrok, a laptop, or a manual server URL.
