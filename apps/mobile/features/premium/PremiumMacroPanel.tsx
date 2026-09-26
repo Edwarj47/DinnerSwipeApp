@@ -282,6 +282,7 @@ export function PremiumMacroPanel() {
           onPress={() => startCheckout.mutate("premium")}
         />
       </View>
+      <Text style={styles.meta}>Coming soon with Premium: create or join unlimited groups.</Text>
 
       <View style={styles.codeBox}>
         <Text style={styles.codeTitle}>Testing access code</Text>

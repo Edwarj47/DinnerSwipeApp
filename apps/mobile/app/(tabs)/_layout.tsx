@@ -3,6 +3,7 @@ import { Tabs } from "expo-router";
 
 import { Colors } from "@/components/theme";
 import { OnboardingGuide } from "@/features/onboarding/OnboardingGuide";
+import { useAppAccess } from "@/services/session";
 
 const icons = {
   index: "flame-outline",
@@ -13,6 +14,9 @@ const icons = {
 } as const;
 
 export default function TabLayout() {
+  const canUseApp = useAppAccess();
+  // Keep the root Stack mounted for public routes; defer protected screens and queries here.
+  if (!canUseApp) return null;
   return (
     <>
       <Tabs

@@ -27,3 +27,17 @@ test("records swipe and undo restores local selection", () => {
   expect(usePlannerStore.getState().selectedRecipes).toHaveLength(0);
 });
 
+test("reset returns only affected meals, preserves hidden choices, and reshuffles", () => {
+  usePlannerStore.getState().resetSession();
+  const store = usePlannerStore.getState();
+  store.addSwipe({ recipe, action: "add" });
+  store.addSwipe({ recipe: { ...recipe, id: "other-day" }, action: "add" });
+  store.addSwipe({ recipe: { ...recipe, id: "hidden" }, action: "hide" });
+  const revision = usePlannerStore.getState().shuffleVersion;
+  store.returnToDiscover([recipe.id, "hidden"]);
+  expect(usePlannerStore.getState().history.map(item => item.recipe.id)).toEqual(["other-day", "hidden"]);
+  expect(usePlannerStore.getState().selectedRecipes.map(item => item.id)).toEqual(["other-day"]);
+  expect(usePlannerStore.getState().shuffleVersion).toBe(revision + 1);
+  store.restartDiscover();
+  expect(usePlannerStore.getState().history.map(item => item.action)).toEqual(["hide"]);
+});

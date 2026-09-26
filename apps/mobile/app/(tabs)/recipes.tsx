@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { BrandLogo } from "@/components/BrandLogo";
@@ -22,12 +23,19 @@ type AddMode = "web" | "manual" | "file";
 
 export default function RecipesScreen() {
   const queryClient = useQueryClient();
+  const params = useLocalSearchParams<{ mode?: string; method?: string }>();
   const [q, setQ] = useState("");
   const [pageMode, setPageMode] = useState<PageMode>("library");
   const [addMode, setAddMode] = useState<AddMode>("web");
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [quickActionRecipe, setQuickActionRecipe] = useState<Recipe | null>(null);
   const [actionStatus, setActionStatus] = useState("");
+  useEffect(() => {
+    if (params.mode === "add") {
+      setPageMode("add");
+      setAddMode(params.method === "manual" ? "manual" : "web");
+    }
+  }, [params.mode, params.method]);
   const { data } = useQuery<Recipe[]>({
     queryKey: ["recipes", q],
     queryFn: () => apiFetch<Recipe[]>(`/api/v1/recipes?q=${encodeURIComponent(q)}`)

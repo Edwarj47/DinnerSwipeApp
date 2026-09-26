@@ -211,7 +211,12 @@ def add_recipe_to_week(db: Session, user: User, recipe_id: str) -> WeeklyPlan:
     plan = get_or_create_current_plan(db, user)
     slot = db.scalar(
         select(WeeklyPlanSlot)
-        .where(WeeklyPlanSlot.weekly_plan_id == plan.id, WeeklyPlanSlot.recipe_id.is_(None))
+        .where(
+            WeeklyPlanSlot.weekly_plan_id == plan.id,
+            WeeklyPlanSlot.recipe_id.is_(None),
+            WeeklyPlanSlot.slot_type.in_(["flexible", "meal"]),
+            WeeklyPlanSlot.is_locked.is_(False),
+        )
         .order_by(WeeklyPlanSlot.sort_order)
     )
     if not slot:
@@ -302,14 +307,21 @@ def category_for(name: str) -> str:
     return "produce"
 
 
-def regenerate_grocery_list(db: Session, user: User, plan: WeeklyPlan) -> GroceryList:
+def regenerate_grocery_list(
+    db: Session, user: User, plan: WeeklyPlan, *, preserve_edits: bool = False
+) -> GroceryList:
     existing = db.scalar(
         select(GroceryList).where(
             GroceryList.user_id == user.id, GroceryList.weekly_plan_id == plan.id
         )
     )
+    checked = {}
     if existing:
-        db.query(GroceryListItem).filter(GroceryListItem.grocery_list_id == existing.id).delete()
+        items = db.query(GroceryListItem).filter(GroceryListItem.grocery_list_id == existing.id)
+        if preserve_edits:
+            checked = {(item.normalized_name, item.unit): item.is_checked for item in items.all()}
+            items = items.filter(GroceryListItem.match_status != "manual")
+        items.delete()
         grocery = existing
     else:
         grocery = GroceryList(user_id=user.id, weekly_plan_id=plan.id)
@@ -361,6 +373,7 @@ def regenerate_grocery_list(db: Session, user: User, plan: WeeklyPlan) -> Grocer
                 category=category_for(name),
                 walmart_search_url=walmart.build_search_url(name),
                 match_status="search_link",
+                is_checked=checked.get((name, _unit), False),
                 notes=item["notes"],
             )
         )

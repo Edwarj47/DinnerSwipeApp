@@ -9,8 +9,12 @@ type PlannerState = {
   selectedRecipes: Recipe[];
   history: SwipeAction[];
   offlineQueue: SwipeAction[];
+  shuffleVersion: number;
   addSwipe: (action: SwipeAction) => void;
   undo: () => SwipeAction | undefined;
+  resetSession: () => void;
+  returnToDiscover: (recipeIds: string[]) => void;
+  restartDiscover: () => void;
 };
 
 export const usePlannerStore = create<PlannerState>((set, get) => ({
@@ -18,6 +22,15 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   selectedRecipes: [],
   history: [],
   offlineQueue: [],
+  shuffleVersion: 0,
+  resetSession: () => set({ sessionId: Math.random().toString(36).slice(2), selectedRecipes: [], history: [], offlineQueue: [] }),
+  returnToDiscover: (recipeIds) => set(state => ({
+    history: state.history.filter(item => item.action === "hide" || !recipeIds.includes(item.recipe.id)),
+    selectedRecipes: state.selectedRecipes.filter(recipe => !recipeIds.includes(recipe.id)),
+    offlineQueue: state.offlineQueue.filter(item => !recipeIds.includes(item.recipe.id)),
+    shuffleVersion: state.shuffleVersion + 1
+  })),
+  restartDiscover: () => set(state => ({ history: state.history.filter(item => item.action === "hide"), shuffleVersion: state.shuffleVersion + 1 })),
   addSwipe: (action) =>
     set((state) => ({
       history: [...state.history, action],
@@ -39,4 +52,3 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     return last;
   }
 }));
-

@@ -328,6 +328,10 @@ class WeeklyPlanOut(ApiModel):
     slots: list[dict[str, Any]]
 
 
+class WeeklyPlanReset(ApiModel):
+    slot_date: date | None = None
+
+
 GroceryRetailer = Literal["walmart", "publix", "kroger", "instacart"]
 
 

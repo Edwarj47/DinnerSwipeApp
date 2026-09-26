@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useLocalSearchParams, useRouter } from "expo-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { BrandLogo } from "@/components/BrandLogo";
@@ -13,24 +13,40 @@ import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
 import { apiFetch } from "@/services/api";
 import { Recipe, WeeklyPlan } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
+import { shuffleRecipes } from "@/features/discover/deck";
 
 export default function DiscoverScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ replace_slot_id?: string; replace_name?: string }>();
   const queryClient = useQueryClient();
   const cardRef = useRef<MealCardHandle>(null);
-  const { sessionId, addSwipe, undo, selectedRecipes, history } = usePlannerStore();
-  const [index, setIndex] = useState(0);
+  const { sessionId, addSwipe, undo, history, shuffleVersion, restartDiscover, returnToDiscover } = usePlannerStore();
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [status, setStatus] = useState("");
-  const { data, isLoading, error } = useQuery({ queryKey: ["recipes"], queryFn: () => apiFetch<Recipe[]>("/api/v1/recipes") });
+  const { data, isLoading, isFetching, error, refetch } = useQuery<Recipe[]>({ queryKey: ["recipes", "discover"], queryFn: async () => {
+    const all: Recipe[] = [];
+    for (let offset = 0; ; offset += 100) {
+      const page = await apiFetch<Recipe[]>(`/api/v1/recipes?limit=100&offset=${offset}`);
+      all.push(...page);
+      if (page.length < 100) return all;
+    }
+  }, retry: false });
+  const plan = useQuery<WeeklyPlan>({ queryKey: ["weekly-plan"], queryFn: () => apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current"), retry: false });
+  useFocusEffect(useCallback(() => { restartDiscover(); }, [restartDiscover]));
   const replaceSlotId = typeof params.replace_slot_id === "string" ? params.replace_slot_id : "";
   const replaceName = typeof params.replace_name === "string" ? params.replace_name : "this slot";
   const isReplacingSlot = Boolean(replaceSlotId);
   const swipe = useMutation({
     mutationFn: (payload: { recipe_id: string; action: string; session_id: string }) =>
       apiFetch("/api/v1/recipes/swipes", { method: "POST", body: JSON.stringify(payload) }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["weekly-plan"] })
+    onSuccess: async (_, payload) => {
+      await queryClient.invalidateQueries({ queryKey: ["weekly-plan"] });
+      if (payload.action === "hide" || payload.action === "favorite") await queryClient.invalidateQueries({ queryKey: ["recipes"] });
+    },
+    onError: (error, payload) => {
+      returnToDiscover([payload.recipe_id]);
+      setStatus(error instanceof Error ? error.message : "Couldn't save this choice. Please try again.");
+    }
   });
   const replaceSlot = useMutation({
     mutationFn: ({ slotId, recipeId }: { slotId: string; recipeId: string }) =>
@@ -71,13 +87,16 @@ export default function DiscoverScreen() {
     },
     onError: (error) => setStatus(error instanceof Error ? error.message : "Unable to undo the planned dinner.")
   });
-  const recipes = data ?? [];
-  const current = recipes[index];
-  const target = 5;
-  const complete = !isReplacingSlot && selectedRecipes.length >= target;
-  const progressText = isReplacingSlot ? `Replacing ${replaceName}` : `${Math.min(selectedRecipes.length, target)} of ${target} dinners`;
+  const recipes = useMemo(() => shuffleRecipes<Recipe>(data ?? [], `${sessionId}-${shuffleVersion}`), [data, sessionId, shuffleVersion]);
+  const plannedIds = new Set(plan.data?.slots.flatMap((slot: WeeklyPlan["slots"][number]) => slot.recipe_id ? [slot.recipe_id] : []) ?? []);
+  const seenIds = new Set(history.map(item => item.recipe.id));
+  const current = recipes.find(recipe => !recipe.is_hidden && !plannedIds.has(recipe.id) && !seenIds.has(recipe.id));
+  const target = plan.data?.meal_target ?? 5;
+  const plannedCount = plan.data?.slots.filter((slot: WeeklyPlan["slots"][number]) => slot.slot_type === "meal" && slot.recipe_id).length ?? 0;
+  const complete = !isReplacingSlot && plannedCount >= target;
+  const progressText = isReplacingSlot ? `Replacing ${replaceName}` : `${plannedCount} of ${target} dinners`;
   const lastAction = history[history.length - 1];
-  const canUndoPlannedMeal = !isReplacingSlot && lastAction?.action === "add" && !undoPlannedMeal.isPending;
+  const canUndoPlannedMeal = !isReplacingSlot && lastAction?.action === "add" && !undoPlannedMeal.isPending && !swipe.isPending;
 
   const headline = useMemo(
     () => (isReplacingSlot ? "Pick replacement" : complete ? "Week filled" : "Find dinners"),
@@ -92,12 +111,10 @@ export default function DiscoverScreen() {
     if (!current) return;
     if (isReplacingSlot && action === "add") {
       replaceSlot.mutate({ slotId: replaceSlotId, recipeId: current.id });
-      setIndex((value) => value + 1);
       return;
     }
     addSwipe({ recipe: current, action });
     swipe.mutate({ recipe_id: current.id, action, session_id: sessionId });
-    setIndex((value) => value + 1);
   }
 
   function actFromDetails(action: "add" | "skip" | "favorite" | "hide") {
@@ -125,19 +142,36 @@ export default function DiscoverScreen() {
             icon="arrow-undo"
             disabled={!canUndoPlannedMeal}
             onPress={() => {
-              const restored = undo();
-              if (restored?.action !== "add") return;
-              setIndex((value) => Math.max(0, value - 1));
-              undoPlannedMeal.mutate(restored.recipe.id);
+              if (lastAction?.action !== "add") return;
+              undoPlannedMeal.mutate(lastAction.recipe.id, { onSuccess: () => { undo(); } });
             }}
           />
         ) : null}
       </View>
       <OnboardingNextStepCard />
       {status ? <Text style={styles.status}>{status}</Text> : null}
-      {isLoading ? <ActivityIndicator color={Colors.tomato} /> : null}
-      {error ? <Text style={styles.error}>Sign in from Profile, then seed and refresh recipes.</Text> : null}
-      {complete ? (
+      {isLoading || plan.isLoading ? (
+        <View style={styles.empty}>
+          <ActivityIndicator color={Colors.tomato} />
+          <Text style={styles.emptyCopy}>Loading your recipes...</Text>
+        </View>
+      ) : error || plan.isError ? (
+        <View style={styles.empty}>
+          <Text accessibilityRole="alert" style={styles.done}>Couldn't load your recipes</Text>
+          <Text style={styles.emptyCopy}>Check your connection and try again.</Text>
+          <Button label={isFetching || plan.isFetching ? "Trying again..." : "Try again"} icon="refresh" disabled={isFetching || plan.isFetching} onPress={() => { void refetch(); void plan.refetch(); }} />
+        </View>
+      ) : recipes.length === 0 ? (
+        <View style={styles.empty}>
+          <BrandLogo size={72} framed />
+          <Text style={styles.done}>Add your first recipe</Text>
+          <Text style={styles.emptyCopy}>Start with a dinner you love.</Text>
+          <View style={styles.emptyActions}>
+            <Button label="Add from a link" icon="link" variant="primary" onPress={() => router.push("/recipes?mode=add&method=web")} />
+            <Button label="Enter a recipe" icon="create-outline" onPress={() => router.push("/recipes?mode=add&method=manual")} />
+          </View>
+        </View>
+      ) : complete ? (
         <View style={styles.empty}>
           <Text style={styles.done}>Your dinner slots are filled.</Text>
           <Link href="/week" style={styles.link}>Review this week</Link>
@@ -146,8 +180,10 @@ export default function DiscoverScreen() {
         <MealCard key={current.id} ref={cardRef} recipe={current} onAction={act} onOpen={() => setSelectedRecipe(current)} />
       ) : (
         <View style={styles.empty}>
-          <Text style={styles.done}>No more meals in this session.</Text>
-          <Button label="Start over" icon="refresh" onPress={() => setIndex(0)} />
+          <Text style={styles.done}>You're caught up</Text>
+          <Text style={styles.emptyCopy}>You've seen every recipe in this session.</Text>
+          <Button label="Shuffle again" icon="shuffle" onPress={restartDiscover} />
+          <Button label="Add a recipe" icon="add" onPress={() => router.push("/recipes?mode=add")} />
         </View>
       )}
       <RecipeDetailSheet
@@ -167,8 +203,9 @@ const styles = StyleSheet.create({
   eyebrow: { color: Colors.basil, fontWeight: "800", textTransform: "uppercase", fontSize: 12 },
   title: { color: Colors.ink, fontSize: 32, fontWeight: "900" },
   status: { color: Colors.basil, fontWeight: "800", marginBottom: 10 },
-  error: { color: Colors.danger, marginBottom: 12 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
+  emptyCopy: { color: Colors.muted, textAlign: "center", lineHeight: 22, maxWidth: 360 },
+  emptyActions: { width: "100%", maxWidth: 320, gap: 10 },
   done: { fontSize: 22, fontWeight: "800", color: Colors.ink, textAlign: "center" },
   link: { color: Colors.blue, fontWeight: "800", fontSize: 16 }
 });

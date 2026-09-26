@@ -1,6 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, usePathname } from "expo-router";
-import { ReactNode, useCallback, useEffect, useState } from "react";
+import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -18,6 +18,8 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
 import { Colors } from "@/components/theme";
+import { AuthSessionContext } from "@/services/session";
+import { usePlannerStore } from "@/stores/plannerStore";
 import {
   addAuthChangeListener,
   apiFetch,
@@ -46,6 +48,9 @@ export function AuthGate({ children }: Props) {
   const queryClient = useQueryClient();
   const [checking, setChecking] = useState(true);
   const [authenticated, setAuthenticated] = useState(false);
+  const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const sessionCheck = useRef(0);
+  const previousEmail = useRef<string | null>(null);
   const [authMode, setAuthMode] = useState<AuthMode>("choice");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -57,26 +62,49 @@ export function AuthGate({ children }: Props) {
   const [enableBiometricAfterAuth, setEnableBiometricAfterAuth] = useState(false);
 
   const checkSession = useCallback(async () => {
+    const check = ++sessionCheck.current;
     if (PUBLIC_PATHS.has(pathname)) {
       setChecking(false);
       return;
     }
     const [token, refreshToken] = await Promise.all([getToken(), getRefreshToken()]);
+    if (check !== sessionCheck.current) return;
     if (!token && !refreshToken) {
+      if (previousEmail.current) {
+        previousEmail.current = null;
+        void queryClient.cancelQueries();
+        queryClient.clear();
+        usePlannerStore.getState().resetSession();
+      }
       setAuthenticated(false);
+      setSessionEmail(null);
+      setAuthMode("choice");
+      setPassword("");
+      setConfirmPassword("");
+      setAcceptedLegal(false);
+      setStatus("");
       setChecking(false);
       return;
     }
     try {
-      await apiFetch("/api/v1/auth/status");
+      const session = await apiFetch<{ email: string }>("/api/v1/auth/status");
+      if (check !== sessionCheck.current) return;
+      if (previousEmail.current && previousEmail.current !== session.email) {
+        queryClient.clear();
+        usePlannerStore.getState().resetSession();
+      }
+      previousEmail.current = session.email;
+      setSessionEmail(session.email);
       setAuthenticated(true);
     } catch {
+      if (check !== sessionCheck.current) return;
       await clearAuthTokens();
       setAuthenticated(false);
+      setSessionEmail(null);
     } finally {
-      setChecking(false);
+      if (check === sessionCheck.current) setChecking(false);
     }
-  }, [pathname]);
+  }, [pathname, queryClient]);
 
   useEffect(() => {
     void checkSession();
@@ -150,8 +178,7 @@ export function AuthGate({ children }: Props) {
           await setBiometricPreference(true);
         }
       }
-      await queryClient.invalidateQueries();
-      setAuthenticated(true);
+      await checkSession();
     } catch (error) {
       setStatus(error instanceof Error ? error.message : "Unable to complete authentication.");
     } finally {
@@ -159,13 +186,16 @@ export function AuthGate({ children }: Props) {
     }
   }
 
-  if (PUBLIC_PATHS.has(pathname) || authenticated) return children;
+  const session = { authenticated, email: sessionEmail };
+  if (PUBLIC_PATHS.has(pathname) || authenticated) {
+    return <AuthSessionContext.Provider value={session}>{children}</AuthSessionContext.Provider>;
+  }
 
   const panelTitle =
     authMode === "login" ? "Welcome back" : authMode === "register" ? "Create account" : "Get started";
 
   return (
-    <>
+    <AuthSessionContext.Provider value={session}>
       {children}
       <SafeAreaView style={styles.overlay}>
         {checking ? (
@@ -338,20 +368,20 @@ export function AuthGate({ children }: Props) {
           </KeyboardAvoidingView>
         )}
       </SafeAreaView>
-    </>
+    </AuthSessionContext.Provider>
   );
 }
 
 const styles = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: Colors.tomato, zIndex: 20 },
   keyboard: { flex: 1 },
-  content: { flexGrow: 1, justifyContent: "center", padding: 20, gap: 20 },
+  content: { flexGrow: 1, justifyContent: "center", alignItems: "center", padding: 20, gap: 20 },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.tomato },
-  hero: { alignItems: "center", gap: 9 },
+  hero: { alignItems: "center", gap: 9, width: "100%", maxWidth: 520 },
   kicker: { color: "#fff", fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
   title: { color: "#fff", fontSize: 32, fontWeight: "900", textAlign: "center", lineHeight: 37 },
   subtitle: { color: "#ffe6e3", textAlign: "center", lineHeight: 22, maxWidth: 340 },
-  panel: { backgroundColor: Colors.surface, borderColor: "#f7d3cf", borderWidth: 1, borderRadius: 8, padding: 16, gap: 12 },
+  panel: { width: "100%", maxWidth: 520, backgroundColor: Colors.surface, borderColor: "#f7d3cf", borderWidth: 1, borderRadius: 8, padding: 16, gap: 12 },
   panelTitle: { color: Colors.ink, fontSize: 19, fontWeight: "900" },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12 },
   actions: { gap: 10 },

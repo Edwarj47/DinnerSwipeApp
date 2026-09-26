@@ -45,14 +45,12 @@ export function OnboardingNextStepCard() {
     }
   });
 
-  if (!profile.data || profile.data.onboarding_completed_at) return null;
+  if (!profile.data || profile.data.onboarding_completed_at || !recipes.data || recipes.data.length === 0 || recipes.isError) return null;
 
   const plannedCount = plan.data?.slots.filter((slot: WeeklyPlan["slots"][number]) => slot.slot_type === "meal" && slot.recipe_id).length ?? 0;
   const groceryCount = grocery.data?.items.length ?? 0;
-  const starterRecipeCount = recipes.data?.length ?? 0;
   const step = nextStep({
     hasCookPreference: Boolean(profile.data.max_cook_minutes),
-    starterRecipeCount,
     plannedCount,
     groceryCount
   });
@@ -61,8 +59,8 @@ export function OnboardingNextStepCard() {
     <View style={styles.card}>
       <View style={styles.copy}>
         <Text style={styles.kicker}>Next step</Text>
-        <Text numberOfLines={1} style={styles.title}>{step.title}</Text>
-        <Text numberOfLines={2} style={styles.body}>{step.body}</Text>
+        <Text style={styles.title}>{step.title}</Text>
+        <Text style={styles.body}>{step.body}</Text>
       </View>
       <View style={styles.actions}>
         <Button label={step.cta} icon={step.icon} variant="primary" onPress={() => router.push(step.href as never)} />
@@ -74,31 +72,20 @@ export function OnboardingNextStepCard() {
 
 function nextStep({
   hasCookPreference,
-  starterRecipeCount,
   plannedCount,
   groceryCount
 }: {
   hasCookPreference: boolean;
-  starterRecipeCount: number;
   plannedCount: number;
   groceryCount: number;
 }) {
   if (!hasCookPreference) {
     return {
       title: "Set your dinner preferences",
-      body: "Start with household size, weekly target, and max cook time so suggestions stay realistic.",
-      cta: "Profile",
-      href: "/profile",
+      body: "Choose servings, dinners per week, and cooking time.",
+      cta: "Preferences",
+      href: "/profile?section=meals",
       icon: "person-outline" as const
-    };
-  }
-  if (starterRecipeCount <= 12) {
-    return {
-      title: "Add recipes you already like",
-      body: "Starter meals are examples. Dinner Swipe gets better when your own links and manual recipes drive the deck.",
-      cta: "Add recipe",
-      href: "/recipes",
-      icon: "add-circle-outline" as const
     };
   }
   if (plannedCount === 0) {
@@ -123,7 +110,7 @@ function nextStep({
     title: "You have the basic flow",
     body: "You can keep adding recipes, invite a group, or mark onboarding done.",
     cta: "Group",
-    href: "/profile",
+      href: "/profile?section=group",
     icon: "people-outline" as const
   };
 }
