@@ -1,10 +1,68 @@
 # Expo and EAS Build Guide
 
-Run locally:
+## Phone Testing Without Metro
+
+Use the **preview** profile for regular phone UAT. It produces a standalone
+Android APK with its JavaScript bundled inside, not the development-server
+launcher. It does not require Metro, ngrok, a laptop, or a manual server URL.
+The API still requires an internet connection. See
+[Expo internal distribution](https://docs.expo.dev/tutorial/eas/internal-distribution-builds/).
+
+From the repository root, with the private Expo token already configured:
+
+```bash
+infrastructure/scripts/eas-build-android-preview.sh
+```
+
+This explicitly starts a cloud build and uses the account's EAS build allowance.
+It does not submit to either store. The CLI is pinned to `21.7.0` in both this
+helper and the GitHub workflow; update them together after validation.
+
+1. Wait for the build to finish successfully in the
+   [Dinner Swipe EAS dashboard](https://expo.dev/accounts/data-centric-software-solutions/projects/dinner-swipe/builds).
+2. Open that build's install link or QR code on Android and install its APK.
+   Android may ask permission to install from the browser.
+3. Open Dinner Swipe directly. If it asks for a development server URL, that is
+   still the old development build, not the preview APK.
+4. Test cold launch, sign-in, biometrics, email verification and return, recipe
+   import, swiping, weekly drag/reset, grocery generation, and macro edits.
+5. Repeat after force-closing the app and with no Metro server running.
+
+The preview currently shares the package ID and signing identity of the existing
+app; it is not a side-by-side staging installation. Preserve the signing key and
+increase the Android version code for new releases. If Android rejects an
+update, check signing/version codes before uninstalling and losing local data.
+
+**Current backend:** `https://dinner.dcss.dev`, including live accounts, data,
+and Stripe Checkout. Use private UAT access grants for charge-free testing; do
+not enter real payment details for a billing test. An isolated staging API,
+database, and Stripe sandbox are still roadmap work.
+
+## Manual GitHub Build
+
+`.github/workflows/mobile-preview.yml` adds **Android Preview** under Actions.
+It is manual-only: pushing a commit does not queue an EAS build.
+
+- Configure the GitHub `preview` environment and its `EXPO_TOKEN` secret; the
+  private VPS token file is not automatically available to GitHub.
+- Limit the environment to trusted branches and require approval before builds.
+- Run the workflow on the intended commit. It runs mobile checks, then queues
+  the Android preview build using existing EAS signing credentials.
+- The workflow uses `--no-wait`. A green job means the cloud build was queued,
+  **not** that the APK succeeded. Follow the printed EAS link to completion.
+- A successful build still needs physical-device testing before sharing widely.
+
+This follows [Expo's CI build flow](https://docs.expo.dev/build/building-on-ci/).
+The workflow and profile alone do not create an APK or configure GitHub secrets.
+
+## Optional Developer Sessions
+
+Use Metro only for an engineer's interactive debugging session, not regular
+tester access. Run locally:
 
 ```bash
 npm run web -w apps/mobile
-npx expo start -w apps/mobile
+npm run start -w apps/mobile
 ```
 
 Android development build:
@@ -14,16 +72,19 @@ cd /home/codexvps/Desktop/projects/dinner-swipe
 infrastructure/scripts/eas-build-android-development.sh
 ```
 
-Android development build reconnect:
+The old development build requires a reachable Metro server to reconnect:
 
 ```bash
 cd /home/codexvps/Desktop/projects/dinner-swipe
 infrastructure/scripts/current-expo-tunnel.sh
 ```
 
-Paste the printed `http://...exp.direct` URL into the Dinner Swipe development
-build's manual URL field. Do not use the default `10.0.0.25:8081` placeholder
-unless Metro is running from a computer on the same Wi-Fi network as the phone.
+The helper above only prints an existing tunnel URL. Do not start ngrok on the
+shared VPS without first resolving the hosting provider's previous tunnel
+restriction. Prefer local Wi-Fi or USB debugging when a developer session is
+actually needed. Standalone preview builds avoid this dependency entirely.
+
+## Project And Credentials
 
 The EAS profiles point native builds at `https://dinner.dcss.dev` through `EXPO_PUBLIC_API_URL`. Change this only when preparing staging or production domain variants.
 
@@ -58,15 +119,9 @@ cd apps/mobile
 npx eas-cli@latest login
 ```
 
-For non-interactive VPS or CI builds, create an Expo access token in the Expo dashboard and run:
-
-```bash
-export EXPO_TOKEN=<expo-access-token>
-cd apps/mobile
-npx eas-cli@latest build --profile production
-```
-
-Do not commit `EXPO_TOKEN`.
+For non-interactive builds, use a private Expo token file on the VPS or the
+`EXPO_TOKEN` GitHub environment secret. Do not put token values in shell history,
+logs, source files, or documentation.
 
 On the VPS, store the token outside the repository:
 
@@ -86,10 +141,17 @@ with `0600` permissions. Future Android builds can then use:
 ```bash
 cd /home/codexvps/Desktop/projects/dinner-swipe
 infrastructure/scripts/eas-build-android-development.sh
+infrastructure/scripts/eas-build-android-preview.sh
 infrastructure/scripts/eas-build-android-production.sh
 ```
 
-Android production build:
+## Store Builds
+
+The project is still on Expo SDK 51. Upgrade and validate the native toolchain
+against current store requirements before submitting. See
+[the release roadmap](store-release-and-cicd-roadmap.md).
+
+Android production build (AAB for Play, not a directly installable APK):
 
 ```bash
 cd apps/mobile
@@ -110,6 +172,10 @@ npm run build:web -w apps/mobile
 ```
 
 Package identifiers are set in `app.json`; avoid changing them after store listings are created.
+
+Over-the-air updates are **not configured** yet: there is no `expo-updates`
+dependency, runtime version policy, or update URL. Until that work and a new
+binary are complete, distribute another preview APK for client code changes.
 
 Native manual recipe photos use `expo-image-picker`; iOS includes a photo-library usage description in `app.json`.
 

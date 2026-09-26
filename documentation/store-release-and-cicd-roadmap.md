@@ -4,6 +4,8 @@ This roadmap keeps Dinner Swipe easy to edit, test, deploy, and eventually submi
 
 ## Current State
 
+Reviewed 2026-09-26. Configuration is not evidence of a finished native build.
+
 - Production web URL: `https://dinner.dcss.dev`
 - API health URL: `https://dinner.dcss.dev/api/v1/health`
 - EAS project owner: `data-centric-software-solutions`
@@ -12,10 +14,27 @@ This roadmap keeps Dinner Swipe easy to edit, test, deploy, and eventually submi
 - iOS bundle ID: `dev.dcss.dinnerswipe`
 - GitHub repo: `git@github.com:Edwarj47/DinnerSwipeApp.git`
 - Existing CI: backend lint/typecheck/tests, frontend lint/typecheck/tests/web build, Docker build validation.
+- Native app: Expo SDK 51 / React Native 0.74.5. A supported SDK/toolchain upgrade is still needed for store submission.
+- Android preview: explicit standalone APK profile, local helper, and manual-only GitHub workflow are now present. No fresh APK has been built for these updates yet.
+- EAS access was verified during this task. The most recent existing Android build is an older development client, not this preview.
+- GitHub EAS secrets, store accounts/signing, and physical-device behavior have not been verified as ready.
+- Preview currently uses the live API; isolated staging and EAS Update are not configured.
+
+## Next Milestones
+
+1. Build and install the standalone Android preview APK; complete a physical-phone smoke test without Metro.
+2. Set up a separate staging API/database, Stripe sandbox, and preview application identity before wider UAT or billing tests. Keep production data and credentials separate.
+3. Upgrade Expo and native dependencies, then add EAS Update with compatible runtime versions and separate preview/production channels. Rebuild both platforms and test update rollback.
+4. Configure store accounts, signing, regional billing, account deletion, privacy disclosures, support, crash monitoring, and review assets.
+5. Distribute through Google Play internal testing and Apple TestFlight, resolve tester issues, then submit for public review.
+
+The APK milestone does not need to wait for store approval. Store availability
+and TestFlight access are separate milestones, not consequences of a Git push.
 
 ## Fast Deployment Model
 
-The preferred short-term deployment is GitHub plus VPS Docker Compose:
+The preferred backend/web deployment is GitHub plus VPS Docker Compose. The
+following is the target flow, not a claim that automatic deployment exists yet:
 
 1. Develop in this repository.
 2. Push to GitHub.
@@ -27,6 +46,8 @@ This keeps the live route stable while allowing fast rebuilds. It also avoids ch
 
 ## CI/CD Work Still Needed
 
+- The manual **Android Preview** workflow queues an APK after frontend checks. Add a protected GitHub `preview` environment and `EXPO_TOKEN` secret before using it. A green job means queued, not a finished APK, because it uses `--no-wait`.
+- Add EAS Update after the SDK upgrade: install/configure `expo-updates`, define runtime compatibility, separate preview/production channels, require tests and production approval, and document rollback. Compatible JavaScript/assets can update without Metro; native dependencies and SDK changes require a new binary. See [EAS Update setup](https://docs.expo.dev/eas-update/getting-started/).
 - Add a deploy workflow that runs only after CI passes on `main`.
 - Add GitHub environment protection for production deploys.
 - Add SSH deploy secrets:
@@ -54,27 +75,32 @@ For the current VPS, prefer `infrastructure/scripts/build-web-static.sh` for
 fast web-only deploys. Full Docker dependency installs are slow on this host and
 should move to GitHub Actions or Azure Container Registry builds.
 
-## Development Build Path
+## Phone Testing Path
 
-Use the Android development build for phone testing while the app is changing quickly.
-
-When Metro is running on the VPS, the dev client needs the active Expo tunnel URL, not a local Wi-Fi IP. Print the current URL with:
+Use a standalone preview APK for Android UAT:
 
 ```bash
 cd /home/codexvps/Desktop/projects/dinner-swipe
-infrastructure/scripts/current-expo-tunnel.sh
+infrastructure/scripts/eas-build-android-preview.sh
 ```
 
-If Metro is not running, start it with:
+Install the completed build from its EAS link/QR code. There is no development
+server URL to enter and no Metro/ngrok dependency. The API still needs internet.
+The build uses EAS allowance and must be explicitly started; this roadmap does
+not queue it. Full instructions and GitHub prerequisites are in the
+[EAS build guide](expo-eas-build-guide.md).
 
-```bash
-cd /home/codexvps/Desktop/projects/dinner-swipe
-infrastructure/scripts/start-expo-dev-client.sh
-```
-
-Paste the printed `http://...exp.direct` URL into the Android development build's manual URL field.
+The development client remains optional for active engineering/debugging.
+Do not make tester access depend on a VPS tunnel. For iPhone, prefer TestFlight
+after the toolchain/signing work below; ad hoc previews require registered
+devices and Apple provisioning.
 
 ## Google Play Roadmap
+
+As of this review, new apps and updates must target Android 16 / API 36 from
+August 31, 2026. Upgrade the Expo/React Native toolchain and verify the built
+manifest; changing a version number alone is not sufficient.
+[Google target API requirements](https://support.google.com/googleplay/android-developer/answer/11926878?hl=en).
 
 1. Confirm the final package ID before creating the Play app. Current value: `dev.dcss.dinnerswipe`.
 2. Create or confirm the DCSS Google Play Developer account.
@@ -102,9 +128,18 @@ infrastructure/scripts/eas-build-android-production.sh
 7. Add internal testers and upload the `.aab`.
 8. Move from internal testing to closed/open/production only after smoke tests pass.
 
-Note: Google requires app setup items such as Data Safety and privacy information before broader release. Personal Play accounts created after November 13, 2023 may have additional closed-testing requirements before production access.
+Personal Play accounts created after November 13, 2023 require at least 12
+testers opted into a closed test continuously for 14 days before applying for
+production access. Confirm the account type rather than assuming this applies
+to the organization's account.
+[Google testing requirements](https://support.google.com/googleplay/android-developer/answer/14151465?hl=en).
 
 ## Apple App Store and TestFlight Roadmap
+
+Since April 28, 2026, App Store Connect uploads require Xcode 26 or later and
+the iOS 26 SDK or later. Upgrade the SDK/toolchain and verify the EAS build
+image before upload. TestFlight does not bypass these upload requirements.
+[Apple SDK requirements](https://developer.apple.com/news/upcoming-requirements/).
 
 1. Confirm the final iOS bundle ID before creating the App Store Connect record. Current value: `dev.dcss.dinnerswipe`.
 2. Create or confirm the DCSS Apple Developer Program membership.
@@ -134,16 +169,21 @@ npx eas-cli@latest build --platform ios --profile production
 
 ## Premium and Billing Decision
 
-Dinner Swipe currently has a Stripe-ready subscription foundation:
+Dinner Swipe currently implements Stripe Checkout for web subscriptions:
 
-- Basic web subscription: app access after the first free month, planned at `5.99 USD/month`.
-- Premium web subscription: Basic plus macro tracking, planned at `9.99 USD/month`.
+- Basic: a card-backed 30-day trial, then `5.99 USD/month` unless canceled.
+- Premium: Basic plus macro tracking, `9.99 USD/month`, charged immediately.
+- The September 23 UAT diagnostic verified live Stripe configuration; no paid test transaction was made. Preview currently shares that API, so use private access grants for charge-free UAT.
 
 For store release, billing must be handled carefully:
 
 - Web subscriptions can use Stripe.
-- Native iOS premium digital features generally need Apple In-App Purchase if purchasing is offered inside the app.
-- Native Android premium digital features generally need Google Play Billing if purchasing is offered inside the app.
+- Choose launch countries and either implement Apple In-App Purchase / Google Play Billing or validate the applicable regional alternative billing/link-out rules and enrollment obligations.
+- Existing generic external Stripe buttons are not evidence of a globally store-compliant native purchase flow. Do not ship them unchanged without that review.
+
+Check the current [Apple payments guidelines](https://developer.apple.com/app-store/review/guidelines/#payments)
+and [Google payments policy](https://support.google.com/googleplay/android-developer/answer/10281818?hl=en)
+for the actual storefronts before implementation or submission.
 
 Recommended MVP path:
 
@@ -171,14 +211,14 @@ Recommended MVP path:
 ## Product Readiness Before Store Submission
 
 - Finish current phone UX cleanup.
-- Verify dev-client startup and biometric resume behavior.
+- Verify standalone cold startup, background/resume, biometric cancellation, expired sessions, and offline/retry behavior on physical Android and iOS devices.
 - Verify email verification from a fresh account.
 - Verify URL recipe import and approval using live public recipe pages.
 - Verify manual recipe creation with uploaded photo.
-- Verify group creation, invite, vote, and vote summary.
+- Finish group creation and multi-group switching before promising unlimited Premium groups; verify invites, votes, ownership, and tier enforcement.
 - Verify allergens/dislikes warnings or blocking settings.
 - Verify grocery list generation and preferred grocery search links.
-- Verify data export and delete request.
+- Verify data export and end-to-end account deletion, including a web request path and retention handling. A recorded manual deletion request alone does not demonstrate that deletion is fulfilled.
 - Add crash/error monitoring before production release.
 - Add automated backups and restore drill documentation.
 - Complete a security review of auth, SSRF protections, recipe import safety, file upload limits, and secret handling.

@@ -17,7 +17,11 @@
       }
     },
     "preview": {
+      "developmentClient": false,
       "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      },
       "env": {
         "EXPO_PUBLIC_APP_NAME": "Dinner Swipe",
         "EXPO_PUBLIC_API_URL": "https://dinner.dcss.dev",

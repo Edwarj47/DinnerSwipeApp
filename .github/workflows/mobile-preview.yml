@@ -1,0 +1,37 @@
+name: Android Preview
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-preview
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    environment: preview
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      - run: npm run lint -w apps/mobile
+      - run: npm run typecheck -w apps/mobile
+      - run: npm test -w apps/mobile -- --runInBand
+      - name: Set up EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: 21.7.0
+          token: ${{ secrets.EXPO_TOKEN }}
+      - name: Queue standalone APK build
+        working-directory: apps/mobile
+        env:
+          EAS_BUILD_NO_EXPO_GO_WARNING: "true"
+        run: eas build --platform android --profile preview --non-interactive --no-wait
