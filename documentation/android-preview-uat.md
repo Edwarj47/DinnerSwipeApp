@@ -10,8 +10,27 @@ Updated 2026-09-28 for Android preview build 8.
   `8`. The standalone preview embeds JavaScript and does not require Metro.
 - Backend and web are already deployed; live database revision is
   `d8126c4ab391`. The Add meal endpoint required by builds 7 and 8 is live.
-- Owner approved GitHub push and the new APK build. Build/artifact verification
-  is pending; the completed install link will be shared privately.
+- Source commit `5ecb1d1` is pushed. EAS completed the APK on September 28 at
+  17:23 UTC; its install link is shared privately, not committed to GitHub.
+- Download and ZIP checks passed: 79,298,237 bytes. Embedded package/version
+  match the release configuration; the JavaScript bundle contains the live API
+  URL and the weekly-picks UI. Signing certificate matches build 7.
+- SHA-256: `b56fd08d5b769b5592deb1708ccacf342108e3fc081b26ddddc8478adbd3641a`.
+- Install over build 7. Artifact verification does not replace physical-phone
+  installation and feature UAT.
+
+### Frontend CI Timeout Correction
+
+The initial GitHub run passed lint, TypeScript, backend, and Docker checks but
+timed out in the native paywall test at Jest's default five-second deadline.
+Running locally with `--no-cache` reproduced it; the warm-cache run had passed.
+The first native render includes lazy React Native module transformations.
+
+Only that test now has a 20-second startup budget. Its individual async assertion
+deadlines remain unchanged. CI explicitly disables the transform cache, and all
+16 mobile tests, lint, and TypeScript checks pass in the cold-cache check. This
+test/workflow correction changes no bundled application code, so build 8 remains
+the correct APK; no additional cloud build is needed.
 
 ## Build 7 Update
 

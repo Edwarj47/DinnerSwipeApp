@@ -55,8 +55,8 @@
 - New picker tabs require a new standalone Android APK; build 7's bundled JS
   does not update from web deployment. No Metro or OTA dependency was introduced.
 - Web image `dinner-swipe-web:week-picks` is deployed at `https://dinner.dcss.dev`.
-  The owner approved GitHub push and Android preview build 8. Artifact checks
-  and the completed build record are tracked in `android-preview-uat.md`.
+  Source commit `5ecb1d1` is pushed and Android preview build 8 is complete.
+  Artifact checks and the build record are tracked in `android-preview-uat.md`.
 
 ## Verification
 
@@ -69,4 +69,5 @@
 - Existing day-drag/edge-scroll, day reset, multi-meal, group create/invite/join,
   and account-settings browser regressions also passed at all three sizes.
 - PostgreSQL backup/upgrade and endpoint smoke checks passed before live rollout.
-- Physical Android gestures and the next APK remain device UAT work.
+- The APK is built and verified; installation and physical Android gestures
+  remain device UAT work.

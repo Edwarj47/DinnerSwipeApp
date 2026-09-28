@@ -34,7 +34,8 @@ jobs:
       - run: npm ci
       - run: npm run lint -w apps/mobile
       - run: npm run typecheck -w apps/mobile
-      - run: npm test -w apps/mobile -- --runInBand
+      - name: Run mobile tests with a cold transform cache
+        run: npm test -w apps/mobile -- --runInBand --no-cache
       - run: npm run build:web -w apps/mobile
 
   docker:

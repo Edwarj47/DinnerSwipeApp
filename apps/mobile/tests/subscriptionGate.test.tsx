@@ -18,6 +18,8 @@ jest.mock("@/services/api", () => ({
   apiFetch: jest.fn()
 }));
 
+// The first native render also transforms lazy RN modules on a cold CI runner.
+// Keep the individual findBy/waitFor deadlines unchanged; only budget that startup.
 test("native paywall opens plan choices and checks out with the selected tier", async () => {
   const client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } }
@@ -52,7 +54,7 @@ test("native paywall opens plan choices and checks out with the selected tier", 
     screen.unmount();
     client.clear();
   }
-});
+}, 20_000);
 
 function ProtectedRecipes() {
   const recipes = useQuery({ queryKey: ["recipes"], queryFn: () => apiFetch<string[]>("/api/v1/recipes"), retry: false });
