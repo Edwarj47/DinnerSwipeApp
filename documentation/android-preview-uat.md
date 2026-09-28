@@ -17,7 +17,7 @@ Updated 2026-09-28 for Android preview build 9.
   on this device; a fresh process launch with a saved session still locks.
   Canceled prompts and secure-storage failures do not grant access.
 - Android version code is `9`; standalone preview still embeds JavaScript.
-- 30 mobile tests pass with a cold transform cache, alongside lint and
+- 31 mobile tests pass with a cold transform cache, alongside lint and
   TypeScript. Browser checks at 1280x900, 390x844, and 320x640 cover persisted
   confirmation on/off, day/week scopes, cancellation, profile preservation,
   and Discover beyond the legacy target. Native biometric behavior is tested

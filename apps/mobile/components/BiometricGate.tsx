@@ -74,7 +74,7 @@ export function BiometricGate({ children }: Props) {
         promptTransition.current = false;
         // Native authentication also emits AppState changes; do not prompt in a loop.
         if (promptInProgress.current || isBiometricPromptActive() ||
-          (returningFromPrompt && elapsed !== null && elapsed >= 0 && elapsed < 1000)) return;
+          (returningFromPrompt && (elapsed === null || (elapsed >= 0 && elapsed < 1000)))) return;
         void lockIfNeeded(elapsed);
       }
     });

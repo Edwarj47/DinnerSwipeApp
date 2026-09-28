@@ -123,6 +123,20 @@ test("secure storage or authentication failures never expose saved content", asy
   expect(authenticate).not.toHaveBeenCalled();
 });
 
+test("foreground arriving just after authentication succeeds does not relock immediately", async () => {
+  await setBiometricTimeout(0);
+  authenticate.mockImplementation(async () => {
+    AppState.currentState = "inactive";
+    onState("inactive");
+    return { success: true };
+  });
+  const screen = mount();
+  await screen.findByText("Private meals");
+  await transition("active", 200);
+  expect(authenticate).toHaveBeenCalledTimes(1);
+  expect(screen.getByText("Private meals")).toBeTruthy();
+});
+
 test("disabled biometrics do not prompt and invalid stored timeouts default safely", async () => {
   await setBiometricPreference(false);
   storage.set("dinnerSwipeBiometricTimeoutMinutes", "invalid");
