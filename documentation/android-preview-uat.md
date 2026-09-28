@@ -1,8 +1,26 @@
 # Android Preview UAT
 
-Prepared 2026-09-26 for the first standalone preview of the current app.
+Updated 2026-09-28 for Android preview build 7.
 
-## Build Record
+## Build 7 Update
+
+- Source commit: `415d210`; package `dev.dcss.dinnerswipe`, version `0.1.0`,
+  Android version code `7`, standalone `preview` release APK.
+- EAS finished successfully on 2026-09-28 at 00:51 UTC. The install link is shared
+  privately, not committed to the repository.
+- Downloaded APK: 79,296,783 bytes. ZIP integrity passed; embedded configuration
+  matches the package and version code. The 2,502,676-byte JavaScript bundle
+  contains the intended `https://dinner.dcss.dev` API URL.
+- Signing certificate matches build 6 exactly; install over the existing app.
+- SHA-256: `3ec058c27ed0cf959a462d403ff8e57ab92cce57753b6e183339f1fb4ff3679e`.
+- Backend rollout is pending owner approval. The new day-specific add and group
+  endpoints are not live yet. Do not treat this artifact as end-to-end deployed.
+- 48 API tests and 14 mobile tests passed; lint/types and desktop/phone-size
+  browser checks passed. Physical-device testing remains pending.
+
+## Previous Build 6
+
+### Build Record
 
 - Profile: `preview`, internal distribution, release APK, development client disabled.
 - App: `dev.dcss.dinnerswipe`, version `0.1.0`, Android version code `6`.
@@ -12,7 +30,7 @@ Prepared 2026-09-26 for the first standalone preview of the current app.
 - Backend: live `https://dinner.dcss.dev`. This is not an isolated staging environment.
 - Physical-device checks below remain pending until a tester performs them.
 
-## Artifact Verification
+### Artifact Verification
 
 - EAS completed `:app:assembleRelease`, uploaded the APK, and the build command exited 0.
 - APK downloaded successfully (HTTP 200), size 79,271,431 bytes; ZIP integrity passed.

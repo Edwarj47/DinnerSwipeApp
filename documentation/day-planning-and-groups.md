@@ -1,7 +1,8 @@
 # Day Planning And Groups
 
-Updated 2026-09-28. Source changes are local; this document is not evidence of a
-production deployment or a completed Android build.
+Updated 2026-09-28. Source commit `415d210` is pushed and Android preview build 7
+is complete. The production migration and API/web deployment are still pending
+owner approval; the APK's new group and day-specific add features need that rollout.
 
 ## Weekly Planning
 
@@ -77,7 +78,9 @@ VPS services, PostgreSQL databases, or reverse-proxy routes.
   scopes, dates/access checks, Basic/Premium limits, private recipe sharing,
   revoked invites, repeated joins, owner transfer, and isolated group votes.
 - The migration test exercises upgrade/downgrade on disposable SQLite data and
-  preserves legacy votes. Production PostgreSQL migration remains a release check.
+  preserves legacy votes. A fresh production backup was also restored to an
+  isolated, network-disabled PostgreSQL 16 container and upgraded successfully.
+  The live PostgreSQL database remains at `0db143da7f75`.
 - Mobile tests cover drop hit-testing, edge-scroll bounds and invitation parsing,
   alongside existing authentication, subscription, Discover and planner tests.
 - Playwright uses intercepted API fixtures at 1280, 390 and 320 pixel widths,
@@ -88,3 +91,13 @@ VPS services, PostgreSQL databases, or reverse-proxy routes.
   lint and type checks. The five group/migration tests were rerun after the final
   invitation concurrency change and passed.
 - Physical Android/iOS gesture and share-sheet checks remain phone UAT tasks.
+
+## Release 7 Preflight
+
+- Verified backup: `backups/postgres/dinner_swipe_20260928T004154Z_before_build7.dump`
+  (0600, ignored by Git). Restore plus upgrade reached `ca92e654710b`; every user
+  had a private kitchen afterward. The temporary database container was removed.
+- Retained rollback tags: `dinner-swipe-api:before-build7`,
+  `dinner-swipe-worker:before-build7`, `dinner-swipe-web:before-build7`.
+- Prepared API image: `dinner-swipe-api:build7-415d210`. No live service restarted.
+- Android artifact verification is recorded in `android-preview-uat.md`.

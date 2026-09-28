@@ -2,9 +2,11 @@
 
 ## Phone Testing Without Metro
 
-Android preview build 6 completed on 2026-09-26. Its artifact checks and pending
+Android preview build 7 completed on 2026-09-28. Its artifact checks and pending
 physical-device tests are recorded in the [UAT checklist](android-preview-uat.md).
 The install link is shared privately rather than committed to this repository.
+Build 7's new group and day-specific add features require the pending API/database
+rollout described in [day planning and groups](day-planning-and-groups.md).
 
 Use the **preview** profile for regular phone UAT. It produces a standalone
 Android APK with its JavaScript bundled inside, not the development-server
