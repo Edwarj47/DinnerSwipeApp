@@ -1,6 +1,17 @@
 # Android Preview UAT
 
-Updated 2026-09-28 for Android preview build 7.
+Updated 2026-09-28 for Android preview build 8.
+
+## Build 8 Update
+
+- Includes the weekly picks/all recipes picker, weekly Discover rollover, and
+  exact-slot Plan undo. Swipe counts remain stored when a plan is undone/reset.
+- Package remains `dev.dcss.dinnerswipe`, version `0.1.0`, Android version code
+  `8`. The standalone preview embeds JavaScript and does not require Metro.
+- Backend and web are already deployed; live database revision is
+  `d8126c4ab391`. The Add meal endpoint required by builds 7 and 8 is live.
+- Owner approved GitHub push and the new APK build. Build/artifact verification
+  is pending; the completed install link will be shared privately.
 
 ## Build 7 Update
 
@@ -15,11 +26,11 @@ Updated 2026-09-28 for Android preview build 7.
 - Follow-up Android tooling checks passed for both APKs: `apksigner verify`
   validates v1/v2 signatures; `aapt` confirms the same package, minimum SDK 23,
   target SDK 34, and ARM/ARM64/x86/x86_64 architectures. Only the version code
-  rises from 6 to 7. A reported phone installation failure still needs the exact
-  Android error; artifact checks are not a physical-device installation test.
+  rises from 6 to 7. The owner subsequently confirmed build 7 installed; Samsung
+  Auto Blocker had prevented the download from completing.
 - SHA-256: `3ec058c27ed0cf959a462d403ff8e57ab92cce57753b6e183339f1fb4ff3679e`.
-- Backend rollout is pending owner approval. The new day-specific add and group
-  endpoints are not live yet. Do not treat this artifact as end-to-end deployed.
+- The day-specific add and group endpoints were subsequently deployed on
+  September 28 with the weekly-picks update.
 - 48 API tests and 14 mobile tests passed; lint/types and desktop/phone-size
   browser checks passed. Physical-device testing remains pending.
 

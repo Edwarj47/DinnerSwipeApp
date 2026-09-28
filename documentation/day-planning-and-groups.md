@@ -1,8 +1,9 @@
 # Day Planning And Groups
 
-Updated 2026-09-28. Source commit `415d210` is pushed and Android preview build 7
-is complete. The production migration and API/web deployment are still pending
-owner approval; the APK's new group and day-specific add features need that rollout.
+Updated 2026-09-28. Android preview build 7 is available. The owner-approved
+production API/worker deployment and database migration are now complete through
+`d8126c4ab391`, including the day-specific Add meal endpoint needed by build 7.
+See `weekly-picks-release.md` for the newer picker and swipe-history changes.
 
 ## Weekly Planning
 
@@ -80,7 +81,8 @@ VPS services, PostgreSQL databases, or reverse-proxy routes.
 - The migration test exercises upgrade/downgrade on disposable SQLite data and
   preserves legacy votes. A fresh production backup was also restored to an
   isolated, network-disabled PostgreSQL 16 container and upgraded successfully.
-  The live PostgreSQL database remains at `0db143da7f75`.
+  The live PostgreSQL database was subsequently upgraded to `d8126c4ab391` on
+  September 28 after a new backup and restored-PostgreSQL rehearsal.
 - Mobile tests cover drop hit-testing, edge-scroll bounds and invitation parsing,
   alongside existing authentication, subscription, Discover and planner tests.
 - Playwright uses intercepted API fixtures at 1280, 390 and 320 pixel widths,

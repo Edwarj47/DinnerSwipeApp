@@ -41,3 +41,26 @@ test("reset returns only affected meals, preserves hidden choices, and reshuffle
   store.restartDiscover();
   expect(usePlannerStore.getState().history.map(item => item.action)).toEqual(["hide"]);
 });
+
+test("only a new week clears swipe history and starts a new shuffled session", () => {
+  const store = usePlannerStore.getState();
+  store.resetSession();
+  store.syncWeek("2026-09-28");
+  store.addSwipe({ recipe, action: "favorite" });
+  const firstSession = usePlannerStore.getState().sessionId;
+  store.syncWeek("2026-09-28");
+  expect(usePlannerStore.getState().history).toHaveLength(1);
+  expect(usePlannerStore.getState().sessionId).toBe(firstSession);
+  store.syncWeek("2026-10-05");
+  expect(usePlannerStore.getState().history).toHaveLength(0);
+  expect(usePlannerStore.getState().sessionId).not.toBe(firstSession);
+});
+
+test("a failed hide returns to the deck without dropping other choices", () => {
+  const store = usePlannerStore.getState();
+  store.resetSession();
+  const requestId = store.addSwipe({ recipe, action: "hide" });
+  store.addSwipe({ recipe: { ...recipe, id: "second" }, action: "skip" });
+  store.removeChoice(requestId);
+  expect(usePlannerStore.getState().history.map(choice => choice.recipe.id)).toEqual(["second"]);
+});

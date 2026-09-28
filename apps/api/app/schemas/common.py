@@ -300,7 +300,8 @@ class RecipeOut(ApiModel):
 class SwipeRequest(ApiModel):
     recipe_id: str
     action: Literal["add", "skip", "favorite", "hide"]
-    session_id: str
+    session_id: str = Field(min_length=1, max_length=36)
+    request_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class WeeklySlotIn(ApiModel):

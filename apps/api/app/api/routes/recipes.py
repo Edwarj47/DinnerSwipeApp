@@ -1,18 +1,21 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime, time, timedelta
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile
-from sqlalchemy import or_, select
+from sqlalchemy import func, or_, select
 
 from app.api.deps import BasicUser, DbDep
 from app.core.config import settings
-from app.models.entities import Favorite, HiddenRecipe, Recipe
+from app.models.entities import Favorite, HiddenRecipe, MealSwipe, Recipe, WeeklyPlanSlot
 from app.schemas.common import RecipeCreate, RecipeOut, SwipeRequest
 from app.services.media_storage import get_media_storage
 from app.services.recipes import (
     accessible_recipes_query,
+    clear_plan_slot,
     create_recipe,
+    current_week_start,
+    get_or_create_current_plan,
     record_swipe,
     serialize_recipe,
 )
@@ -28,6 +31,8 @@ def list_recipes(
     q: str | None = None,
     include_hidden: bool = False,
     owned_only: bool = False,
+    weekly_picks: bool = False,
+    apply_preferences: bool = True,
     max_total_minutes: int | None = Query(default=None, ge=1, le=1440),
     limit: int = Query(30, ge=1, le=100),
     offset: int = Query(0, ge=0),
@@ -37,8 +42,23 @@ def list_recipes(
         query = query.where(Recipe.owner_user_id == current_user.id)
     if q:
         query = query.where(Recipe.name.ilike(f"%{q}%"))
+    if weekly_picks:
+        start = datetime.combine(current_week_start(), time.min)
+        query = query.where(
+            Recipe.id.in_(
+                select(MealSwipe.recipe_id).where(
+                    MealSwipe.user_id == current_user.id,
+                    MealSwipe.created_at >= start,
+                    MealSwipe.created_at < start + timedelta(days=7),
+                    MealSwipe.action.in_(["add", "favorite"]),
+                    MealSwipe.undone_at.is_(None),
+                )
+            )
+        )
     effective_max = max_total_minutes or (
-        current_user.profile.max_cook_minutes if current_user.profile else None
+        current_user.profile.max_cook_minutes
+        if apply_preferences and current_user.profile
+        else None
     )
     if effective_max:
         query = query.where(
@@ -107,8 +127,71 @@ def archive_recipe(recipe_id: str, db: DbDep, current_user: BasicUser) -> dict[s
 
 @router.post("/swipes")
 def swipe(payload: SwipeRequest, db: DbDep, current_user: BasicUser) -> dict[str, str]:
-    record_swipe(db, current_user, payload.recipe_id, payload.action, payload.session_id)
-    return {"status": "recorded"}
+    event = record_swipe(
+        db, current_user, payload.recipe_id, payload.action, payload.session_id, payload.request_id
+    )
+    return {"status": "recorded", "swipe_id": event.id}
+
+
+@router.get("/swipes/summary")
+def swipe_summary(
+    db: DbDep,
+    current_user: BasicUser,
+    week_start: date | None = None,
+) -> dict[str, object]:
+    week = week_start or current_week_start()
+    week -= timedelta(days=week.weekday())
+    start = datetime.combine(week, time.min)
+    rows = db.execute(
+        select(
+            MealSwipe.recipe_id,
+            MealSwipe.action,
+            func.count(MealSwipe.id),
+            func.count(MealSwipe.undone_at),
+        )
+        .where(
+            MealSwipe.user_id == current_user.id,
+            MealSwipe.created_at >= start,
+            MealSwipe.created_at < start + timedelta(days=7),
+        )
+        .group_by(MealSwipe.recipe_id, MealSwipe.action)
+    ).all()
+    return {
+        "week_start": week,
+        "timezone": "UTC",
+        "counts": [
+            {"recipe_id": recipe_id, "action": action, "selections": count, "undone": undone}
+            for recipe_id, action, count, undone in rows
+        ],
+    }
+
+
+@router.post("/swipes/{request_id}/undo")
+def undo_swipe(request_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
+    plan = get_or_create_current_plan(db, current_user)
+    event = db.scalar(
+        select(MealSwipe)
+        .where(
+            MealSwipe.user_id == current_user.id,
+            MealSwipe.request_id == request_id,
+        )
+        .with_for_update()
+    )
+    if not event or event.action != "add":
+        raise HTTPException(404, "Planned choice not found")
+    if event.undone_at:
+        return {"status": "undone"}
+    slot = db.scalar(
+        select(WeeklyPlanSlot).where(
+            WeeklyPlanSlot.id == event.planned_slot_id,
+            WeeklyPlanSlot.weekly_plan_id == plan.id,
+            WeeklyPlanSlot.recipe_id == event.recipe_id,
+        )
+    )
+    if not slot:
+        raise HTTPException(409, "This dinner has changed. Review it in This Week.")
+    clear_plan_slot(db, current_user, plan, slot)
+    return {"status": "undone"}
 
 
 @router.post("/{recipe_id}/favorite")

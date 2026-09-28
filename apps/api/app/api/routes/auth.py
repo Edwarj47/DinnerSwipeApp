@@ -24,6 +24,7 @@ from app.models.entities import (
     Household,
     HouseholdMember,
     MealMacroConfirmation,
+    MealSwipe,
     Recipe,
     UrlIngestionCandidate,
     User,
@@ -430,6 +431,14 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
                 "created_at": entry.created_at.isoformat(),
             }
             for entry in macro_entries
+        ],
+        "meal_choices": [
+            {"recipe_id": choice.recipe_id, "action": choice.action,
+             "selected_at": choice.created_at.isoformat(),
+             "undone_at": choice.undone_at.isoformat() if choice.undone_at else None}
+            for choice in db.scalars(select(MealSwipe).where(
+                MealSwipe.user_id == current_user.id
+            ).order_by(MealSwipe.created_at)).all()
         ],
         "account_activity": [_audit_event_for_account_export(event) for event in audit_events],
     }

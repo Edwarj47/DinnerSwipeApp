@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
+from fastapi import HTTPException
 from sqlalchemy import Select, and_, func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
@@ -12,6 +13,7 @@ from app.models.entities import (
     GroceryListItem,
     HiddenRecipe,
     HouseholdRecipe,
+    MealMacroConfirmation,
     MealSwipe,
     PantryItem,
     Recipe,
@@ -187,9 +189,13 @@ def accessible_recipes_query(user: User, household_id: str | None = None) -> Sel
     )
 
 
+def current_week_start() -> date:
+    today = datetime.now(UTC).date()
+    return today - timedelta(days=today.weekday())
+
+
 def get_or_create_current_plan(db: Session, user: User) -> WeeklyPlan:
-    today = date.today()
-    week_start = today - timedelta(days=today.weekday())
+    week_start = current_week_start()
     plan = db.scalar(
         select(WeeklyPlan).where(WeeklyPlan.user_id == user.id, WeeklyPlan.week_start == week_start)
     )
@@ -213,8 +219,7 @@ def get_or_create_current_plan(db: Session, user: User) -> WeeklyPlan:
     return plan
 
 
-def add_recipe_to_week(db: Session, user: User, recipe_id: str) -> WeeklyPlan:
-    plan = get_or_create_current_plan(db, user)
+def add_recipe_to_week(db: Session, user: User, recipe_id: str, plan: WeeklyPlan) -> WeeklyPlanSlot:
     slot = db.scalar(
         select(WeeklyPlanSlot)
         .where(
@@ -237,12 +242,41 @@ def add_recipe_to_week(db: Session, user: User, recipe_id: str) -> WeeklyPlan:
     else:
         slot.slot_type = "meal"
         slot.recipe_id = recipe_id
-    db.commit()
-    return plan
+    db.flush()
+    return slot
 
 
-def record_swipe(db: Session, user: User, recipe_id: str, action: str, session_id: str) -> None:
-    db.add(MealSwipe(user_id=user.id, recipe_id=recipe_id, action=action, session_id=session_id))
+def record_swipe(
+    db: Session,
+    user: User,
+    recipe_id: str,
+    action: str,
+    session_id: str,
+    request_id: str | None = None,
+) -> MealSwipe:
+    plan = get_or_create_current_plan(db, user) if action == "add" else None
+    # Serialize retries for this account before checking the unique request key.
+    db.execute(select(User.id).where(User.id == user.id).with_for_update()).one()
+    if request_id:
+        previous = db.scalar(
+            select(MealSwipe).where(
+                MealSwipe.user_id == user.id, MealSwipe.request_id == request_id
+            )
+        )
+        if previous:
+            if previous.recipe_id != recipe_id or previous.action != action:
+                raise HTTPException(409, "This choice was already saved with different details.")
+            return previous
+    if not db.scalar(accessible_recipes_query(user).where(Recipe.id == recipe_id)):
+        raise HTTPException(404, "Recipe not found")
+    swipe = MealSwipe(
+        user_id=user.id,
+        recipe_id=recipe_id,
+        action=action,
+        session_id=session_id,
+        request_id=request_id,
+    )
+    db.add(swipe)
     if action == "favorite":
         if not db.scalar(
             select(Favorite).where(Favorite.user_id == user.id, Favorite.recipe_id == recipe_id)
@@ -255,9 +289,35 @@ def record_swipe(db: Session, user: User, recipe_id: str, action: str, session_i
             )
         ):
             db.add(HiddenRecipe(user_id=user.id, recipe_id=recipe_id))
-    if action == "add":
-        add_recipe_to_week(db, user, recipe_id)
+    if plan:
+        swipe.planned_slot_id = add_recipe_to_week(db, user, recipe_id, plan).id
+        db.flush()
+        regenerate_grocery_list(db, user, plan, preserve_edits=True)
     db.commit()
+    return swipe
+
+
+def retire_slot_choices(db: Session, user_id: str, slot_ids: list[str]) -> None:
+    """Keep action counts, but exclude removed plans from the weekly shortlist."""
+    if slot_ids:
+        db.query(MealSwipe).filter(
+            MealSwipe.user_id == user_id,
+            MealSwipe.planned_slot_id.in_(slot_ids),
+            MealSwipe.undone_at.is_(None),
+        ).update({MealSwipe.undone_at: datetime.utcnow()}, synchronize_session=False)
+
+
+def clear_plan_slot(db: Session, user: User, plan: WeeklyPlan, slot: WeeklyPlanSlot) -> None:
+    retire_slot_choices(db, user.id, [slot.id])
+    slot.recipe_id = None
+    slot.slot_type = "flexible"
+    slot.is_locked = False
+    db.query(MealMacroConfirmation).filter(
+        MealMacroConfirmation.weekly_plan_slot_id == slot.id,
+        MealMacroConfirmation.user_id == user.id,
+    ).update({MealMacroConfirmation.weekly_plan_slot_id: None}, synchronize_session=False)
+    db.flush()
+    regenerate_grocery_list(db, user, plan, preserve_edits=True)
 
 
 def serialize_plan(db: Session, plan: WeeklyPlan) -> dict[str, Any]:

@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { BrandLogo } from "@/components/BrandLogo";
@@ -14,13 +14,14 @@ import { apiFetch } from "@/services/api";
 import { Recipe, WeeklyPlan } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { shuffleRecipes } from "@/features/discover/deck";
+import { useCurrentWeek } from "@/features/planner/useCurrentWeek";
 
 export default function DiscoverScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ replace_slot_id?: string; replace_name?: string }>();
   const queryClient = useQueryClient();
   const cardRef = useRef<MealCardHandle>(null);
-  const { sessionId, addSwipe, undo, history, shuffleVersion, restartDiscover, returnToDiscover } = usePlannerStore();
+  const { sessionId, addSwipe, history, shuffleVersion, restartDiscover, removeChoice } = usePlannerStore();
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [status, setStatus] = useState("");
   const { data, isLoading, isFetching, error, refetch } = useQuery<Recipe[]>({ queryKey: ["recipes", "discover"], queryFn: async () => {
@@ -31,20 +32,20 @@ export default function DiscoverScreen() {
       if (page.length < 100) return all;
     }
   }, retry: false });
-  const plan = useQuery<WeeklyPlan>({ queryKey: ["weekly-plan"], queryFn: () => apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current"), retry: false });
-  useFocusEffect(useCallback(() => { restartDiscover(); }, [restartDiscover]));
+  const plan = useCurrentWeek();
   const replaceSlotId = typeof params.replace_slot_id === "string" ? params.replace_slot_id : "";
   const replaceName = typeof params.replace_name === "string" ? params.replace_name : "this slot";
   const isReplacingSlot = Boolean(replaceSlotId);
   const swipe = useMutation({
-    mutationFn: (payload: { recipe_id: string; action: string; session_id: string }) =>
+    mutationFn: (payload: { recipe_id: string; action: string; session_id: string; request_id: string }) =>
       apiFetch("/api/v1/recipes/swipes", { method: "POST", body: JSON.stringify(payload) }),
-    onSuccess: async (_, payload) => {
+    onSuccess: async () => {
       await queryClient.invalidateQueries({ queryKey: ["weekly-plan"] });
-      if (payload.action === "hide" || payload.action === "favorite") await queryClient.invalidateQueries({ queryKey: ["recipes"] });
+      await queryClient.invalidateQueries({ queryKey: ["recipes"] });
+      await queryClient.invalidateQueries({ queryKey: ["grocery"] });
     },
     onError: (error, payload) => {
-      returnToDiscover([payload.recipe_id]);
+      removeChoice(payload.request_id);
       setStatus(error instanceof Error ? error.message : "Couldn't save this choice. Please try again.");
     }
   });
@@ -65,23 +66,12 @@ export default function DiscoverScreen() {
     onError: (error) => setStatus(error instanceof Error ? error.message : "Unable to replace this dinner.")
   });
   const undoPlannedMeal = useMutation({
-    mutationFn: async (recipeId: string) => {
-      for (let attempt = 0; attempt < 4; attempt += 1) {
-        const plan = await apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current");
-        const slot = [...plan.slots]
-          .filter((item) => item.slot_type === "meal" && item.recipe_id === recipeId)
-          .sort((a, b) => b.sort_order - a.sort_order)[0];
-        if (slot) {
-          await apiFetch(`/api/v1/weekly-plans/current/slots/${slot.id}`, { method: "DELETE" });
-          return;
-        }
-        await wait(250);
-      }
-    },
+    mutationFn: (requestId: string) => apiFetch(`/api/v1/recipes/swipes/${requestId}/undo`, { method: "POST" }),
     onSuccess: async () => {
       setStatus("Planned dinner undone.");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["weekly-plan"] }),
+        queryClient.invalidateQueries({ queryKey: ["recipes"] }),
         queryClient.invalidateQueries({ queryKey: ["grocery"] })
       ]);
     },
@@ -96,7 +86,7 @@ export default function DiscoverScreen() {
   const complete = !isReplacingSlot && plannedCount >= target;
   const progressText = isReplacingSlot ? `Replacing ${replaceName}` : `${plannedCount} of ${target} dinners`;
   const lastAction = history[history.length - 1];
-  const canUndoPlannedMeal = !isReplacingSlot && lastAction?.action === "add" && !undoPlannedMeal.isPending && !swipe.isPending;
+  const canUndoPlannedMeal = !isReplacingSlot && lastAction?.action === "add" && !!lastAction.requestId && !undoPlannedMeal.isPending && !swipe.isPending;
 
   const headline = useMemo(
     () => (isReplacingSlot ? "Pick replacement" : complete ? "Week filled" : "Find dinners"),
@@ -113,8 +103,8 @@ export default function DiscoverScreen() {
       replaceSlot.mutate({ slotId: replaceSlotId, recipeId: current.id });
       return;
     }
-    addSwipe({ recipe: current, action });
-    swipe.mutate({ recipe_id: current.id, action, session_id: sessionId });
+    const requestId = addSwipe({ recipe: current, action });
+    swipe.mutate({ recipe_id: current.id, action, session_id: sessionId, request_id: requestId });
   }
 
   function actFromDetails(action: "add" | "skip" | "favorite" | "hide") {
@@ -142,8 +132,9 @@ export default function DiscoverScreen() {
             icon="arrow-undo"
             disabled={!canUndoPlannedMeal}
             onPress={() => {
-              if (lastAction?.action !== "add") return;
-              undoPlannedMeal.mutate(lastAction.recipe.id, { onSuccess: () => { undo(); } });
+              if (lastAction?.action !== "add" || !lastAction.requestId) return;
+              const requestId = lastAction.requestId;
+              undoPlannedMeal.mutate(requestId, { onSuccess: () => { removeChoice(requestId); } });
             }}
           />
         ) : null}
@@ -209,9 +200,3 @@ const styles = StyleSheet.create({
   done: { fontSize: 22, fontWeight: "800", color: Colors.ink, textAlign: "center" },
   link: { color: Colors.blue, fontWeight: "800", fontSize: 16 }
 });
-
-function wait(milliseconds: number) {
-  return new Promise((resolve) => {
-    setTimeout(resolve, milliseconds);
-  });
-}

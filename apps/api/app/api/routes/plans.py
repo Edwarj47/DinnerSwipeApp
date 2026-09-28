@@ -10,8 +10,10 @@ from app.models.entities import MealMacroConfirmation, Recipe, WeeklyPlanSlot
 from app.schemas.common import WeeklyPlanReset, WeeklySlotCreate, WeeklySlotUpdate
 from app.services.recipes import (
     accessible_recipes_query,
+    clear_plan_slot,
     get_or_create_current_plan,
     regenerate_grocery_list,
+    retire_slot_choices,
     serialize_plan,
 )
 
@@ -43,6 +45,7 @@ def reset_plan(payload: WeeklyPlanReset, db: DbDep, current_user: BasicUser) -> 
     ]
     # Logged nutrition is historical data, not part of the editable plan.
     ids = [slot.id for slot in selected]
+    retire_slot_choices(db, current_user.id, ids)
     if ids:
         db.query(MealMacroConfirmation).filter(
             MealMacroConfirmation.weekly_plan_slot_id.in_(ids),
@@ -101,6 +104,7 @@ def update_slot(
     if updates.get("slot_type") in {"leftovers", "dining_out", "flexible"}:
         updates["recipe_id"] = None
     if "recipe_id" in updates and updates["recipe_id"] != slot.recipe_id:
+        retire_slot_choices(db, current_user.id, [slot.id])
         db.query(MealMacroConfirmation).filter(
             MealMacroConfirmation.weekly_plan_slot_id == slot.id,
             MealMacroConfirmation.user_id == current_user.id,
@@ -122,15 +126,7 @@ def remove_slot(slot_id: str, db: DbDep, current_user: BasicUser) -> dict[str, o
     )
     if not slot:
         raise HTTPException(status_code=404, detail="Slot not found")
-    slot.recipe_id = None
-    slot.slot_type = "flexible"
-    slot.is_locked = False
-    db.query(MealMacroConfirmation).filter(
-        MealMacroConfirmation.weekly_plan_slot_id == slot.id,
-        MealMacroConfirmation.user_id == current_user.id,
-    ).update({MealMacroConfirmation.weekly_plan_slot_id: None}, synchronize_session=False)
-    db.flush()
-    regenerate_grocery_list(db, current_user, plan, preserve_edits=True)
+    clear_plan_slot(db, current_user, plan, slot)
     return serialize_plan(db, plan)
 
 

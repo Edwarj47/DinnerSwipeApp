@@ -2,7 +2,7 @@ import { create } from "zustand";
 
 import { Recipe } from "@/services/types";
 
-type SwipeAction = { recipe: Recipe; action: "add" | "skip" | "favorite" | "hide" };
+type SwipeAction = { recipe: Recipe; action: "add" | "skip" | "favorite" | "hide"; requestId?: string };
 
 type PlannerState = {
   sessionId: string;
@@ -10,7 +10,10 @@ type PlannerState = {
   history: SwipeAction[];
   offlineQueue: SwipeAction[];
   shuffleVersion: number;
-  addSwipe: (action: SwipeAction) => void;
+  weekStart: string | null;
+  syncWeek: (weekStart: string) => void;
+  removeChoice: (requestId: string) => void;
+  addSwipe: (action: SwipeAction) => string;
   undo: () => SwipeAction | undefined;
   resetSession: () => void;
   returnToDiscover: (recipeIds: string[]) => void;
@@ -23,7 +26,18 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   history: [],
   offlineQueue: [],
   shuffleVersion: 0,
-  resetSession: () => set({ sessionId: Math.random().toString(36).slice(2), selectedRecipes: [], history: [], offlineQueue: [] }),
+  weekStart: null,
+  resetSession: () => set({ sessionId: Math.random().toString(36).slice(2), weekStart: null, selectedRecipes: [], history: [], offlineQueue: [] }),
+  syncWeek: (weekStart) => {
+    if (get().weekStart === weekStart) return;
+    if (get().weekStart !== null) get().resetSession();
+    set({ weekStart });
+  },
+  removeChoice: (requestId) => set(state => ({
+    history: state.history.filter(item => item.requestId !== requestId),
+    selectedRecipes: state.history.filter(item => item.requestId !== requestId && item.action === "add").map(item => item.recipe),
+    offlineQueue: state.offlineQueue.filter(item => item.requestId !== requestId)
+  })),
   returnToDiscover: (recipeIds) => set(state => ({
     history: state.history.filter(item => item.action === "hide" || !recipeIds.includes(item.recipe.id)),
     selectedRecipes: state.selectedRecipes.filter(recipe => !recipeIds.includes(recipe.id)),
@@ -31,12 +45,16 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
     shuffleVersion: state.shuffleVersion + 1
   })),
   restartDiscover: () => set(state => ({ history: state.history.filter(item => item.action === "hide"), shuffleVersion: state.shuffleVersion + 1 })),
-  addSwipe: (action) =>
+  addSwipe: (action) => {
+    const requestId = action.requestId ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
+    const choice = { ...action, requestId };
     set((state) => ({
-      history: [...state.history, action],
+      history: [...state.history, choice],
       selectedRecipes: action.action === "add" ? [...state.selectedRecipes, action.recipe] : state.selectedRecipes,
-      offlineQueue: [...state.offlineQueue, action]
-    })),
+      offlineQueue: [...state.offlineQueue, choice]
+    }));
+    return requestId;
+  },
   undo: () => {
     const history = get().history;
     const last = history[history.length - 1];

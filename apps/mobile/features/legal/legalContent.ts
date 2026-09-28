@@ -2,7 +2,7 @@ export const privacySections = [
   {
     title: "Information We Collect",
     body:
-      "Dinner Swipe may collect account information, profile preferences, household and group membership, recipe data you create or import, recipe URLs you submit, uploaded photos, weekly meal plans, grocery list items, pantry exclusions, and support communications."
+      "Dinner Swipe may collect account information, profile preferences, household and group membership, recipe data you create or import, recipe URLs you submit, uploaded photos, weekly meal plans, grocery list items, pantry exclusions, and support communications. We record meal choices (plan, favorite, skip, and hide), when they happen, and when a plan is undone to provide weekly picks and understand product usage. These choices are included in your account data export."
   },
   {
     title: "Recipe And Web Ingestion Data",

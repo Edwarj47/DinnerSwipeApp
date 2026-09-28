@@ -14,6 +14,7 @@ import { PremiumStatus, WeeklyPlan } from "@/services/types";
 import { WeekDrag, WeekDragHandle, WeekDropDay } from "@/features/planner/WeekDrag";
 import { RecipePicker } from "@/features/recipes/RecipePicker";
 import { usePlannerStore } from "@/stores/plannerStore";
+import { useCurrentWeek } from "@/features/planner/useCurrentWeek";
 
 type WeeklySlot = WeeklyPlan["slots"][number];
 type SlotPatch = Partial<Omit<WeeklySlot, "id" | "recipe_name" | "recipe_photo_url" | "recipe_total_minutes" | "recipe_difficulty">>;
@@ -34,7 +35,7 @@ export default function WeekScreen() {
   const [resetScope, setResetScope] = useState<{ date: string | null; label: string } | null>(null);
   const [statusIsError, setStatusIsError] = useState(false);
   const [addDay, setAddDay] = useState<{ iso: string; label: string } | null>(null);
-  const { data, isLoading, error, refetch } = useQuery<WeeklyPlan>({ queryKey: ["weekly-plan"], queryFn: () => apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current"), retry: false });
+  const { data, isLoading, error, refetch } = useCurrentWeek();
   const subscription = useQuery({ queryKey: ["subscription-status"], queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status"), retry: false });
   const sortedSlots = useMemo(() => [...(data?.slots ?? [])].sort((a, b) => a.sort_order - b.sort_order), [data?.slots]);
   const dayOptions = useMemo(() => (data ? weekDates(data.week_start) : []), [data]);
@@ -264,7 +265,7 @@ export default function WeekScreen() {
           </WeekDropDay>
         ))}
       </WeekDrag>
-      <RecipePicker title={`Add to ${addDay?.label ?? "day"}`} visible={!!addDay} busy={addMeal.isPending} error={addMeal.error instanceof Error ? addMeal.error.message : undefined}
+      <RecipePicker weeklyChoices title={`Add to ${addDay?.label ?? "day"}`} visible={!!addDay} busy={addMeal.isPending} error={addMeal.error instanceof Error ? addMeal.error.message : undefined}
         onClose={() => setAddDay(null)} onSelect={recipe => { if (addDay) addMeal.mutate({ recipeId: recipe.id, date: addDay.iso || null }); }} />
       <Modal visible={!!resetScope} transparent animationType="fade" onRequestClose={() => { if (!reset.isPending) setResetScope(null); }}>
         <View style={styles.modalBackdrop}>
@@ -286,6 +287,7 @@ export default function WeekScreen() {
 async function invalidatePlan(queryClient: ReturnType<typeof useQueryClient>) {
   await Promise.all([
     queryClient.invalidateQueries({ queryKey: ["weekly-plan"] }),
+    queryClient.invalidateQueries({ queryKey: ["recipes", "picker"] }),
     queryClient.invalidateQueries({ queryKey: ["grocery"] })
   ]);
 }

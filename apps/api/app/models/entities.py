@@ -293,6 +293,15 @@ class MealSwipe(Base, TimestampMixin):
     recipe_id: Mapped[str] = mapped_column(ForeignKey("recipes.id"), index=True)
     action: Mapped[str] = mapped_column(String(32), nullable=False)
     session_id: Mapped[str] = mapped_column(String(36), index=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    planned_slot_id: Mapped[str | None] = mapped_column(
+        ForeignKey("weekly_plan_slots.id", ondelete="SET NULL"), nullable=True
+    )
+    undone_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    __table_args__ = (
+        UniqueConstraint("user_id", "request_id", name="uq_meal_swipe_request"),
+        Index("ix_meal_swipes_user_created", "user_id", "created_at"),
+    )
 
 
 class MealMacroConfirmation(Base, TimestampMixin):

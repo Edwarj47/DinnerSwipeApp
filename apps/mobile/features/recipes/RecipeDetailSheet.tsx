@@ -31,7 +31,7 @@ type Props = {
 
 export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props) {
   const queryClient = useQueryClient();
-  const { sessionId, addSwipe } = usePlannerStore();
+  const { sessionId, addSwipe, removeChoice } = usePlannerStore();
   const dragToClose = useMemo(
     () =>
       PanResponder.create({
@@ -46,7 +46,7 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
     [onClose]
   );
   const actionMutation = useMutation({
-    mutationFn: (payload: { recipe_id: string; action: "add" | "favorite" | "hide" }) =>
+    mutationFn: (payload: { recipe_id: string; action: "add" | "favorite" | "hide"; request_id: string }) =>
       apiFetch("/api/v1/recipes/swipes", { method: "POST", body: JSON.stringify({ ...payload, session_id: sessionId }) }),
     onSuccess: async (_result, variables) => {
       await Promise.all([
@@ -57,7 +57,8 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
       if (variables.action === "hide") {
         onClose();
       }
-    }
+    },
+    onError: (_error, payload) => removeChoice(payload.request_id)
   });
   const vote = useMutation({
     mutationFn: (payload: { recipe_id: string; vote: "yes" | "maybe" | "no" }) =>
@@ -77,8 +78,9 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
       onClose();
       return;
     }
-    addSwipe({ recipe, action: kind });
-    actionMutation.mutate({ recipe_id: recipe.id, action: kind });
+    if (actionMutation.isPending) return;
+    const requestId = addSwipe({ recipe, action: kind });
+    actionMutation.mutate({ recipe_id: recipe.id, action: kind, request_id: requestId });
   }
 
   return (
