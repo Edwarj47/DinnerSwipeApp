@@ -10,7 +10,8 @@ import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
-import { PremiumStatus, WeeklyPlan } from "@/services/types";
+import { PremiumStatus, UserProfile, WeeklyPlan } from "@/services/types";
+import { shouldConfirmPlanReset } from "@/services/profilePreferences";
 import { WeekDrag, WeekDragHandle, WeekDropDay } from "@/features/planner/WeekDrag";
 import { RecipePicker } from "@/features/recipes/RecipePicker";
 import { usePlannerStore } from "@/stores/plannerStore";
@@ -36,6 +37,7 @@ export default function WeekScreen() {
   const [statusIsError, setStatusIsError] = useState(false);
   const [addDay, setAddDay] = useState<{ iso: string; label: string } | null>(null);
   const { data, isLoading, error, refetch } = useCurrentWeek();
+  const profile = useQuery({ queryKey: ["profile"], queryFn: () => apiFetch<UserProfile>("/api/v1/profile"), retry: false });
   const subscription = useQuery({ queryKey: ["subscription-status"], queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status"), retry: false });
   const sortedSlots = useMemo(() => [...(data?.slots ?? [])].sort((a, b) => a.sort_order - b.sort_order), [data?.slots]);
   const dayOptions = useMemo(() => (data ? weekDates(data.week_start) : []), [data]);
@@ -136,17 +138,20 @@ export default function WeekScreen() {
   const premiumCheckoutReady = Boolean(subscription.data?.premium_stripe_configured);
   const busy = reset.isPending || update.isPending || remove.isPending || addMeal.isPending;
 
+  function requestReset(scope: { date: string | null; label: string }) {
+    if (busy) return;
+    if (profile.isError || shouldConfirmPlanReset(profile.data)) setResetScope(scope);
+    else reset.mutate(scope);
+  }
+
   return (
     <Screen scroll={false}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>This Week</Text>
-          <Text style={styles.subtitle}>{isLoading ? "Loading plan..." : `${plannedCount} planned - weekly goal ${data?.meal_target ?? 0}`}</Text>
+          <Text style={styles.subtitle}>{isLoading ? "Loading plan..." : `${plannedCount} ${plannedCount === 1 ? "meal" : "meals"} planned`}</Text>
         </View>
-        <Button label="Reset" icon="refresh" disabled={!data || busy} onPress={() => setResetScope({ date: null, label: "This week" })} />
-      </View>
-      <View style={styles.progressTrack}>
-        <View style={[styles.progressFill, { width: `${Math.min(100, ((plannedCount || 0) / Math.max(1, data?.meal_target ?? 1)) * 100)}%` }]} />
+        <Button label="Reset" icon="refresh" disabled={!data || busy} onPress={() => requestReset({ date: null, label: "This week" })} />
       </View>
       {status ? <Text accessibilityRole={statusIsError ? "alert" : undefined} style={[styles.status, statusIsError && styles.error]}>{status}</Text> : null}
       {error ? <Button label="Retry loading week" icon="refresh" onPress={() => { void refetch(); }} /> : null}
@@ -182,7 +187,7 @@ export default function WeekScreen() {
             <View style={styles.groupHeader}>
               <View style={{ flex: 1 }}><Text style={styles.groupTitle}>{group.label}</Text><Text style={styles.meta}>{group.short}</Text></View>
               {group.iso && group.slots.some(slot => slot.recipe_id || slot.slot_type !== "flexible") ? (
-                <Pressable accessibilityRole="button" accessibilityLabel={`Reset ${group.label}`} disabled={busy} onPress={() => setResetScope({ date: group.iso, label: group.label })} style={styles.resetDay}>
+                <Pressable accessibilityRole="button" accessibilityLabel={`Reset ${group.label}`} disabled={busy} onPress={() => requestReset({ date: group.iso, label: group.label })} style={styles.resetDay}>
                   <Ionicons name="refresh" color={Colors.muted} size={20} />
                 </Pressable>
               ) : null}
@@ -324,8 +329,6 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
   title: { fontSize: 32, fontWeight: "900", color: Colors.ink },
   subtitle: { color: Colors.muted },
-  progressTrack: { height: 8, backgroundColor: Colors.border, borderRadius: 999, overflow: "hidden", marginBottom: 10 },
-  progressFill: { height: "100%", backgroundColor: Colors.tomato, borderRadius: 999 },
   status: { color: Colors.basil, fontWeight: "800", marginBottom: 10 },
   premiumBanner: { flexDirection: "row", gap: 10, alignItems: "center", backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 10 },
   premiumTitle: { color: Colors.ink, fontWeight: "900" },

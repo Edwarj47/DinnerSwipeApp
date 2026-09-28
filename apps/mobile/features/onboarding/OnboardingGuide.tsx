@@ -28,7 +28,7 @@ const STEPS = [
   },
   {
     title: "Turn plans into groceries",
-    body: "This Week controls dinner slots. Grocery List combines selected meals and keeps pantry exclusions separate."
+    body: "Plan as many meals as you like for each day in This Week. Grocery List combines their ingredients and keeps pantry exclusions separate."
   },
   {
     title: "Invite people to vote",

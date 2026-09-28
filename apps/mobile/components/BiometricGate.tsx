@@ -2,7 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import { ActivityIndicator, AppState, AppStateStatus, StyleSheet, Text, View } from "react-native";
 
-import { BiometricSettings, authenticateForUnlock, getBiometricSettings, setBiometricPreference } from "@/services/biometrics";
+import { BiometricSettings, authenticateForUnlock, getBiometricSettings, isBiometricPromptActive, setBiometricPreference } from "@/services/biometrics";
 import { clearAuthTokens, getRefreshToken, getToken } from "@/services/api";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
@@ -21,31 +21,61 @@ export function BiometricGate({ children }: Props) {
   const [message, setMessage] = useState("");
   const lastAppState = useRef<AppStateStatus>(AppState.currentState);
   const promptInProgress = useRef(false);
+  const awaySince = useRef<number | null>(null);
+  const promptTransition = useRef(false);
+  const gateStateRef = useRef<GateState>("checking");
+  const checkVersion = useRef(0);
 
-  const lockIfNeeded = useCallback(async () => {
-    const [token, refreshToken, biometricSettings] = await Promise.all([
-      getToken(),
-      getRefreshToken(),
-      getBiometricSettings()
-    ]);
-    setSettings(biometricSettings);
-    if ((token || refreshToken) && biometricSettings.enabled && biometricSettings.supported) {
-      setGateState("locked");
-      return;
-    }
-    setGateState("unlocked");
+  const changeState = useCallback((state: GateState) => {
+    gateStateRef.current = state;
+    setGateState(state);
   }, []);
+
+  const lockIfNeeded = useCallback(async (awayMilliseconds: number | null = null) => {
+    const version = ++checkVersion.current;
+    try {
+      const [token, refreshToken, biometricSettings] = await Promise.all([
+        getToken(), getRefreshToken(), getBiometricSettings()
+      ]);
+      if (version !== checkVersion.current) return;
+      setSettings(biometricSettings);
+      if ((token || refreshToken) && biometricSettings.enabled && biometricSettings.supported) {
+        // A grace period only applies to an already unlocked, still-running session.
+        const inGrace = gateStateRef.current === "unlocked" && awayMilliseconds !== null &&
+          awayMilliseconds >= 0 && awayMilliseconds < biometricSettings.timeoutMinutes * 60_000;
+        if (!inGrace) changeState("locked");
+        return;
+      }
+      changeState("unlocked");
+    } catch {
+      if (version !== checkVersion.current) return;
+      changeState("locked");
+      setMessage("Unable to check device security. Try unlocking again.");
+    }
+  }, [changeState]);
 
   useEffect(() => {
     void lockIfNeeded();
+    return () => { checkVersion.current += 1; };
   }, [lockIfNeeded]);
 
   useEffect(() => {
     const subscription = AppState.addEventListener("change", (nextState) => {
       const previousState = lastAppState.current;
       lastAppState.current = nextState;
+      if (nextState === "inactive" || nextState === "background") {
+        awaySince.current ??= Date.now();
+        if (isBiometricPromptActive() || promptInProgress.current) promptTransition.current = true;
+      }
       if ((previousState === "inactive" || previousState === "background") && nextState === "active") {
-        void lockIfNeeded();
+        const elapsed = awaySince.current === null ? null : Date.now() - awaySince.current;
+        const returningFromPrompt = promptTransition.current;
+        awaySince.current = null;
+        promptTransition.current = false;
+        // Native authentication also emits AppState changes; do not prompt in a loop.
+        if (promptInProgress.current || isBiometricPromptActive() ||
+          (returningFromPrompt && elapsed !== null && elapsed >= 0 && elapsed < 1000)) return;
+        void lockIfNeeded(elapsed);
       }
     });
     return () => subscription.remove();
@@ -53,22 +83,26 @@ export function BiometricGate({ children }: Props) {
 
   const unlock = useCallback(async () => {
     if (promptInProgress.current) return;
+    checkVersion.current += 1;
     promptInProgress.current = true;
     setMessage("");
     try {
       const unlocked = await authenticateForUnlock();
-      if (unlocked) {
-        setGateState("unlocked");
+      if (unlocked && AppState.currentState !== "background") {
+        awaySince.current = null;
+        changeState("unlocked");
         return;
       }
       setMessage("Unlock was cancelled or not recognized.");
+    } catch {
+      setMessage("Unable to unlock. Try again or sign in with your password.");
     } finally {
       promptInProgress.current = false;
     }
-  }, []);
+  }, [changeState]);
 
   useEffect(() => {
-    if (gateState === "locked") {
+    if (gateState === "locked" && AppState.currentState !== "background") {
       void unlock();
     }
   }, [gateState, unlock]);
@@ -76,7 +110,9 @@ export function BiometricGate({ children }: Props) {
   async function usePasswordInstead() {
     await Promise.all([clearAuthTokens(), setBiometricPreference(false)]);
     queryClient.clear();
-    setGateState("unlocked");
+    checkVersion.current += 1;
+    awaySince.current = null;
+    changeState("unlocked");
   }
 
   if (gateState === "checking") {

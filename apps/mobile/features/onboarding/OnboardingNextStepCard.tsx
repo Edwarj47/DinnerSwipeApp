@@ -82,7 +82,7 @@ function nextStep({
   if (!hasCookPreference) {
     return {
       title: "Set your dinner preferences",
-      body: "Choose servings, dinners per week, and cooking time.",
+      body: "Choose default servings, cooking time, and your grocery store.",
       cta: "Preferences",
       href: "/profile?section=meals",
       icon: "person-outline" as const

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Link, useLocalSearchParams, useRouter } from "expo-router";
+import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
@@ -81,16 +81,14 @@ export default function DiscoverScreen() {
   const plannedIds = new Set(plan.data?.slots.flatMap((slot: WeeklyPlan["slots"][number]) => slot.recipe_id ? [slot.recipe_id] : []) ?? []);
   const seenIds = new Set(history.map(item => item.recipe.id));
   const current = recipes.find(recipe => !recipe.is_hidden && !plannedIds.has(recipe.id) && !seenIds.has(recipe.id));
-  const target = plan.data?.meal_target ?? 5;
   const plannedCount = plan.data?.slots.filter((slot: WeeklyPlan["slots"][number]) => slot.slot_type === "meal" && slot.recipe_id).length ?? 0;
-  const complete = !isReplacingSlot && plannedCount >= target;
-  const progressText = isReplacingSlot ? `Replacing ${replaceName}` : `${plannedCount} of ${target} dinners`;
+  const progressText = isReplacingSlot ? `Replacing ${replaceName}` : `${plannedCount} ${plannedCount === 1 ? "meal" : "meals"} planned`;
   const lastAction = history[history.length - 1];
   const canUndoPlannedMeal = !isReplacingSlot && lastAction?.action === "add" && !!lastAction.requestId && !undoPlannedMeal.isPending && !swipe.isPending;
 
   const headline = useMemo(
-    () => (isReplacingSlot ? "Pick replacement" : complete ? "Week filled" : "Find dinners"),
-    [complete, isReplacingSlot]
+    () => (isReplacingSlot ? "Pick replacement" : "Find dinners"),
+    [isReplacingSlot]
   );
 
   useEffect(() => {
@@ -161,11 +159,6 @@ export default function DiscoverScreen() {
             <Button label="Add from a link" icon="link" variant="primary" onPress={() => router.push("/recipes?mode=add&method=web")} />
             <Button label="Enter a recipe" icon="create-outline" onPress={() => router.push("/recipes?mode=add&method=manual")} />
           </View>
-        </View>
-      ) : complete ? (
-        <View style={styles.empty}>
-          <Text style={styles.done}>Your dinner slots are filled.</Text>
-          <Link href="/week" style={styles.link}>Review this week</Link>
         </View>
       ) : current ? (
         <MealCard key={current.id} ref={cardRef} recipe={current} onAction={act} onOpen={() => setSelectedRecipe(current)} />

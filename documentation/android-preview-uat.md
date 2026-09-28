@@ -1,6 +1,42 @@
 # Android Preview UAT
 
-Updated 2026-09-28 for Android preview build 8.
+Updated 2026-09-28 for Android preview build 9.
+
+## Build 9 Update
+
+- Removes the weekly meal target input, goal bar, and Discover's target-based
+  stop. The existing API field remains for older clients; it is not a meal cap.
+- Keeps default servings, optional maximum cook time, grocery store, allergens,
+  and dislikes under Food and shopping.
+- Profile > Account > Planning has a persistent "Confirm day and week resets"
+  switch, enabled by default. It uses the existing profile notification JSON;
+  neither a database migration nor an API deployment is needed. Failed/missing
+  preference reads retain confirmation. Other profile settings are preserved.
+- Biometrics default to five minutes away before locking. Profile > Account >
+  Device security offers Immediately, 1 min, 5 min, or 15 min. The choice stays
+  on this device; a fresh process launch with a saved session still locks.
+  Canceled prompts and secure-storage failures do not grant access.
+- Android version code is `9`; standalone preview still embeds JavaScript.
+- 30 mobile tests pass with a cold transform cache, alongside lint and
+  TypeScript. Browser checks at 1280x900, 390x844, and 320x640 cover persisted
+  confirmation on/off, day/week scopes, cancellation, profile preservation,
+  and Discover beyond the legacy target. Native biometric behavior is tested
+  with mocked device events; physical-phone testing is still required.
+- Build artifact verification is pending. The completed private install link
+  will be shared with the tester, not committed here. Production web is unchanged.
+
+### Build 9 Phone Checks
+
+1. Install over build 8 without uninstalling; confirm the session is retained.
+2. Enable Biometrics. Open a grocery link and return within five minutes: no
+   extra prompt. Leave for five minutes or more: unlock is required.
+3. Force-close and reopen: unlock is required even within those five minutes.
+4. Select Immediately, 1 min, or 15 min and verify the chosen timeout. Cancel
+   a prompt and check that private screens remain locked; retry should work.
+5. Turn reset confirmation off, restart, and reset one day. Only that day is
+   cleared. Whole-week Reset clears the week. Turn confirmation back on and
+   confirm Cancel makes no changes.
+6. Plan more than five meals; Discover must continue offering remaining meals.
 
 ## Build 8 Update
 

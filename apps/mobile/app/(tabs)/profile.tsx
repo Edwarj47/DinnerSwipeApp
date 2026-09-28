@@ -10,7 +10,8 @@ import { Colors } from "@/components/theme";
 import { HouseholdPanel } from "@/features/groups/HouseholdPanel";
 import { PremiumMacroPanel } from "@/features/premium/PremiumMacroPanel";
 import { apiFetch, clearAuthTokens, getRefreshToken, getToken, setAuthTokens } from "@/services/api";
-import { BiometricSettings, authenticateForUnlock, getBiometricSettings, setBiometricPreference } from "@/services/biometrics";
+import { BiometricSettings, BiometricTimeout, authenticateForUnlock, getBiometricSettings, setBiometricPreference, setBiometricTimeout } from "@/services/biometrics";
+import { saveProfilePreferences, shouldConfirmPlanReset } from "@/services/profilePreferences";
 import { openTutorial } from "@/services/tutorial";
 import { UserProfile } from "@/services/types";
 
@@ -36,7 +37,6 @@ export default function ProfileScreen() {
   const [resetToken, setResetToken] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [householdSize, setHouseholdSize] = useState("2");
-  const [weeklyTarget, setWeeklyTarget] = useState("5");
   const [maxCookMinutes, setMaxCookMinutes] = useState("");
   const [allergens, setAllergens] = useState<string[]>([]);
   const [dislikes, setDislikes] = useState<string[]>([]);
@@ -45,6 +45,7 @@ export default function ProfileScreen() {
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [biometricSettings, setBiometricSettings] = useState<BiometricSettings | null>(null);
+  const [biometricBusy, setBiometricBusy] = useState(false);
   useEffect(() => {
     if (params.reset_token) {
       setResetToken(String(params.reset_token));
@@ -61,7 +62,7 @@ export default function ProfileScreen() {
     setBiometricSettings(await getBiometricSettings());
   }, []);
   useEffect(() => {
-    void refreshBiometricSettings();
+    void refreshBiometricSettings().catch(() => setStatus("Unable to read device security settings."));
   }, [refreshBiometricSettings]);
   const authStatus = useQuery({
     queryKey: ["auth-status"],
@@ -76,7 +77,6 @@ export default function ProfileScreen() {
   useEffect(() => {
     if (!profile.data) return;
     setHouseholdSize(String(profile.data.household_size));
-    setWeeklyTarget(String(profile.data.weekly_meal_target));
     setMaxCookMinutes(profile.data.max_cook_minutes ? String(profile.data.max_cook_minutes) : "");
     setAllergens(profile.data.allergens);
     setDislikes(profile.data.disliked_ingredients);
@@ -159,22 +159,12 @@ export default function ProfileScreen() {
   });
   const saveProfile = useMutation({
     mutationFn: () =>
-      apiFetch<UserProfile>("/api/v1/profile", {
-        method: "PUT",
-        body: JSON.stringify({
+      saveProfilePreferences({
           household_size: Number(householdSize) || 2,
-          weekly_meal_target: Number(weeklyTarget) || 5,
           max_cook_minutes: maxCookMinutes ? Number(maxCookMinutes) : null,
-          difficulty_preference: profile.data?.difficulty_preference ?? null,
-          dietary_preferences: profile.data?.dietary_preferences ?? [],
           allergens: cleanList(allergens),
           disliked_ingredients: cleanList(dislikes),
-          favorite_proteins: profile.data?.favorite_proteins ?? [],
-          budget_preference: profile.data?.budget_preference ?? null,
-          walmart_zip: profile.data?.walmart_zip ?? null,
-          preferred_grocery_retailer: preferredRetailer,
-          notification_preferences: profile.data?.notification_preferences ?? {}
-        })
+          preferred_grocery_retailer: preferredRetailer
       }),
     onSuccess: async () => {
       setStatus("Preferences saved.");
@@ -187,6 +177,21 @@ export default function ProfileScreen() {
     },
     onError: (error) => setStatus(String(error))
   });
+  const resetPreference = useMutation({
+    mutationFn: (enabled: boolean) => saveProfilePreferences({ notification_preferences: { confirm_plan_reset: enabled } }),
+    onSuccess: (data) => {
+      queryClient.setQueryData(["profile"], data);
+      setStatus("Reset preference saved.");
+    },
+    onError: () => setStatus("Couldn't save reset preference. Try again.")
+  });
+  async function updateBiometricSetting(action: () => Promise<void>) {
+    if (biometricBusy) return;
+    setBiometricBusy(true);
+    try { await action(); }
+    catch { setStatus("Couldn't save device security settings. Try again."); }
+    finally { setBiometricBusy(false); }
+  }
   async function toggleBiometrics(enabled: boolean) {
     const settings = await getBiometricSettings();
     if (enabled) {
@@ -214,7 +219,6 @@ export default function ProfileScreen() {
   return (
     <Screen>
       <Text style={styles.title}>Profile</Text>
-      <Text style={styles.subtitle}>Manage the account, meal preferences, group voting, and premium macros from focused sections.</Text>
       <SegmentedControl
         accessibilityLabel="Profile sections"
         value={section}
@@ -306,6 +310,20 @@ export default function ProfileScreen() {
             ) : null}
           </View>
           <View style={styles.panel}>
+            <Text style={styles.section}>Planning</Text>
+            <View style={styles.toggleRow}>
+              <Text style={[styles.toggleTitle, styles.toggleCopy]}>Confirm day and week resets</Text>
+              <Switch
+                accessibilityLabel="Confirm day and week resets"
+                value={shouldConfirmPlanReset(profile.data)}
+                disabled={!profile.data || profile.isError || resetPreference.isPending || saveProfile.isPending}
+                onValueChange={(value) => resetPreference.mutate(value)}
+                thumbColor={shouldConfirmPlanReset(profile.data) ? Colors.tomato : Colors.surface}
+                trackColor={{ false: Colors.border, true: "#f4aaa8" }}
+              />
+            </View>
+          </View>
+          <View style={styles.panel}>
             <Text style={styles.section}>Device security</Text>
             <View style={styles.toggleRow}>
               <View style={styles.toggleCopy}>
@@ -314,25 +332,43 @@ export default function ProfileScreen() {
               <Switch
                 accessibilityLabel="Enable Biometrics"
                 value={Boolean(biometricSettings?.enabled)}
-                disabled={Platform.OS === "web"}
+                disabled={Platform.OS === "web" || biometricBusy || !biometricSettings}
                 onValueChange={(value) => {
-                  void toggleBiometrics(value);
+                  void updateBiometricSetting(() => toggleBiometrics(value));
                 }}
                 thumbColor={biometricSettings?.enabled ? Colors.tomato : Colors.surface}
                 trackColor={{ false: Colors.border, true: "#f4aaa8" }}
               />
             </View>
+            {biometricSettings?.enabled ? (
+              <View style={styles.retailerPicker}>
+                <Text style={styles.inputLabel}>Lock after leaving the app</Text>
+                <View style={styles.timeoutOptions}>
+                  {([0, 1, 5, 15] as BiometricTimeout[]).map(minutes => (
+                    <Pressable key={minutes} accessibilityRole="radio" accessibilityLabel={minutes === 0 ? "Lock immediately" : `Lock after ${minutes} minutes`}
+                      accessibilityState={{ checked: biometricSettings.timeoutMinutes === minutes, disabled: biometricBusy }} disabled={biometricBusy}
+                      style={[styles.timeoutOption, biometricSettings.timeoutMinutes === minutes && styles.timeoutSelected]}
+                      onPress={() => { void updateBiometricSetting(async () => {
+                        await setBiometricTimeout(minutes);
+                        await refreshBiometricSettings();
+                        setStatus("Lock timeout saved.");
+                      }); }}>
+                      <Text style={biometricSettings.timeoutMinutes === minutes ? styles.timeoutSelectedText : styles.meta}>{minutes === 0 ? "Immediately" : `${minutes} min`}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </View>
+            ) : null}
           </View>
         </>
       ) : null}
       {section === "meals" ? (
         <View style={styles.panel}>
-          <Text style={styles.section}>Meal preferences</Text>
-          <View style={styles.grid}>
-            <TextInput accessibilityLabel="Household size" value={householdSize} onChangeText={setHouseholdSize} keyboardType="number-pad" placeholder="Household size" style={[styles.input, styles.gridInput]} />
-            <TextInput accessibilityLabel="Weekly dinner target" value={weeklyTarget} onChangeText={setWeeklyTarget} keyboardType="number-pad" placeholder="Weekly meals" style={[styles.input, styles.gridInput]} />
-            <TextInput accessibilityLabel="Maximum preferred cook time" value={maxCookMinutes} onChangeText={setMaxCookMinutes} keyboardType="number-pad" placeholder="Max cook minutes" style={[styles.input, styles.gridInput]} />
-          </View>
+          <Text style={styles.section}>Food and shopping</Text>
+          <Text style={styles.inputLabel}>Default servings</Text>
+          <TextInput accessibilityLabel="Default servings" value={householdSize} onChangeText={setHouseholdSize} keyboardType="number-pad" placeholder="2" style={styles.input} />
+          <Text style={styles.inputLabel}>Maximum cook time (minutes)</Text>
+          <TextInput accessibilityLabel="Maximum preferred cook time" value={maxCookMinutes} onChangeText={setMaxCookMinutes} keyboardType="number-pad" placeholder="No limit" style={styles.input} />
           <View style={styles.retailerPicker}>
             <Text style={styles.inputLabel}>Preferred grocery</Text>
             <SegmentedControl
@@ -341,7 +377,6 @@ export default function ProfileScreen() {
               onChange={setPreferredRetailer}
               options={GROCERY_RETAILER_OPTIONS}
             />
-            <Text style={styles.meta}>Grocery list search buttons will open your selected store.</Text>
           </View>
           <TagEditor
             label="Allergens"
@@ -356,7 +391,7 @@ export default function ProfileScreen() {
             onChange={setDislikes}
           />
           <Text style={styles.meta}>Allergens are stored per user. Group owners can warn or block matching recipes during group votes.</Text>
-          <Button label="Save preferences" icon="save" variant="primary" onPress={() => saveProfile.mutate()} />
+          <Button label="Save preferences" icon="save" variant="primary" disabled={!profile.data || saveProfile.isPending || resetPreference.isPending} onPress={() => saveProfile.mutate()} />
         </View>
       ) : null}
       {section === "group" ? <HouseholdPanel /> : null}
@@ -479,11 +514,12 @@ async function deliverAccountExport(data: Record<string, unknown>) {
 
 const styles = StyleSheet.create({
   title: { fontSize: 32, fontWeight: "900", color: Colors.ink },
-  subtitle: { color: Colors.muted, marginBottom: 14, lineHeight: 20 },
   panel: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 14, gap: 10, marginTop: 12 },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12 },
-  grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  gridInput: { flex: 1, minWidth: 118 },
+  timeoutOptions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  timeoutOption: { flexGrow: 1, minHeight: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.border },
+  timeoutSelected: { borderColor: Colors.tomato, backgroundColor: Colors.softRed },
+  timeoutSelectedText: { color: Colors.tomato, fontWeight: "800" },
   actions: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
   sectionHeader: { flexDirection: "row", gap: 10, alignItems: "center" },
   toolGrid: { gap: 9 },
