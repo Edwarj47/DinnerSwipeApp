@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { useEffect, useState } from "react";
+import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Household, SafetyFilterMode, VoteOption, VoteResult, VoteSummary } from "@/services/types";
+import { RecipePicker } from "@/features/recipes/RecipePicker";
+import { GroupManager } from "./GroupManager";
 
 const safetyModes: SafetyFilterMode[] = ["off", "warn", "block"];
 const safetyLabels: Record<SafetyFilterMode, string> = {
@@ -16,30 +18,26 @@ const safetyLabels: Record<SafetyFilterMode, string> = {
 
 export function HouseholdPanel() {
   const queryClient = useQueryClient();
-  const [code, setCode] = useState("");
   const [status, setStatus] = useState("");
+  const [ownerTools, setOwnerTools] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
+  const [transferTarget, setTransferTarget] = useState<{ id: string; email: string } | null>(null);
   const [maxMinutes, setMaxMinutes] = useState("");
-  const { data: household } = useQuery<Household>({ queryKey: ["household"], queryFn: () => apiFetch<Household>("/api/v1/households/current") });
-  const { data: voteOptions } = useQuery<VoteOption[]>({
-    queryKey: ["vote-options", maxMinutes],
-    queryFn: () => apiFetch<VoteOption[]>(`/api/v1/households/current/vote-options?limit=12${maxMinutes ? `&max_total_minutes=${encodeURIComponent(maxMinutes)}` : ""}`)
+  const { data: household, error: householdError, refetch: reloadHousehold } = useQuery<Household>({ queryKey: ["household"], queryFn: () => apiFetch<Household>("/api/v1/households/current") });
+  const { data: voteOptions, error: optionsError, refetch: reloadOptions } = useQuery<VoteOption[]>({
+    queryKey: ["vote-options", household?.id, maxMinutes],
+    queryFn: () => apiFetch<VoteOption[]>(`/api/v1/households/${household?.id}/vote-options?limit=50${maxMinutes ? `&max_total_minutes=${encodeURIComponent(maxMinutes)}` : ""}`),
+    enabled: !!household && !household.is_personal
   });
-  const { data: votes } = useQuery<VoteSummary>({ queryKey: ["votes"], queryFn: () => apiFetch<VoteSummary>("/api/v1/households/current/votes") });
-  const join = useMutation({
-    mutationFn: () => apiFetch<Household>("/api/v1/households/join", { method: "POST", body: JSON.stringify({ invite_code: code }) }),
-    onSuccess: async () => {
-      setStatus("Joined dinner group.");
-      setCode("");
-      await Promise.all([
-        queryClient.invalidateQueries({ queryKey: ["household"] }),
-        queryClient.invalidateQueries({ queryKey: ["vote-options"] })
-      ]);
-    },
-    onError: (error) => setStatus(String(error))
+  const { data: votes, error: votesError, refetch: reloadVotes } = useQuery<VoteSummary>({ queryKey: ["votes", household?.id], queryFn: () => apiFetch<VoteSummary>(`/api/v1/households/${household?.id}/votes`), enabled: !!household && !household.is_personal });
+  useEffect(() => { setTransferTarget(null); setOwnerTools(false); setShareOpen(false); setStatus(""); }, [household?.id]);
+  const shareRecipe = useMutation({
+    mutationFn: (id: string) => apiFetch(`/api/v1/households/${household?.id}/recipes`, { method: "POST", body: JSON.stringify({ recipe_id: id }) }),
+    onSuccess: async () => { setShareOpen(false); setStatus("Recipe shared with this group."); await queryClient.invalidateQueries({ queryKey: ["vote-options"] }); }
   });
   const updateSettings = useMutation({
     mutationFn: (payload: { allergen_filter_mode: SafetyFilterMode; dislike_filter_mode: SafetyFilterMode }) =>
-      apiFetch<Household>("/api/v1/households/current/settings", { method: "PATCH", body: JSON.stringify(payload) }),
+      apiFetch<Household>(`/api/v1/households/${household?.id}/settings`, { method: "PATCH", body: JSON.stringify(payload) }),
     onSuccess: async () => {
       setStatus("Group safety settings saved.");
       await Promise.all([
@@ -50,11 +48,13 @@ export function HouseholdPanel() {
     onError: (error) => setStatus(String(error))
   });
   const transferOwner = useMutation({
-    mutationFn: (userId: string) => apiFetch<Household>("/api/v1/households/current/transfer-owner", { method: "POST", body: JSON.stringify({ user_id: userId }) }),
+    mutationFn: (userId: string) => apiFetch<Household>(`/api/v1/households/${household?.id}/transfer-owner`, { method: "POST", body: JSON.stringify({ user_id: userId }) }),
     onSuccess: async () => {
       setStatus("Group ownership transferred.");
+      setTransferTarget(null);
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["household"] }),
+        queryClient.invalidateQueries({ queryKey: ["households"] }),
         queryClient.invalidateQueries({ queryKey: ["votes"] }),
         queryClient.invalidateQueries({ queryKey: ["vote-options"] })
       ]);
@@ -63,7 +63,7 @@ export function HouseholdPanel() {
   });
   const vote = useMutation({
     mutationFn: (payload: { recipe_id: string; vote: "yes" | "maybe" | "no" }) =>
-      apiFetch<VoteSummary>("/api/v1/households/current/votes", { method: "POST", body: JSON.stringify(payload) }),
+      apiFetch<VoteSummary>(`/api/v1/households/${household?.id}/votes`, { method: "POST", body: JSON.stringify(payload) }),
     onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["votes"] }),
     onError: (error) => setStatus(String(error))
   });
@@ -78,21 +78,13 @@ export function HouseholdPanel() {
 
   return (
     <View style={styles.panel}>
-      <Text style={styles.title}>Dinner group</Text>
-      {household ? (
-        <View style={styles.invite}>
-          <View>
-            <Text style={styles.meta}>Invite code</Text>
-            <Text style={styles.code}>{household.invite_code}</Text>
-          </View>
-          <Text style={styles.memberCount}>{household.members.length} member{household.members.length === 1 ? "" : "s"}</Text>
-        </View>
-      ) : null}
-      <View style={styles.join}>
-        <TextInput accessibilityLabel="Group invite code" value={code} onChangeText={setCode} autoCapitalize="characters" placeholder="Join code" style={styles.input} />
-        <Button label="Join" icon="people" onPress={() => join.mutate()} disabled={join.isPending || !code.trim()} />
-      </View>
+      <GroupManager current={household} />
+      {householdError ? <Button label="Retry current group" icon="refresh" onPress={() => { void reloadHousehold(); }} /> : null}
+      {household && !household.is_personal ? <>
+      <Text style={styles.title}>{household.name}</Text>
       <Text style={styles.section}>Vote this week</Text>
+      {optionsError || votesError ? <Button label="Retry group votes" icon="refresh" onPress={() => { void reloadOptions(); void reloadVotes(); }} /> : null}
+      <Button label="Share a recipe" icon="add" onPress={() => { shareRecipe.reset(); setShareOpen(true); }} />
       <View style={styles.filterRow}>
         <TextInput accessibilityLabel="Maximum cook time for group voting" value={maxMinutes} onChangeText={setMaxMinutes} keyboardType="number-pad" placeholder="Max minutes" style={styles.input} />
         <Text style={styles.meta}>Optional filter for this group vote list.</Text>
@@ -104,16 +96,17 @@ export function HouseholdPanel() {
           <Text style={styles.meta}>{majorityText(votes.top_match)} - {votes.top_match.total_votes} of {votes.total_members} voted</Text>
         </View>
       ) : null}
-      {household && votes?.can_view_voters ? (
+      {votes?.can_view_voters ? <Button label={ownerTools ? "Close group settings" : "Group settings"} icon="settings-outline" onPress={() => setOwnerTools(!ownerTools)} /> : null}
+      {ownerTools && votes?.can_view_voters ? (
         <OwnerVoteDashboard
           household={household}
           votes={votes}
           onSetSafetyMode={setSafetyMode}
-          onTransferOwner={(userId) => transferOwner.mutate(userId)}
+          onTransferOwner={(userId) => setTransferTarget(household.members.find((member: Household["members"][number]) => member.id === userId) ?? null)}
           isSaving={updateSettings.isPending || transferOwner.isPending}
         />
       ) : null}
-      {(voteOptions ?? ([] as VoteOption[])).slice(0, 4).map((option: VoteOption) => {
+      {(voteOptions ?? ([] as VoteOption[])).map((option: VoteOption) => {
         const recipe = option.recipe;
         const summary = votes?.votes.find((item: VoteResult) => item.recipe_id === recipe.id);
         return (
@@ -144,6 +137,17 @@ export function HouseholdPanel() {
         );
       })}
       {voteOptions?.length === 0 ? <Text style={styles.meta}>No recipes match the current group filters.</Text> : null}
+      <RecipePicker title="Share one of your recipes" ownedOnly visible={shareOpen} busy={shareRecipe.isPending} error={shareRecipe.error?.message} onClose={() => setShareOpen(false)} onSelect={recipe => shareRecipe.mutate(recipe.id)} />
+      <Modal visible={!!transferTarget} transparent animationType="fade" onRequestClose={() => { if (!transferOwner.isPending) setTransferTarget(null); }}>
+        <View style={styles.backdrop}><View style={styles.confirm} accessibilityViewIsModal>
+          <Text style={styles.title}>Transfer ownership?</Text>
+          <Text style={styles.meta}>{transferTarget?.email} will manage this group and its invitations. You will remain a member.</Text>
+          <Button label="Make owner" icon="swap-horizontal" disabled={transferOwner.isPending} onPress={() => { if (transferTarget) transferOwner.mutate(transferTarget.id); }} />
+          <Button label="Cancel" icon="close" disabled={transferOwner.isPending} onPress={() => setTransferTarget(null)} />
+          {transferOwner.error ? <Text accessibilityRole="alert" style={{ color: Colors.danger }}>{transferOwner.error.message}</Text> : null}
+        </View></View>
+      </Modal>
+      </> : null}
       {status ? <Text style={styles.status}>{status}</Text> : null}
     </View>
   );
@@ -279,7 +283,9 @@ function majorityText(result: VoteResult) {
 }
 
 const styles = StyleSheet.create({
-  panel: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 14, gap: 10, marginBottom: 12 },
+  panel: { gap: 10, marginBottom: 12 },
+  backdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20, backgroundColor: "rgba(0,0,0,0.45)" },
+  confirm: { width: "100%", maxWidth: 420, backgroundColor: Colors.surface, borderRadius: 8, padding: 20, gap: 14 },
   title: { fontSize: 19, fontWeight: "900", color: Colors.ink },
   invite: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   code: { color: Colors.tomatoDark, fontSize: 24, fontWeight: "900" },

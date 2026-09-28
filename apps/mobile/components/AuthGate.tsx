@@ -294,12 +294,9 @@ export function AuthGate({ children }: Props) {
                       <View style={styles.biometricRow}>
                         <View style={{ flex: 1 }}>
                           <Text style={styles.biometricTitle}>Enable Biometrics</Text>
-                          <Text style={styles.biometricText}>
-                            Use {biometricSettings?.label ?? "this device"} when Dinner Swipe opens.
-                          </Text>
                         </View>
                         <Switch
-                          accessibilityLabel="Enable biometric unlock after authentication"
+                          accessibilityLabel="Enable Biometrics"
                           value={enableBiometricAfterAuth}
                           onValueChange={setEnableBiometricAfterAuth}
                           thumbColor={enableBiometricAfterAuth ? Colors.tomato : Colors.surface}
@@ -421,6 +418,5 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.softRed
   },
   biometricTitle: { color: Colors.ink, fontWeight: "900" },
-  biometricText: { color: Colors.muted, lineHeight: 19, marginTop: 3, fontSize: 13 },
   status: { color: Colors.danger, fontWeight: "700", lineHeight: 20 }
 });

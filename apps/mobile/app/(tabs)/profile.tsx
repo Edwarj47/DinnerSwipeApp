@@ -260,15 +260,17 @@ export default function ProfileScreen() {
             <View style={styles.sectionHeader}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.section}>Account tools</Text>
-                <Text style={styles.meta}>Choose an action when you need it.</Text>
               </View>
-              {accountAction !== "overview" ? <Button label="Back" icon="arrow-back" onPress={() => setAccountAction("overview")} /> : null}
+              {accountAction !== "overview" ? <Button label="Back" icon="arrow-back" onPress={() => {
+                setDeletePassword("");
+                setDeleteConfirmation("");
+                setAccountAction(accountAction === "delete" ? "data" : "overview");
+              }} /> : null}
             </View>
             {accountAction === "overview" ? (
               <View style={styles.toolGrid}>
                 <Button label="Reset password" icon="mail-open" onPress={() => setAccountAction("reset")} />
                 <Button label="Data and legal" icon="document-text" onPress={() => setAccountAction("data")} />
-                <Button label="Delete request" icon="trash" variant="danger" onPress={() => setAccountAction("delete")} />
               </View>
             ) : null}
             {accountAction === "reset" ? (
@@ -290,6 +292,7 @@ export default function ProfileScreen() {
                   <Button label="Privacy" icon="document-text" onPress={() => router.push("/privacy" as never)} />
                   <Button label="Terms" icon="document-text" onPress={() => router.push("/terms" as never)} />
                 </View>
+                <Button label="Delete account" icon="chevron-forward" onPress={() => setAccountAction("delete")} />
               </View>
             ) : null}
             {accountAction === "delete" ? (
@@ -307,16 +310,9 @@ export default function ProfileScreen() {
             <View style={styles.toggleRow}>
               <View style={styles.toggleCopy}>
                 <Text style={styles.toggleTitle}>Enable Biometrics</Text>
-                <Text style={styles.meta}>
-                  {Platform.OS === "web"
-                    ? "Biometric unlock is available on Android and iOS builds."
-                    : biometricSettings?.supported
-                      ? `Use ${biometricSettings.label} when Dinner Swipe opens.`
-                      : "Set up Face ID, fingerprint, or a device passcode to enable this."}
-                </Text>
               </View>
               <Switch
-                accessibilityLabel="Enable biometric unlock"
+                accessibilityLabel="Enable Biometrics"
                 value={Boolean(biometricSettings?.enabled)}
                 disabled={Platform.OS === "web"}
                 onValueChange={(value) => {

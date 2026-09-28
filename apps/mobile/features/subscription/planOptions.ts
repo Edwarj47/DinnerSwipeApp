@@ -12,12 +12,13 @@ export const planFeatures: Record<SubscriptionTier, string[]> = {
   basic: [
     "Save and import your recipes",
     "Weekly meal plans and grocery lists",
-    "Group voting and shared meal choices"
+    "A private kitchen and one shared group"
   ],
   premium: [
     "Everything in Basic",
     "Daily macros from meals or manual entries",
-    "Macro targets, trends, and data exports"
+    "Macro targets, trends, and data exports",
+    "Create or join unlimited shared groups"
   ]
 };
 

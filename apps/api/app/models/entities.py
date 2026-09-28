@@ -109,6 +109,7 @@ class Household(Base, TimestampMixin):
     __tablename__ = "households"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     name: Mapped[str] = mapped_column(String(120), nullable=False)
+    is_personal: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     invite_code: Mapped[str | None] = mapped_column(String(16), unique=True, nullable=True)
     allergen_filter_mode: Mapped[str] = mapped_column(String(16), default="warn", nullable=False)
     dislike_filter_mode: Mapped[str] = mapped_column(String(16), default="warn", nullable=False)
@@ -326,6 +327,25 @@ class WeeklyPlanVote(Base, TimestampMixin):
     recipe_id: Mapped[str] = mapped_column(ForeignKey("recipes.id"), index=True)
     vote: Mapped[str] = mapped_column(String(16), default="yes")
     __table_args__ = (UniqueConstraint("weekly_plan_id", "user_id", "recipe_id"),)
+
+
+class HouseholdVote(Base, TimestampMixin):
+    __tablename__ = "household_votes"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    household_id: Mapped[str] = mapped_column(ForeignKey("households.id"), index=True)
+    week_start: Mapped[date] = mapped_column(Date, index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    recipe_id: Mapped[str] = mapped_column(ForeignKey("recipes.id"), index=True)
+    vote: Mapped[str] = mapped_column(String(16), default="yes")
+    __table_args__ = (UniqueConstraint("household_id", "week_start", "user_id", "recipe_id"),)
+
+
+class HouseholdRecipe(Base, TimestampMixin):
+    __tablename__ = "household_recipes"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    household_id: Mapped[str] = mapped_column(ForeignKey("households.id"), index=True)
+    recipe_id: Mapped[str] = mapped_column(ForeignKey("recipes.id"), index=True)
+    __table_args__ = (UniqueConstraint("household_id", "recipe_id"),)
 
 
 class Favorite(Base, TimestampMixin):

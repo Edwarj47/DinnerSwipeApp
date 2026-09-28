@@ -1,6 +1,7 @@
 # Weekly Planner And Entry Flow
 
-Updated 2026-09-25.
+Updated 2026-09-28. Implementation status and deployment notes for the latest
+changes are in `day-planning-and-groups.md`.
 
 ## Entry Flow
 
@@ -18,11 +19,14 @@ Updated 2026-09-25.
 ## Weekly Plan
 
 - Reset replaces the redundant header Groceries link. The Grocery tab remains.
-- The fixed Any/Mon-Sun row accepts meals dragged by their handles. Selecting a
-  handle and then a day is the keyboard/tap alternative; Edit also retains date
-  selection. Dragging outside a target cancels without saving.
+- Full Monday-Sunday sections accept meals dragged by their handles, with edge
+  scrolling. Tapping a handle opens a day picker as the keyboard/tap alternative;
+  Edit also retains date selection. Dropping outside a day cancels without saving.
+- Each day has an Add meal action with a searchable recipe picker. Open slots
+  are reused first; extra meals add slots without overwriting existing meals.
 - Meals are displayed under their assigned date, in Monday-Sunday order, with
-  unscheduled slots first. Multiple meals on one day are allowed; dropping a
+  unscheduled meals last. Empty placeholder slots are not shown. Multiple meals
+  on one day are allowed; dropping a
   meal never silently replaces another meal.
 - Reset requires confirmation. A day's reset clears only slots for that date
   and keeps the date available. Whole-week reset restores Profile's current
@@ -51,9 +55,9 @@ Updated 2026-09-25.
   switching, code unlock, optional tour persistence/replay, and retry states.
 - Physical Android/iOS binaries and real Stripe Checkout were not exercised.
 
-## Deployment And Rollback
+## Previous Deployment And Rollback (2026-09-25)
 
-No database migration or billing/provider change is needed. Only Dinner Swipe
+That earlier release needed no database migration or billing/provider change. Only Dinner Swipe
 web and API containers are replaced; worker and database stay running.
 
 Previous image tags:

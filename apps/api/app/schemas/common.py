@@ -321,6 +321,11 @@ class WeeklySlotUpdate(ApiModel):
     sort_order: int | None = None
 
 
+class WeeklySlotCreate(ApiModel):
+    slot_date: date | None = None
+    recipe_id: str = Field(min_length=1, max_length=36)
+
+
 class WeeklyPlanOut(ApiModel):
     id: str
     week_start: date
@@ -397,6 +402,7 @@ class UrlApprovalRequest(ApiModel):
 class HouseholdOut(ApiModel):
     id: str
     name: str
+    is_personal: bool = False
     invite_code: str
     allergen_filter_mode: Literal["off", "warn", "block"] = "warn"
     dislike_filter_mode: Literal["off", "warn", "block"] = "warn"
@@ -406,6 +412,14 @@ class HouseholdOut(ApiModel):
 
 class HouseholdJoinRequest(ApiModel):
     invite_code: str = Field(min_length=4, max_length=16)
+
+
+class HouseholdCreate(ApiModel):
+    name: str = Field(min_length=1, max_length=120)
+
+
+class HouseholdRecipeRequest(ApiModel):
+    recipe_id: str = Field(min_length=1, max_length=36)
 
 
 class HouseholdSettingsUpdate(ApiModel):

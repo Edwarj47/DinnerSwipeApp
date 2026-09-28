@@ -11,6 +11,7 @@ from app.models.entities import (
     GroceryList,
     GroceryListItem,
     HiddenRecipe,
+    HouseholdRecipe,
     MealSwipe,
     PantryItem,
     Recipe,
@@ -159,8 +160,8 @@ def create_recipe(db: Session, payload: RecipeCreate, user: User | None = None) 
     return recipe
 
 
-def accessible_recipes_query(user: User) -> Select[tuple[Recipe]]:
-    household_id = user.profile.household_id if user.profile else None
+def accessible_recipes_query(user: User, household_id: str | None = None) -> Select[tuple[Recipe]]:
+    household_id = household_id or (user.profile.household_id if user.profile else None)
     return (
         select(Recipe)
         .options(
@@ -175,6 +176,11 @@ def accessible_recipes_query(user: User) -> Select[tuple[Recipe]]:
                 Recipe.owner_user_id.is_(None),
                 Recipe.owner_user_id == user.id,
                 Recipe.household_id == household_id,
+                Recipe.id.in_(
+                    select(HouseholdRecipe.recipe_id).where(
+                        HouseholdRecipe.household_id == household_id
+                    )
+                ),
             ),
         )
         .order_by(Recipe.created_at.desc())

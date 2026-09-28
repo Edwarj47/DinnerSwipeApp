@@ -170,7 +170,6 @@ export function SubscriptionGate({ children }: Props) {
                     <Text style={styles.featureText}>{feature}</Text>
                   </View>
                 ))}
-                {!isBasic ? <Text style={styles.comingSoon}>Coming soon: create or join unlimited groups.</Text> : null}
               </View>
               <View style={styles.billingSummary}>
                 <Text style={styles.billingTitle}>{isBasic ? "First 30 days free" : monthlyPrice(premiumPrice)}</Text>

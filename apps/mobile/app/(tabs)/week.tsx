@@ -4,14 +4,15 @@ import { Image } from "expo-image";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { PremiumStatus, WeeklyPlan } from "@/services/types";
-import { WeekDrag, WeekDragHandle } from "@/features/planner/WeekDrag";
+import { WeekDrag, WeekDragHandle, WeekDropDay } from "@/features/planner/WeekDrag";
+import { RecipePicker } from "@/features/recipes/RecipePicker";
 import { usePlannerStore } from "@/stores/plannerStore";
 
 type WeeklySlot = WeeklyPlan["slots"][number];
@@ -32,18 +33,31 @@ export default function WeekScreen() {
   const [expandedSlotId, setExpandedSlotId] = useState<string | null>(null);
   const [resetScope, setResetScope] = useState<{ date: string | null; label: string } | null>(null);
   const [statusIsError, setStatusIsError] = useState(false);
+  const [addDay, setAddDay] = useState<{ iso: string; label: string } | null>(null);
   const { data, isLoading, error, refetch } = useQuery<WeeklyPlan>({ queryKey: ["weekly-plan"], queryFn: () => apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current"), retry: false });
   const subscription = useQuery({ queryKey: ["subscription-status"], queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status"), retry: false });
   const sortedSlots = useMemo(() => [...(data?.slots ?? [])].sort((a, b) => a.sort_order - b.sort_order), [data?.slots]);
   const dayOptions = useMemo(() => (data ? weekDates(data.week_start) : []), [data]);
-  const groups = [{ iso: "", label: "Unscheduled", short: "" }, ...dayOptions].map(day => ({
-    ...day, slots: sortedSlots.filter(slot => (slot.slot_date ?? "") === day.iso)
+  const groups = [...dayOptions, { iso: "", label: "Unscheduled", short: "" }].map(day => ({
+    ...day, slots: sortedSlots.filter(slot => (slot.slot_date ?? "") === day.iso && (slot.recipe_id || slot.slot_type !== "flexible"))
   }));
-  const counts = Object.fromEntries(groups.map(group => [group.iso, group.slots.filter(slot => slot.recipe_id || slot.slot_type !== "flexible").length]));
   function showError(error: unknown) {
     setStatusIsError(true);
     setStatus(error instanceof Error ? error.message : "Unable to update this week. Try again.");
   }
+  const addMeal = useMutation({
+    mutationFn: ({ recipeId, date }: { recipeId: string; date: string | null }) => apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current/slots", {
+      method: "POST", body: JSON.stringify({ recipe_id: recipeId, slot_date: date })
+    }),
+    onSuccess: async plan => {
+      queryClient.setQueryData(["weekly-plan"], plan);
+      setAddDay(null);
+      setStatusIsError(false);
+      setStatus("Meal added.");
+      await invalidatePlan(queryClient);
+    },
+    onError: showError
+  });
   const reset = useMutation({
     mutationFn: (scope: { date: string | null; label: string }) => apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current/reset", {
       method: "POST", body: JSON.stringify({ slot_date: scope.date })
@@ -119,14 +133,14 @@ export default function WeekScreen() {
   const plannedCount = sortedSlots.filter((slot) => slot.slot_type === "meal" && slot.recipe_id).length;
   const premiumActive = Boolean(subscription.data?.premium_active ?? subscription.data?.active);
   const premiumCheckoutReady = Boolean(subscription.data?.premium_stripe_configured);
-  const busy = reset.isPending || update.isPending || remove.isPending;
+  const busy = reset.isPending || update.isPending || remove.isPending || addMeal.isPending;
 
   return (
     <Screen scroll={false}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>This Week</Text>
-          <Text style={styles.subtitle}>{isLoading ? "Loading plan..." : `${plannedCount} planned - ${data?.meal_target ?? 0} dinner slots`}</Text>
+          <Text style={styles.subtitle}>{isLoading ? "Loading plan..." : `${plannedCount} planned - weekly goal ${data?.meal_target ?? 0}`}</Text>
         </View>
         <Button label="Reset" icon="refresh" disabled={!data || busy} onPress={() => setResetScope({ date: null, label: "This week" })} />
       </View>
@@ -158,20 +172,22 @@ export default function WeekScreen() {
           />
         </View>
       ) : null}
-      <WeekDrag days={dayOptions} counts={counts} disabled={busy} onAssign={(slotId, date) => {
+      <WeekDrag days={dayOptions} disabled={busy} onAssign={(slotId, date) => {
         const slot = sortedSlots.find(item => item.id === slotId);
         if (slot && slot.slot_date !== date) update.mutate({ slot, patch: { slot_date: date } });
       }}>
-      <ScrollView contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled">
         {groups.map(group => (
-          <View key={group.iso} style={styles.group}>
+          <WeekDropDay key={group.iso} day={group.iso}>
             <View style={styles.groupHeader}>
-              <Text style={styles.groupTitle}>{group.label}{group.short ? ` ${group.short}` : ""}</Text>
+              <View style={{ flex: 1 }}><Text style={styles.groupTitle}>{group.label}</Text><Text style={styles.meta}>{group.short}</Text></View>
               {group.iso && group.slots.some(slot => slot.recipe_id || slot.slot_type !== "flexible") ? (
                 <Pressable accessibilityRole="button" accessibilityLabel={`Reset ${group.label}`} disabled={busy} onPress={() => setResetScope({ date: group.iso, label: group.label })} style={styles.resetDay}>
                   <Ionicons name="refresh" color={Colors.muted} size={20} />
                 </Pressable>
               ) : null}
+              <Pressable accessibilityRole="button" accessibilityLabel={`Add meal to ${group.label}`} disabled={busy || !data} onPress={() => { addMeal.reset(); setAddDay(group); }} style={styles.addDay}>
+                <Ionicons name="add" size={20} color={Colors.tomato} /><Text style={styles.addLabel}>Add meal</Text>
+              </Pressable>
             </View>
             {!group.slots.length ? <Text style={styles.emptyDay}>No dinner planned</Text> : null}
         {group.slots.map((slot) => {
@@ -189,15 +205,10 @@ export default function WeekScreen() {
                   </Text>
                 </View>
                 <Button
-                  label={slot.recipe_id ? (isExpanded ? "Done" : "Edit") : "Find"}
-                  icon={slot.recipe_id ? (isExpanded ? "checkmark" : "create") : "search"}
-                  variant={slot.recipe_id ? "secondary" : "primary"}
+                  label={isExpanded ? "Done" : "Edit"}
+                  icon={isExpanded ? "checkmark" : "create"}
                   disabled={busy}
                   onPress={() => {
-                    if (!slot.recipe_id) {
-                      openSlotPicker(router, slot, "Pick dinner");
-                      return;
-                    }
                     setExpandedSlotId(isExpanded ? null : slot.id);
                   }}
                 />
@@ -250,10 +261,11 @@ export default function WeekScreen() {
             </View>
           );
         })}
-          </View>
+          </WeekDropDay>
         ))}
-      </ScrollView>
       </WeekDrag>
+      <RecipePicker title={`Add to ${addDay?.label ?? "day"}`} visible={!!addDay} busy={addMeal.isPending} error={addMeal.error instanceof Error ? addMeal.error.message : undefined}
+        onClose={() => setAddDay(null)} onSelect={recipe => { if (addDay) addMeal.mutate({ recipeId: recipe.id, date: addDay.iso || null }); }} />
       <Modal visible={!!resetScope} transparent animationType="fade" onRequestClose={() => { if (!reset.isPending) setResetScope(null); }}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalPanel}>
@@ -285,7 +297,7 @@ function weekDates(weekStart: string) {
     const value = new Date(start);
     value.setUTCDate(start.getUTCDate() + index);
     const iso = value.toISOString().slice(0, 10);
-    return { iso, label: DAYS[index], short: `${value.getUTCMonth() + 1}/${value.getUTCDate()}` };
+    return { iso, label: ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][index], short: `${value.getUTCMonth() + 1}/${value.getUTCDate()}` };
   });
 }
 
@@ -321,6 +333,8 @@ const styles = StyleSheet.create({
   groupHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 },
   groupTitle: { color: Colors.ink, fontWeight: "800", fontSize: 18 },
   resetDay: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  addDay: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44, paddingHorizontal: 8 },
+  addLabel: { color: Colors.tomato, fontWeight: "800" },
   emptyDay: { color: Colors.muted, paddingBottom: 12, borderBottomWidth: 1, borderColor: Colors.border },
   error: { color: Colors.danger },
   modalBackdrop: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)", padding: 20 },

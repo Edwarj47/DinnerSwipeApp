@@ -7,7 +7,7 @@ from sqlalchemy import select
 
 from app.api.deps import BasicUser, DbDep
 from app.models.entities import MealMacroConfirmation, Recipe, WeeklyPlanSlot
-from app.schemas.common import WeeklyPlanReset, WeeklySlotUpdate
+from app.schemas.common import WeeklyPlanReset, WeeklySlotCreate, WeeklySlotUpdate
 from app.services.recipes import (
     accessible_recipes_query,
     get_or_create_current_plan,
@@ -100,9 +100,15 @@ def update_slot(
         raise HTTPException(status_code=404, detail="Recipe not found")
     if updates.get("slot_type") in {"leftovers", "dining_out", "flexible"}:
         updates["recipe_id"] = None
+    if "recipe_id" in updates and updates["recipe_id"] != slot.recipe_id:
+        db.query(MealMacroConfirmation).filter(
+            MealMacroConfirmation.weekly_plan_slot_id == slot.id,
+            MealMacroConfirmation.user_id == current_user.id,
+        ).update({MealMacroConfirmation.weekly_plan_slot_id: None}, synchronize_session=False)
     for key, value in updates.items():
         setattr(slot, key, value)
-    db.commit()
+    db.flush()
+    regenerate_grocery_list(db, current_user, plan, preserve_edits=True)
     return serialize_plan(db, plan)
 
 
@@ -118,5 +124,56 @@ def remove_slot(slot_id: str, db: DbDep, current_user: BasicUser) -> dict[str, o
         raise HTTPException(status_code=404, detail="Slot not found")
     slot.recipe_id = None
     slot.slot_type = "flexible"
-    db.commit()
+    slot.is_locked = False
+    db.query(MealMacroConfirmation).filter(
+        MealMacroConfirmation.weekly_plan_slot_id == slot.id,
+        MealMacroConfirmation.user_id == current_user.id,
+    ).update({MealMacroConfirmation.weekly_plan_slot_id: None}, synchronize_session=False)
+    db.flush()
+    regenerate_grocery_list(db, current_user, plan, preserve_edits=True)
+    return serialize_plan(db, plan)
+
+
+@router.post("/current/slots")
+def add_slot(payload: WeeklySlotCreate, db: DbDep, current_user: BasicUser) -> dict[str, object]:
+    plan = get_or_create_current_plan(db, current_user)
+    if payload.slot_date and not plan.week_start <= payload.slot_date < plan.week_start + timedelta(
+        days=7
+    ):
+        raise HTTPException(status_code=422, detail="Choose a day in this week.")
+    recipe = db.scalar(accessible_recipes_query(current_user).where(Recipe.id == payload.recipe_id))
+    if not recipe:
+        raise HTTPException(status_code=404, detail="Recipe not found")
+    slots = list(
+        db.scalars(
+            select(WeeklyPlanSlot)
+            .where(WeeklyPlanSlot.weekly_plan_id == plan.id)
+            .order_by(WeeklyPlanSlot.sort_order)
+        ).all()
+    )
+    # Reuse an open place on this day, then an unscheduled place; never overwrite a meal.
+    slot = next(
+        (
+            item
+            for day in (payload.slot_date, None)
+            for item in slots
+            if item.slot_date == day
+            and item.recipe_id is None
+            and item.slot_type == "flexible"
+            and not item.is_locked
+        ),
+        None,
+    )
+    if slot is None:
+        slot = WeeklyPlanSlot(
+            weekly_plan_id=plan.id,
+            sort_order=max((item.sort_order for item in slots), default=-1) + 1,
+        )
+        db.add(slot)
+    slot.slot_date = payload.slot_date
+    slot.recipe_id = recipe.id
+    slot.slot_type = "meal"
+    slot.servings = current_user.profile.household_size if current_user.profile else 4
+    db.flush()
+    regenerate_grocery_list(db, current_user, plan, preserve_edits=True)
     return serialize_plan(db, plan)

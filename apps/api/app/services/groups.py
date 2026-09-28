@@ -5,18 +5,20 @@ import string
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import func, select
+from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
 from app.models.entities import (
     Household,
     HouseholdMember,
+    HouseholdRecipe,
+    HouseholdVote,
     Recipe,
     User,
     UserProfile,
     WeeklyPlan,
-    WeeklyPlanVote,
 )
+from app.services.billing import is_premium_active, subscription_for_user
 from app.services.parsing import normalize_name
 from app.services.recipes import (
     accessible_recipes_query,
@@ -44,19 +46,26 @@ def ensure_invite_code(db: Session, household: Household) -> str:
     return household.invite_code
 
 
-def current_household(db: Session, user: User) -> Household:
-    household_id = user.profile.household_id if user.profile else None
+def current_household(db: Session, user: User, household_id: str | None = None) -> Household:
+    if household_id == "current":
+        household_id = None
+    household_id = household_id or (user.profile.household_id if user.profile else None)
     if not household_id:
         raise HTTPException(status_code=404, detail="Household not found")
     household = db.get(Household, household_id)
-    if not household:
+    if not household or not current_member(db, user, household):
         raise HTTPException(status_code=404, detail="Household not found")
     return household
 
 
-def serialize_household(db: Session, user: User) -> dict[str, Any]:
-    household = current_household(db, user)
-    invite_code = ensure_invite_code(db, household)
+def serialize_household(db: Session, user: User, household_id: str | None = None) -> dict[str, Any]:
+    household = current_household(db, user, household_id)
+    member = current_member(db, user, household)
+    invite_code = (
+        ensure_invite_code(db, household)
+        if not household.is_personal and member and member.role == "owner"
+        else ""
+    )
     rows = db.execute(
         select(HouseholdMember, User)
         .join(User, User.id == HouseholdMember.user_id)
@@ -66,6 +75,7 @@ def serialize_household(db: Session, user: User) -> dict[str, Any]:
     return {
         "id": household.id,
         "name": household.name,
+        "is_personal": household.is_personal,
         "invite_code": invite_code,
         "allergen_filter_mode": household.allergen_filter_mode,
         "dislike_filter_mode": household.dislike_filter_mode,
@@ -79,16 +89,164 @@ def serialize_household(db: Session, user: User) -> dict[str, Any]:
     }
 
 
-def join_household(db: Session, user: User, invite_code: str) -> dict[str, Any]:
-    household = db.scalar(select(Household).where(Household.invite_code == invite_code.upper()))
+def list_households(db: Session, user: User) -> list[dict[str, Any]]:
+    ids = db.scalars(
+        select(Household.id)
+        .join(HouseholdMember)
+        .where(HouseholdMember.user_id == user.id)
+        .order_by(Household.is_personal.desc(), Household.created_at)
+    ).all()
+    return [serialize_household(db, user, household_id) for household_id in ids]
+
+
+def require_group_capacity(db: Session, user: User) -> None:
+    # Serialize concurrent create/join requests for this user before counting memberships.
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    count = (
+        db.scalar(
+            select(func.count())
+            .select_from(HouseholdMember)
+            .join(Household)
+            .where(HouseholdMember.user_id == user.id, Household.is_personal.is_(False))
+        )
+        or 0
+    )
+    if count and not is_premium_active(subscription_for_user(db, user)):
+        raise HTTPException(
+            status_code=403,
+            detail=(
+                "Basic includes one shared group. Upgrade to Premium to create or join more groups."
+            ),
+        )
+
+
+def create_household(db: Session, user: User, name: str) -> dict[str, Any]:
+    name = name.strip()
+    if not name:
+        raise HTTPException(status_code=422, detail="Enter a group name.")
+    require_group_capacity(db, user)
+    household = Household(name=name, invite_code=generate_invite_code(db))
+    db.add(household)
+    db.flush()
+    db.add(HouseholdMember(household_id=household.id, user_id=user.id, role="owner"))
+    user.profile.household_id = household.id
+    db.commit()
+    return serialize_household(db, user)
+
+
+def switch_household(db: Session, user: User, household_id: str) -> dict[str, Any]:
+    household = current_household(db, user, household_id)
+    user.profile.household_id = household.id
+    db.commit()
+    return serialize_household(db, user)
+
+
+def leave_household(db: Session, user: User, household_id: str) -> dict[str, Any]:
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    household = current_household(db, user, household_id)
+    db.scalar(select(Household).where(Household.id == household.id).with_for_update())
+    if household.is_personal:
+        raise HTTPException(status_code=400, detail="Your private kitchen stays with your account.")
+    member = current_member(db, user, household)
+    assert member is not None
+    count = (
+        db.scalar(
+            select(func.count())
+            .select_from(HouseholdMember)
+            .where(HouseholdMember.household_id == household.id)
+        )
+        or 0
+    )
+    if member.role == "owner" and count > 1:
+        raise HTTPException(status_code=409, detail="Transfer ownership before leaving this group.")
+    kitchen = db.scalar(
+        select(Household)
+        .join(HouseholdMember)
+        .where(HouseholdMember.user_id == user.id, Household.is_personal.is_(True))
+    )
+    if not kitchen:
+        raise HTTPException(
+            status_code=409, detail="Your private kitchen is unavailable. Try again."
+        )
+    db.delete(member)
+    if count == 1:
+        household.invite_code = None
+    if user.profile.household_id == household.id:
+        user.profile.household_id = kitchen.id
+    db.commit()
+    return serialize_household(db, user)
+
+
+def preview_invite(db: Session, invite_code: str) -> dict[str, Any]:
+    household = find_invited_household(db, invite_code)
+    count = db.scalar(
+        select(func.count())
+        .select_from(HouseholdMember)
+        .where(HouseholdMember.household_id == household.id)
+    )
+    return {"id": household.id, "name": household.name, "member_count": count}
+
+
+def find_invited_household(
+    db: Session, invite_code: str, *, lock: bool = False
+) -> Household:
+    query = select(Household).where(
+        Household.invite_code == invite_code.strip().upper(), Household.is_personal.is_(False)
+    )
+    household = db.scalar(query.with_for_update() if lock else query)
     if not household:
-        raise HTTPException(status_code=404, detail="Invite code not found")
+        raise HTTPException(
+            status_code=404,
+            detail="This invitation is no longer available. Ask the owner for a new one.",
+        )
+    return household
+
+
+def rotate_invite(db: Session, user: User, household_id: str) -> dict[str, Any]:
+    household = current_household(db, user, household_id)
+    db.scalar(select(Household).where(Household.id == household.id).with_for_update())
+    require_owner(db, user, household)
+    if household.is_personal:
+        raise HTTPException(status_code=400, detail="Create a shared group to invite people.")
+    household.invite_code = generate_invite_code(db)
+    db.commit()
+    return serialize_household(db, user, household.id)
+
+
+def share_recipe(db: Session, user: User, household_id: str, recipe_id: str) -> dict[str, bool]:
+    household = current_household(db, user, household_id)
+    recipe = db.scalar(
+        accessible_recipes_query(user).where(
+            Recipe.id == recipe_id, Recipe.owner_user_id == user.id
+        )
+    )
+    if not recipe or household.is_personal:
+        raise HTTPException(
+            status_code=404, detail="Choose one of your own recipes and a shared group."
+        )
+    # Lock the group so retries cannot create duplicate shares.
+    db.scalar(select(Household).where(Household.id == household.id).with_for_update())
+    existing = db.scalar(
+        select(HouseholdRecipe).where(
+            HouseholdRecipe.household_id == household.id, HouseholdRecipe.recipe_id == recipe.id
+        )
+    )
+    if not existing:
+        db.add(HouseholdRecipe(household_id=household.id, recipe_id=recipe.id))
+        db.commit()
+    return {"shared": True}
+
+
+def join_household(db: Session, user: User, invite_code: str) -> dict[str, Any]:
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    household = find_invited_household(db, invite_code, lock=True)
     existing = db.scalar(
         select(HouseholdMember).where(
             HouseholdMember.household_id == household.id, HouseholdMember.user_id == user.id
         )
     )
     if not existing:
+        require_group_capacity(db, user)
         db.add(HouseholdMember(household_id=household.id, user_id=user.id, role="member"))
     if user.profile:
         user.profile.household_id = household.id
@@ -97,9 +255,13 @@ def join_household(db: Session, user: User, invite_code: str) -> dict[str, Any]:
 
 
 def update_household_settings(
-    db: Session, user: User, allergen_filter_mode: str, dislike_filter_mode: str
+    db: Session,
+    user: User,
+    allergen_filter_mode: str,
+    dislike_filter_mode: str,
+    household_id: str | None = None,
 ) -> dict[str, Any]:
-    household = current_household(db, user)
+    household = current_household(db, user, household_id)
     require_owner(db, user, household)
     if allergen_filter_mode not in SAFETY_MODES or dislike_filter_mode not in SAFETY_MODES:
         raise HTTPException(status_code=422, detail="Unsupported household safety mode")
@@ -107,11 +269,14 @@ def update_household_settings(
     household.dislike_filter_mode = dislike_filter_mode
     db.commit()
     db.refresh(household)
-    return serialize_household(db, user)
+    return serialize_household(db, user, household.id)
 
 
-def transfer_household_owner(db: Session, user: User, target_user_id: str) -> dict[str, Any]:
-    household = current_household(db, user)
+def transfer_household_owner(
+    db: Session, user: User, target_user_id: str, household_id: str | None = None
+) -> dict[str, Any]:
+    household = current_household(db, user, household_id)
+    db.scalar(select(Household).where(Household.id == household.id).with_for_update())
     current = require_owner(db, user, household)
     target = db.scalar(
         select(HouseholdMember).where(
@@ -121,19 +286,23 @@ def transfer_household_owner(db: Session, user: User, target_user_id: str) -> di
     if not target:
         raise HTTPException(status_code=404, detail="Target member not found in this group")
     if target.user_id == user.id:
-        return serialize_household(db, user)
+        return serialize_household(db, user, household.id)
     target.role = "owner"
     current.role = "member"
     db.commit()
-    return serialize_household(db, user)
+    return serialize_household(db, user, household.id)
 
 
 def group_vote_options(
-    db: Session, user: User, max_total_minutes: int | None = None, limit: int = 12
+    db: Session,
+    user: User,
+    max_total_minutes: int | None = None,
+    limit: int = 12,
+    household_id: str | None = None,
 ) -> list[dict[str, Any]]:
-    household = current_household(db, user)
+    household = current_household(db, user, household_id)
     preferences = household_preference_terms(db, household)
-    query = accessible_recipes_query(user).limit(max(1, min(limit, 50)))
+    query = group_recipes_query(user, household)
     if max_total_minutes is not None:
         query = query.where(
             Recipe.total_minutes.is_(None) | (Recipe.total_minutes <= max_total_minutes)
@@ -145,17 +314,18 @@ def group_vote_options(
         if safety["is_blocked"]:
             continue
         options.append({"recipe": serialize_recipe(recipe, user.id, db), **safety})
+        if len(options) >= limit:
+            break
     return options
 
 
-def record_weekly_vote(db: Session, user: User, recipe_id: str, vote: str) -> dict[str, Any]:
-    plan = group_vote_plan(db, user)
-    recipe = db.get(Recipe, recipe_id)
-    household = current_household(db, user)
-    household_id = user.profile.household_id if user.profile else None
-    if not recipe or recipe.archived_at is not None:
-        raise HTTPException(status_code=404, detail="Recipe not found")
-    if recipe.household_id and recipe.household_id != household_id:
+def record_weekly_vote(
+    db: Session, user: User, recipe_id: str, vote: str, household_id: str | None = None
+) -> dict[str, Any]:
+    household = current_household(db, user, household_id)
+    plan = group_vote_plan(db, user, household.id)
+    recipe = db.scalar(group_recipes_query(user, household).where(Recipe.id == recipe_id))
+    if not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
     safety = recipe_group_safety(household, recipe, household_preference_terms(db, household))
     if safety["is_blocked"]:
@@ -163,26 +333,34 @@ def record_weekly_vote(db: Session, user: User, recipe_id: str, vote: str) -> di
             status_code=400,
             detail="This recipe is blocked by the group's allergy or dislike settings.",
         )
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
     row = db.scalar(
-        select(WeeklyPlanVote).where(
-            WeeklyPlanVote.weekly_plan_id == plan.id,
-            WeeklyPlanVote.user_id == user.id,
-            WeeklyPlanVote.recipe_id == recipe_id,
+        select(HouseholdVote).where(
+            HouseholdVote.household_id == household.id,
+            HouseholdVote.week_start == plan.week_start,
+            HouseholdVote.user_id == user.id,
+            HouseholdVote.recipe_id == recipe_id,
         )
     )
     if row:
         row.vote = vote
     else:
         db.add(
-            WeeklyPlanVote(weekly_plan_id=plan.id, user_id=user.id, recipe_id=recipe_id, vote=vote)
+            HouseholdVote(
+                household_id=household.id,
+                week_start=plan.week_start,
+                user_id=user.id,
+                recipe_id=recipe_id,
+                vote=vote,
+            )
         )
     db.commit()
-    return vote_summary(db, user)
+    return vote_summary(db, user, household.id)
 
 
-def vote_summary(db: Session, user: User) -> dict[str, Any]:
-    household = current_household(db, user)
-    plan = group_vote_plan(db, user)
+def vote_summary(db: Session, user: User, household_id: str | None = None) -> dict[str, Any]:
+    household = current_household(db, user, household_id)
+    plan = group_vote_plan(db, user, household.id)
     member_rows = db.execute(
         select(HouseholdMember, User)
         .join(User, User.id == HouseholdMember.user_id)
@@ -195,14 +373,18 @@ def vote_summary(db: Session, user: User) -> dict[str, Any]:
     )
     rows = db.execute(
         select(
-            WeeklyPlanVote.recipe_id,
+            HouseholdVote.recipe_id,
             Recipe.name,
-            WeeklyPlanVote.vote,
-            func.count(WeeklyPlanVote.id),
+            HouseholdVote.vote,
+            func.count(HouseholdVote.id),
         )
-        .join(Recipe, Recipe.id == WeeklyPlanVote.recipe_id)
-        .where(WeeklyPlanVote.weekly_plan_id == plan.id)
-        .group_by(WeeklyPlanVote.recipe_id, Recipe.name, WeeklyPlanVote.vote)
+        .join(Recipe, Recipe.id == HouseholdVote.recipe_id)
+        .where(
+            HouseholdVote.household_id == household.id,
+            HouseholdVote.week_start == plan.week_start,
+            HouseholdVote.user_id.in_([member.user_id for member, _ in member_rows]),
+        )
+        .group_by(HouseholdVote.recipe_id, Recipe.name, HouseholdVote.vote)
         .order_by(Recipe.name)
     ).all()
     recipes: dict[str, dict[str, Any]] = {}
@@ -240,11 +422,12 @@ def vote_summary(db: Session, user: User) -> dict[str, Any]:
     )
     if is_owner:
         voter_rows = db.execute(
-            select(WeeklyPlanVote.recipe_id, User.email, WeeklyPlanVote.vote)
-            .join(User, User.id == WeeklyPlanVote.user_id)
+            select(HouseholdVote.recipe_id, User.email, HouseholdVote.vote)
+            .join(User, User.id == HouseholdVote.user_id)
             .join(HouseholdMember, HouseholdMember.user_id == User.id)
             .where(
-                WeeklyPlanVote.weekly_plan_id == plan.id,
+                HouseholdVote.household_id == household.id,
+                HouseholdVote.week_start == plan.week_start,
                 HouseholdMember.household_id == household.id,
             )
             .order_by(User.email)
@@ -255,6 +438,7 @@ def vote_summary(db: Session, user: User) -> dict[str, Any]:
         for item in ranked:
             item["voters"] = by_recipe.get(str(item["recipe_id"]), [])
     return {
+        "household_id": household.id,
         "weekly_plan_id": plan.id,
         "total_members": member_count,
         "can_view_voters": is_owner,
@@ -263,8 +447,8 @@ def vote_summary(db: Session, user: User) -> dict[str, Any]:
     }
 
 
-def group_vote_plan(db: Session, user: User) -> WeeklyPlan:
-    household = current_household(db, user)
+def group_vote_plan(db: Session, user: User, household_id: str | None = None) -> WeeklyPlan:
+    household = current_household(db, user, household_id)
     owner = db.scalar(
         select(User)
         .join(HouseholdMember, HouseholdMember.user_id == User.id)
@@ -272,6 +456,18 @@ def group_vote_plan(db: Session, user: User) -> WeeklyPlan:
         .order_by(HouseholdMember.created_at)
     )
     return get_or_create_current_plan(db, owner or user)
+
+
+def group_recipes_query(user: User, household: Household) -> Select[tuple[Recipe]]:
+    if household.is_personal:
+        return accessible_recipes_query(user, household.id)
+    return accessible_recipes_query(user, household.id).where(
+        Recipe.owner_user_id.is_(None)
+        | (Recipe.household_id == household.id)
+        | Recipe.id.in_(
+            select(HouseholdRecipe.recipe_id).where(HouseholdRecipe.household_id == household.id)
+        )
+    )
 
 
 def current_member(db: Session, user: User, household: Household) -> HouseholdMember | None:

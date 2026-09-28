@@ -242,3 +242,49 @@ def test_weekly_slot_non_meal_type_clears_recipe(
     assert changed["recipe_id"] is None
     assert changed["recipe_name"] is None
     assert changed["slot_type"] == "leftovers"
+
+
+def test_add_multiple_meals_to_a_day_without_overwriting_other_days(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    recipe, plan, first = add_meal(client, auth_headers)
+    monday = plan["week_start"]
+    tuesday = str(date.fromisoformat(monday) + timedelta(days=1))
+    client.put(
+        f"/api/v1/weekly-plans/current/slots/{first['id']}",
+        headers=auth_headers,
+        json={"slot_date": tuesday},
+    )
+    for _ in range(6):
+        response = client.post(
+            "/api/v1/weekly-plans/current/slots",
+            headers=auth_headers,
+            json={"recipe_id": recipe["id"], "slot_date": monday},
+        )
+        assert response.status_code == 200
+    slots = response.json()["slots"]
+    assert len([slot for slot in slots if slot["slot_date"] == monday and slot["recipe_id"]]) == 6
+    assert next(slot for slot in slots if slot["id"] == first["id"])["slot_date"] == tuesday
+    assert len(slots) == 7
+    removed = next(slot for slot in slots if slot["slot_date"] == monday)
+    response = client.delete(
+        f"/api/v1/weekly-plans/current/slots/{removed['id']}", headers=auth_headers
+    )
+    assert len([slot for slot in response.json()["slots"] if slot["recipe_id"]]) == 6
+    bad_day = str(date.fromisoformat(monday) + timedelta(days=8))
+    assert (
+        client.post(
+            "/api/v1/weekly-plans/current/slots",
+            headers=auth_headers,
+            json={"recipe_id": recipe["id"], "slot_date": bad_day},
+        ).status_code
+        == 422
+    )
+    assert (
+        client.post(
+            "/api/v1/weekly-plans/current/slots",
+            headers=auth_headers,
+            json={"recipe_id": "not-accessible", "slot_date": monday},
+        ).status_code
+        == 404
+    )

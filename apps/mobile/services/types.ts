@@ -45,6 +45,7 @@ export type Recipe = {
 export type Household = {
   id: string;
   name: string;
+  is_personal: boolean;
   invite_code: string;
   allergen_filter_mode: SafetyFilterMode;
   dislike_filter_mode: SafetyFilterMode;

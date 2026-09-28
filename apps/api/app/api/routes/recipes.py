@@ -4,7 +4,6 @@ from datetime import datetime
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile
 from sqlalchemy import or_, select
-from sqlalchemy.orm import selectinload
 
 from app.api.deps import BasicUser, DbDep
 from app.core.config import settings
@@ -28,11 +27,14 @@ def list_recipes(
     current_user: BasicUser,
     q: str | None = None,
     include_hidden: bool = False,
+    owned_only: bool = False,
     max_total_minutes: int | None = Query(default=None, ge=1, le=1440),
     limit: int = Query(30, ge=1, le=100),
     offset: int = Query(0, ge=0),
 ) -> list[dict[str, object]]:
     query = accessible_recipes_query(current_user)
+    if owned_only:
+        query = query.where(Recipe.owner_user_id == current_user.id)
     if q:
         query = query.where(Recipe.name.ilike(f"%{q}%"))
     effective_max = max_total_minutes or (
@@ -83,16 +85,9 @@ async def upload_recipe_photo(file: UploadFile, current_user: BasicUser) -> dict
 @router.get("/{recipe_id}", response_model=RecipeOut)
 def get_recipe(recipe_id: str, db: DbDep, current_user: BasicUser) -> dict[str, object]:
     recipe = db.scalar(
-        select(Recipe)
-        .options(
-            selectinload(Recipe.ingredients),
-            selectinload(Recipe.instructions),
-            selectinload(Recipe.tags),
-        )
-        .where(
+        accessible_recipes_query(current_user).where(
             Recipe.id == recipe_id,
             Recipe.archived_at.is_(None),
-            or_(Recipe.owner_user_id.is_(None), Recipe.owner_user_id == current_user.id),
         )
     )
     if not recipe:

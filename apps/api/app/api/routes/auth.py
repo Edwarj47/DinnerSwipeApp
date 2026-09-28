@@ -55,7 +55,6 @@ from app.services.email_auth import (
     reset_password,
     verify_email_token,
 )
-from app.services.groups import generate_invite_code
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -79,7 +78,7 @@ def register(payload: RegisterRequest, request: Request, db: DbDep) -> TokenPair
         privacy_accepted_at=accepted_at,
         legal_acceptance_version=payload.legal_document_version,
     )
-    household = Household(name=f"{email}'s household", invite_code=generate_invite_code(db))
+    household = Household(name="My kitchen", is_personal=True)
     db.add_all([user, household])
     db.flush()
     db.add(HouseholdMember(household_id=household.id, user_id=user.id, role="owner"))

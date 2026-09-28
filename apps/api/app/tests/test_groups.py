@@ -2,10 +2,17 @@ from __future__ import annotations
 
 from collections.abc import Callable
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.models.entities import User
+
+
+@pytest.fixture(autouse=True)
+def shared_group(client: TestClient, auth_headers: dict[str, str]) -> None:
+    response = client.post("/api/v1/households", headers=auth_headers, json={"name": "Dinner club"})
+    assert response.status_code == 200
 
 
 def test_household_invite_and_vote(client: TestClient, auth_headers: dict[str, str]) -> None:
