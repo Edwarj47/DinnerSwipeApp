@@ -12,11 +12,26 @@ Updated 2026-09-28 for Android preview build 7.
   matches the package and version code. The 2,502,676-byte JavaScript bundle
   contains the intended `https://dinner.dcss.dev` API URL.
 - Signing certificate matches build 6 exactly; install over the existing app.
+- Follow-up Android tooling checks passed for both APKs: `apksigner verify`
+  validates v1/v2 signatures; `aapt` confirms the same package, minimum SDK 23,
+  target SDK 34, and ARM/ARM64/x86/x86_64 architectures. Only the version code
+  rises from 6 to 7. A reported phone installation failure still needs the exact
+  Android error; artifact checks are not a physical-device installation test.
 - SHA-256: `3ec058c27ed0cf959a462d403ff8e57ab92cce57753b6e183339f1fb4ff3679e`.
 - Backend rollout is pending owner approval. The new day-specific add and group
   endpoints are not live yet. Do not treat this artifact as end-to-end deployed.
 - 48 API tests and 14 mobile tests passed; lint/types and desktop/phone-size
   browser checks passed. Physical-device testing remains pending.
+
+### CI Dependency Correction
+
+GitHub's backend job installed SQLAlchemy 2.1.1 while the original local checks
+used 2.0.52. SQLAlchemy 2.1 changes `Select`/`Row` generic types; the app currently
+uses 2.0 annotations. The backend dependency is now constrained below 2.1, and CI
+reports resolved versions and runs `pip check`. A fresh Python 3.12 environment
+passed lint, non-incremental mypy and all 48 API tests with the corrected range.
+This backend-only correction does not change the APK. Rebuild the prepared API
+image from the corrected source before production deployment.
 
 ## Previous Build 6
 

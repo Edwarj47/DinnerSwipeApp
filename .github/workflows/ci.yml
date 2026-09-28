@@ -15,6 +15,10 @@ jobs:
           python-version: "3.12"
       - run: python -m pip install -U pip
       - run: pip install -e "apps/api[dev]"
+      - name: Check backend dependency resolution
+        run: |
+          python -m pip check
+          python -m pip show SQLAlchemy mypy pydantic
       - run: cd apps/api && ruff check app
       - run: cd apps/api && mypy app
       - run: cd apps/api && pytest
@@ -38,4 +42,3 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker compose --profile production build
-
