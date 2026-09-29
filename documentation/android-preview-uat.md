@@ -23,10 +23,27 @@ Updated 2026-09-29 for Android preview build 10.
   parameters, anonymous-export rejection, and read-only account-scoped
   analytics/export checks passed. Only the API container was recreated;
   production web, worker, database schema, and unrelated services are unchanged.
-- Android build 10 is prepared locally but has not been built or published.
-  Build 9 does not contain these new macro screens.
+- Android build 10 finished September 29 at 01:22 UTC from source `c8b3e35`.
+  Source is pushed; backend, frontend, and Docker CI jobs passed. The standalone
+  preview embeds JavaScript and does not require Metro. Its download link was
+  shared privately; build 9 does not contain these new macro screens.
+- Download/ZIP/config/bundle checks passed. Package is `dev.dcss.dinnerswipe`,
+  version code `10`, and the signing certificate matches build 9. The APK is
+  79,523,823 bytes. SHA-256:
+  `ad6752911f03fc5682c64a1cd35fddaacc6201a41f56eca9bed020fa8424c709`.
 - Local checks: 54 API tests, 36 mobile tests (including cold-cache run), lint,
   TypeScript, and mypy pass. Real-phone calendar/biometric UAT is still required.
+
+### Build 10 Phone Checks
+
+1. Install over build 9 without uninstalling; confirm the saved session remains.
+2. In Premium macros, check that Breakfast stays intact and success notices
+   disappear after adding or editing an entry. Failed saves must remain visible.
+3. Open the date calendar, move between months, and select a historical date.
+   Confirm its entries load; direct date entry and Today must still work.
+4. Check the Cal column, logged-day filter, calorie/date sorting, and date taps.
+5. Select each Trends period, including all time. Export and check its date
+   range and totals match the selected view. The top summary remains seven days.
 
 ### API Deployment Recovery
 
