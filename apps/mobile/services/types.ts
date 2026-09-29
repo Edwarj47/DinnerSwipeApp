@@ -206,6 +206,7 @@ export type MacroAnalytics = {
   skipped_meals: number;
   unmatched_meals: number;
   daily_totals: MacroDayTotal[];
+  includes_empty_days?: boolean;
 };
 
 export type MacroExport = {

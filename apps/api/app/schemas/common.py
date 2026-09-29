@@ -215,6 +215,7 @@ class MacroAnalytics(ApiModel):
     skipped_meals: int
     unmatched_meals: int
     daily_totals: list[MacroDayTotal]
+    includes_empty_days: bool = True
 
 
 class MacroExport(ApiModel):

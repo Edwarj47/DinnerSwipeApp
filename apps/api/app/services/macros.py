@@ -5,7 +5,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models.entities import (
@@ -212,13 +212,26 @@ def macro_analytics(
     days: int = 30,
     start_date: date | None = None,
     end_date: date | None = None,
+    all_time: bool = False,
 ) -> dict[str, Any]:
     require_premium(db, user)
-    window_start, window_end, bounded_days = _date_window(days, start_date, end_date)
+    if all_time:
+        if start_date is not None or end_date is not None:
+            raise HTTPException(status_code=422, detail="Choose all time or a date range, not both")
+        first, last = db.execute(
+            select(
+                func.min(MealMacroConfirmation.meal_date), func.max(MealMacroConfirmation.meal_date)
+            ).where(MealMacroConfirmation.user_id == user.id)
+        ).one()
+        window_start = first or date.today()
+        window_end = max(last or date.today(), date.today())
+        bounded_days = (window_end - window_start).days + 1
+    else:
+        window_start, window_end, bounded_days = _date_window(days, start_date, end_date)
     target = db.scalar(select(MacroProfileTarget).where(MacroProfileTarget.user_id == user.id))
     rows = _rows_for_window(db, user, window_start, window_end)
     totals = _macro_totals(rows)
-    daily_totals = _daily_totals(rows, window_start, window_end)
+    daily_totals = _daily_totals(rows, window_start, window_end, include_empty=not all_time)
     days_logged = sum(1 for item in daily_totals if item["entry_count"] > 0)
     divisor = max(1, days_logged)
     averages = {key: round(value / divisor, 2) for key, value in totals.items()}
@@ -234,6 +247,7 @@ def macro_analytics(
         "skipped_meals": sum(1 for row in rows if row.status == "skipped"),
         "unmatched_meals": sum(1 for row in rows if row.macro_source == "unmatched_recipe"),
         "daily_totals": daily_totals,
+        "includes_empty_days": not all_time,
     }
 
 
@@ -243,15 +257,10 @@ def macro_export(
     days: int = 30,
     start_date: date | None = None,
     end_date: date | None = None,
+    all_time: bool = False,
 ) -> dict[str, Any]:
-    analytics = macro_analytics(db, user, days, start_date, end_date)
-    rows = list_macro_entries(
-        db,
-        user,
-        days=days,
-        start_date=analytics["start_date"],
-        end_date=analytics["end_date"],
-    )
+    analytics = macro_analytics(db, user, days, start_date, end_date, all_time)
+    rows = _rows_for_window(db, user, analytics["start_date"], analytics["end_date"])
     return {
         "exported_at": datetime.now(UTC),
         "export_format_version": "2026-09-07",
@@ -302,9 +311,7 @@ def _confirmation_macros(
         return manual, "manual"
     if not recipe:
         return manual, "unmatched_recipe"
-    profile = db.scalar(
-        select(RecipeMacroProfile).where(RecipeMacroProfile.recipe_id == recipe.id)
-    )
+    profile = db.scalar(select(RecipeMacroProfile).where(RecipeMacroProfile.recipe_id == recipe.id))
     if not profile:
         return manual, "unmatched_recipe"
     scale = payload.servings_consumed
@@ -376,28 +383,40 @@ def _date_window(
     start_date: date | None = None,
     end_date: date | None = None,
 ) -> tuple[date, date, int]:
-    bounded_days = max(1, min(days, 90))
+    bounded_days = max(1, min(days, 366))
     window_end = end_date or date.today()
-    window_start = start_date or (window_end - timedelta(days=bounded_days - 1))
+    try:
+        window_start = start_date or (window_end - timedelta(days=bounded_days - 1))
+    except OverflowError as exc:
+        raise HTTPException(
+            status_code=422, detail="Date range is outside supported dates"
+        ) from exc
     if window_start > window_end:
         raise HTTPException(status_code=422, detail="Start date must be before end date")
-    actual_days = min(90, (window_end - window_start).days + 1)
-    if actual_days > 90:
-        window_start = window_end - timedelta(days=89)
-        actual_days = 90
+    actual_days = (window_end - window_start).days + 1
+    if actual_days > 366:
+        raise HTTPException(status_code=422, detail="Choose up to 366 days, or use all time")
     return window_start, window_end, actual_days
 
 
 def _daily_totals(
-    rows: Sequence[MealMacroConfirmation], start_date: date, end_date: date
+    rows: Sequence[MealMacroConfirmation],
+    start_date: date,
+    end_date: date,
+    include_empty: bool = True,
 ) -> list[dict[str, Any]]:
     by_date: dict[date, list[MealMacroConfirmation]] = {}
     for row in rows:
         by_date.setdefault(row.meal_date, []).append(row)
     day_count = (end_date - start_date).days + 1
     totals: list[dict[str, Any]] = []
-    for offset in range(day_count):
-        current = start_date + timedelta(days=offset)
+    # All-time histories are sparse: do not allocate years of empty calendar rows.
+    dates = (
+        [start_date + timedelta(days=offset) for offset in range(day_count)]
+        if include_empty
+        else sorted(by_date)
+    )
+    for current in dates:
         day_rows = by_date.get(current, [])
         day_totals = _macro_totals(day_rows)
         totals.append(

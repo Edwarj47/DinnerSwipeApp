@@ -1,3 +1,4 @@
+import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Linking from "expo-linking";
 import { useEffect, useMemo, useState } from "react";
@@ -7,6 +8,9 @@ import { Button } from "@/components/Button";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
+import { MacroChoice } from "./MacroChoice";
+import { MacroDatePicker } from "./MacroDatePicker";
+import { CalendarSort, calendarDays, isISODate, macroRangeQuery, shiftISODate, todayISO } from "./macroDates";
 import {
   MacroAnalytics,
   MacroConfirmation,
@@ -31,13 +35,17 @@ const MEAL_LABEL_OPTIONS: { label: string; value: MealLabel }[] = [
 export function PremiumMacroPanel() {
   const queryClient = useQueryClient();
   const [code, setCode] = useState("");
-  const [status, setStatus] = useState("");
+  const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
+  const setStatus = (message: string) => setNotice({ message, error: false });
+  const setError = (message: string) => setNotice({ message, error: true });
   const [calories, setCalories] = useState("");
   const [protein, setProtein] = useState("");
   const [carbs, setCarbs] = useState("");
   const [fat, setFat] = useState("");
   const [goal, setGoal] = useState("");
   const [macroView, setMacroView] = useState<MacroView>("day");
+  const [trendRange, setTrendRange] = useState("30");
+  const [calendarRange, setCalendarRange] = useState("14");
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [entryName, setEntryName] = useState("");
@@ -68,33 +76,47 @@ export function PremiumMacroPanel() {
     retry: false
   });
   const entries = useQuery({
-    queryKey: ["macro-entries"],
-    queryFn: () => apiFetch<MacroConfirmation[]>("/api/v1/macros/entries?days=30"),
-    enabled: premiumActive,
+    queryKey: ["macro-entries", selectedDate],
+    queryFn: () => apiFetch<MacroConfirmation[]>(`/api/v1/macros/entries?start_date=${selectedDate}&end_date=${selectedDate}`),
+    enabled: premiumActive && macroView === "day" && isISODate(selectedDate),
     retry: false
   });
   const analytics = useQuery({
-    queryKey: ["macro-analytics"],
-    queryFn: () => apiFetch<MacroAnalytics>("/api/v1/macros/analytics?days=30"),
-    enabled: premiumActive,
+    queryKey: ["macro-analytics", "trends", trendRange],
+    queryFn: () => apiFetch<MacroAnalytics>(`/api/v1/macros/analytics?${macroRangeQuery(trendRange)}`),
+    enabled: premiumActive && macroView === "analytics",
+    retry: false
+  });
+  const calendarAnalytics = useQuery({
+    queryKey: ["macro-analytics", "calendar", calendarRange],
+    queryFn: () => apiFetch<MacroAnalytics>(`/api/v1/macros/analytics?days=${calendarRange}`),
+    enabled: premiumActive && (macroView === "calendar" || macroView === "grid"),
     retry: false
   });
   const basicPlan = useMemo(
-    () => subscription.data?.plans.find((plan: SubscriptionPlanStatus) => plan.tier === "basic"),
+    () => subscription.data?.plans?.find((plan: SubscriptionPlanStatus) => plan.tier === "basic"),
     [subscription.data?.plans]
   );
   const premiumPlan = useMemo(
-    () => subscription.data?.plans.find((plan: SubscriptionPlanStatus) => plan.tier === "premium"),
+    () => subscription.data?.plans?.find((plan: SubscriptionPlanStatus) => plan.tier === "premium"),
     [subscription.data?.plans]
   );
-  const selectedEntries = useMemo(
+  const selectedEntries = useMemo<MacroConfirmation[]>(
     () => (entries.data ?? []).filter((entry: MacroConfirmation) => entry.meal_date === selectedDate),
     [entries.data, selectedDate]
   );
   const selectedTotal = useMemo(
-    () => analytics.data?.daily_totals.find((day: MacroAnalytics["daily_totals"][number]) => day.meal_date === selectedDate),
-    [analytics.data?.daily_totals, selectedDate]
+    () => entries.data ? ({ calories: selectedEntries.reduce((sum, item) => sum + (item.calories ?? 0), 0),
+      protein_g: selectedEntries.reduce((sum, item) => sum + (item.protein_g ?? 0), 0), entry_count: selectedEntries.length }) : undefined,
+    [entries.data, selectedEntries]
   );
+
+  useEffect(() => {
+    if (!notice || notice.error) return;
+    const timer = setTimeout(() => setNotice(null), 3500);
+    return () => clearTimeout(timer);
+  }, [notice]);
+  useEffect(() => { setNotice(null); }, [macroView]);
 
   useEffect(() => {
     if (!targets.data) return;
@@ -116,7 +138,7 @@ export function PremiumMacroPanel() {
       setStatus(data.premium_active ? "Premium access unlocked." : "Basic access unlocked.");
       await refreshPremium(queryClient);
     },
-    onError: (error) => setStatus(error instanceof Error ? error.message : "Unable to apply code.")
+    onError: (error) => setError(error instanceof Error ? error.message : "Unable to apply code.")
   });
 
   const startCheckout = useMutation({
@@ -129,7 +151,7 @@ export function PremiumMacroPanel() {
       setStatus("Opening checkout.");
       await Linking.openURL(data.checkout_url);
     },
-    onError: (error) => setStatus(error instanceof Error ? error.message : "Unable to start checkout.")
+    onError: (error) => setError(error instanceof Error ? error.message : "Unable to start checkout.")
   });
 
   const manageBilling = useMutation({
@@ -141,7 +163,7 @@ export function PremiumMacroPanel() {
       setStatus("Opening billing portal.");
       await Linking.openURL(data.portal_url);
     },
-    onError: (error) => setStatus(error instanceof Error ? error.message : "Unable to open billing.")
+    onError: (error) => setError(error instanceof Error ? error.message : "Unable to open billing.")
   });
 
   const saveTargets = useMutation({
@@ -160,7 +182,7 @@ export function PremiumMacroPanel() {
       setStatus("Macro targets saved.");
       await refreshPremium(queryClient);
     },
-    onError: (error) => setStatus(error instanceof Error ? error.message : "Unable to save targets.")
+    onError: (error) => setError(error instanceof Error ? error.message : "Unable to save targets.")
   });
 
   const saveEntry = useMutation({
@@ -192,7 +214,7 @@ export function PremiumMacroPanel() {
       clearEntryForm();
       await refreshPremium(queryClient);
     },
-    onError: (error) => setStatus(error instanceof Error ? error.message : "Unable to save macro entry.")
+    onError: (error) => setError(error instanceof Error ? error.message : "Unable to save macro entry.")
   });
 
   const deleteEntry = useMutation({
@@ -203,16 +225,16 @@ export function PremiumMacroPanel() {
       clearEntryForm();
       await refreshPremium(queryClient);
     },
-    onError: (error) => setStatus(error instanceof Error ? error.message : "Unable to remove macro entry.")
+    onError: (error) => setError(error instanceof Error ? error.message : "Unable to remove macro entry.")
   });
 
   const exportMacros = useMutation({
-    mutationFn: () => apiFetch<MacroExport>("/api/v1/macros/export?days=30"),
+    mutationFn: () => apiFetch<MacroExport>(`/api/v1/macros/export?${macroRangeQuery(trendRange)}`),
     onSuccess: async (data) => {
       await deliverMacroExport(data);
       setStatus("Macro export generated.");
     },
-    onError: (error) => setStatus(error instanceof Error ? error.message : "Unable to export macros.")
+    onError: (error) => setError(error instanceof Error ? error.message : "Unable to export macros.")
   });
 
   function beginEdit(entry: MacroConfirmation) {
@@ -243,6 +265,8 @@ export function PremiumMacroPanel() {
 
   const currentTier = subscription.data?.current_tier ?? "none";
   const trialDays = subscription.data?.trial_days_remaining ?? 0;
+  const activeQuery = macroView === "day" ? entries : macroView === "analytics" ? analytics : calendarAnalytics;
+  function pickDay(day: string) { setSelectedDate(day); clearEntryForm(); setMacroView("day"); }
 
   return (
     <View style={styles.panel}>
@@ -331,10 +355,12 @@ export function PremiumMacroPanel() {
         </View>
       ) : (
         <>
+          <Text style={styles.subsection}>Last 7 days</Text>
+          {summary.data ? <Text style={styles.meta}>{summary.data.start_date} to {summary.data.end_date}</Text> : null}
           <View style={styles.metrics}>
-            <Metric label="Meals" value={String(summary.data?.eaten_meals ?? 0)} />
-            <Metric label="Protein" value={`${summary.data?.totals.protein_g ?? 0}g`} />
-            <Metric label="Calories" value={String(summary.data?.totals.calories ?? 0)} />
+            <Metric label="Consumed" value={summary.data ? String(summary.data.eaten_meals) : "-"} />
+            <Metric label="Protein" value={summary.data ? `${summary.data.totals.protein_g}g` : "-"} />
+            <Metric label="Calories" value={summary.data ? String(summary.data.totals.calories) : "-"} />
           </View>
 
           <View style={styles.targetBox}>
@@ -367,6 +393,11 @@ export function PremiumMacroPanel() {
             ]}
           />
 
+          {activeQuery.isError ? <View style={styles.queryStatus}>
+            <Text accessibilityRole="alert" style={styles.error}>Couldn't load macro data.</Text>
+            <Button label="Retry macros" icon="refresh" onPress={() => { void activeQuery.refetch(); }} />
+          </View> : activeQuery.isLoading && (macroView !== "day" || isISODate(selectedDate)) ? <Text style={styles.meta}>Loading macros...</Text> : null}
+
           {macroView === "day" ? (
             <DayMacroView
               selectedDate={selectedDate}
@@ -390,7 +421,7 @@ export function PremiumMacroPanel() {
               entryNotes={entryNotes}
               setEntryNotes={setEntryNotes}
               editingEntryId={editingEntryId}
-              savePending={saveEntry.isPending}
+              savePending={saveEntry.isPending || !isISODate(selectedDate)}
               deletePending={deleteEntry.isPending}
               onSave={() => saveEntry.mutate()}
               onClear={clearEntryForm}
@@ -400,27 +431,27 @@ export function PremiumMacroPanel() {
           ) : null}
 
           {macroView === "grid" ? (
-            <GridMacroView dailyTotals={analytics.data?.daily_totals ?? []} onPickDay={(day) => {
-              setSelectedDate(day);
-              setMacroView("day");
-            }} />
+            <GridMacroView dailyTotals={calendarAnalytics.data?.daily_totals ?? []} onPickDay={pickDay} />
           ) : null}
 
           {macroView === "calendar" ? (
-            <CalendarMacroView dailyTotals={analytics.data?.daily_totals ?? []} targetCalories={targets.data?.daily_calories ?? null} />
+            <CalendarMacroView dailyTotals={calendarAnalytics.data?.daily_totals ?? []} targetCalories={targets.data?.daily_calories ?? null}
+              range={calendarRange} onRange={setCalendarRange} onPickDay={pickDay} />
           ) : null}
 
           {macroView === "analytics" ? (
             <AnalyticsMacroView
               analytics={analytics.data}
-              exportPending={exportMacros.isPending}
+              range={trendRange}
+              onRange={setTrendRange}
+              exportPending={exportMacros.isPending || !analytics.data || analytics.isError}
               onExport={() => exportMacros.mutate()}
             />
           ) : null}
         </>
       )}
       {summary.data?.unmatched_meals ? <Text style={styles.meta}>{summary.data.unmatched_meals} meals need macro review.</Text> : null}
-      {status ? <Text style={styles.status}>{status}</Text> : null}
+      {notice ? <Text accessibilityLiveRegion="polite" accessibilityRole={notice.error ? "alert" : undefined} style={notice.error ? styles.error : styles.status}>{notice.message}</Text> : null}
     </View>
   );
 }
@@ -456,7 +487,7 @@ function DayMacroView({
 }: {
   selectedDate: string;
   setSelectedDate: (value: string) => void;
-  selectedTotal?: MacroAnalytics["daily_totals"][number];
+  selectedTotal?: { calories: number; protein_g: number; entry_count: number };
   selectedEntries: MacroConfirmation[];
   entryName: string;
   setEntryName: (value: string) => void;
@@ -485,20 +516,26 @@ function DayMacroView({
   return (
     <View style={styles.viewBox}>
       <View style={styles.dayHeader}>
-        <Button label="Prev" icon="chevron-back" onPress={() => setSelectedDate(shiftISODate(selectedDate, -1))} />
-        <TextInput accessibilityLabel="Macro date" value={selectedDate} onChangeText={setSelectedDate} style={[styles.input, styles.dateInput]} />
-        <Button label="Next" icon="chevron-forward" onPress={() => setSelectedDate(shiftISODate(selectedDate, 1))} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Previous macro day" style={styles.dateArrow} onPress={() => setSelectedDate(shiftISODate(selectedDate, -1))}>
+          <Ionicons name="chevron-back" size={22} color={Colors.ink} />
+        </Pressable>
+        <TextInput accessibilityLabel="Macro date" value={selectedDate} onChangeText={setSelectedDate} autoCorrect={false} maxLength={10} placeholder="YYYY-MM-DD" style={[styles.input, styles.dateInput]} />
+        <MacroDatePicker value={selectedDate} onChange={setSelectedDate} />
+        <Pressable accessibilityRole="button" accessibilityLabel="Next macro day" style={styles.dateArrow} onPress={() => setSelectedDate(shiftISODate(selectedDate, 1))}>
+          <Ionicons name="chevron-forward" size={22} color={Colors.ink} />
+        </Pressable>
       </View>
+      {!isISODate(selectedDate) ? <Text style={styles.error}>Enter a date as YYYY-MM-DD.</Text> : null}
       <View style={styles.metrics}>
-        <Metric label="Calories" value={String(selectedTotal?.calories ?? 0)} />
-        <Metric label="Protein" value={`${selectedTotal?.protein_g ?? 0}g`} />
-        <Metric label="Entries" value={String(selectedTotal?.entry_count ?? 0)} />
+        <Metric label="Calories" value={selectedTotal ? String(selectedTotal.calories) : "-"} />
+        <Metric label="Protein" value={selectedTotal ? `${selectedTotal.protein_g}g` : "-"} />
+        <Metric label="Entries" value={selectedTotal ? String(selectedTotal.entry_count) : "-"} />
       </View>
 
       <View style={styles.entryForm}>
         <Text style={styles.subsection}>{editingEntryId ? "Edit entry" : "Add macro entry"}</Text>
         <TextInput accessibilityLabel="Entry name" value={entryName} onChangeText={setEntryName} placeholder="Meal, snack, or item" style={styles.input} />
-        <SegmentedControl accessibilityLabel="Meal label" value={mealLabel} onChange={setMealLabel} options={MEAL_LABEL_OPTIONS} />
+        <SegmentedControl accessibilityLabel="Meal label" value={mealLabel} onChange={setMealLabel} options={MEAL_LABEL_OPTIONS} wrap />
         <View style={styles.grid}>
           <TextInput accessibilityLabel="Calories" value={entryCalories} onChangeText={setEntryCalories} keyboardType="number-pad" placeholder="Calories" style={[styles.input, styles.gridInput]} />
           <TextInput accessibilityLabel="Protein grams" value={entryProtein} onChangeText={setEntryProtein} keyboardType="decimal-pad" placeholder="Protein g" style={[styles.input, styles.gridInput]} />
@@ -515,7 +552,7 @@ function DayMacroView({
       </View>
 
       <View style={styles.entryList}>
-        <Text style={styles.subsection}>Logged today</Text>
+        <Text style={styles.subsection}>Logged on {selectedDate}</Text>
         {selectedEntries.length === 0 ? <Text style={styles.meta}>No macro entries for this date yet.</Text> : null}
         {selectedEntries.map((entry) => (
           <EntryRow key={entry.id} entry={entry} onPress={() => onEdit(entry)} />
@@ -552,28 +589,56 @@ function GridMacroView({
 
 function CalendarMacroView({
   dailyTotals,
-  targetCalories
+  targetCalories,
+  range,
+  onRange,
+  onPickDay
 }: {
   dailyTotals: MacroAnalytics["daily_totals"];
   targetCalories: number | null;
+  range: string;
+  onRange: (range: string) => void;
+  onPickDay: (day: string) => void;
 }) {
-  const recent = dailyTotals.slice(-14);
+  const [filter, setFilter] = useState("all");
+  const [sort, setSort] = useState<CalendarSort>("newest");
+  const recent = calendarDays(dailyTotals, filter === "logged", sort);
+  const scale = targetCalories || Math.max(1, ...dailyTotals.map(day => day.calories));
   return (
     <View style={styles.viewBox}>
       <Text style={styles.subsection}>Calendar view</Text>
+      <View style={styles.actions}>
+        <MacroChoice label="Calendar period" value={range} onChange={onRange} options={[
+          { value: "14", label: "Last 14 days" }, { value: "30", label: "Last 30 days" },
+          { value: "90", label: "Last 90 days" }, { value: "365", label: "Last 365 days" }
+        ]} />
+        <MacroChoice label="Filter days" value={filter} onChange={setFilter} options={[
+          { value: "all", label: "All days" }, { value: "logged", label: "Logged days" }
+        ]} />
+        <MacroChoice<CalendarSort> label="Sort days" value={sort} onChange={setSort} options={[
+          { value: "newest", label: "Newest first" }, { value: "oldest", label: "Oldest first" },
+          { value: "calories_high", label: "Highest calories" }, { value: "calories_low", label: "Lowest calories" }
+        ]} />
+      </View>
+      {targetCalories ? <Text style={styles.meta}>Daily target: {targetCalories} Cal</Text> : null}
+      <View style={styles.calendarRow}>
+        <Text style={[styles.miniLabel, { flex: 1 }]}>Date</Text><Text accessibilityLabel="Calories" style={[styles.calendarValue, styles.miniLabel]}>Cal</Text>
+      </View>
+      {!recent.length ? <Text style={styles.meta}>No matching days in this period.</Text> : null}
       {recent.map((day) => {
-        const percent = targetCalories ? Math.min(100, Math.round((day.calories / targetCalories) * 100)) : 0;
+        const percent = Math.min(100, Math.round((day.calories / scale) * 100));
         return (
-          <View key={day.meal_date} style={styles.calendarRow}>
+          <Pressable key={day.meal_date} accessibilityRole="button" accessibilityLabel={`${day.meal_date}: ${day.calories} calories, ${day.entry_count} entries`}
+            onPress={() => onPickDay(day.meal_date)} style={styles.calendarRow}>
             <View style={styles.calendarLabel}>
               <Text style={styles.dayName}>{shortDate(day.meal_date)}</Text>
               <Text style={styles.miniText}>{day.entry_count} entries</Text>
             </View>
             <View style={styles.calendarTrack}>
-              <View style={[styles.calendarFill, { width: `${targetCalories ? percent : Math.min(100, day.entry_count * 24)}%` }]} />
+              <View style={[styles.calendarFill, { width: `${percent}%` }]} />
             </View>
             <Text style={styles.calendarValue}>{day.calories}</Text>
-          </View>
+          </Pressable>
         );
       })}
     </View>
@@ -582,20 +647,29 @@ function CalendarMacroView({
 
 function AnalyticsMacroView({
   analytics,
+  range,
+  onRange,
   exportPending,
   onExport
 }: {
   analytics?: MacroAnalytics;
+  range: string;
+  onRange: (range: string) => void;
   exportPending: boolean;
   onExport: () => void;
 }) {
   return (
     <View style={styles.viewBox}>
-      <Text style={styles.subsection}>30-day analytics</Text>
+      <Text style={styles.subsection}>{range === "all" ? "All-time analytics" : `${range}-day analytics`}</Text>
+      <MacroChoice label="Analytics period" value={range} onChange={onRange} options={[
+        { value: "7", label: "Last 7 days" }, { value: "30", label: "Last 30 days" }, { value: "90", label: "Last 90 days" },
+        { value: "365", label: "Last 365 days" }, { value: "all", label: "All time" }
+      ]} />
+      {analytics ? <Text style={styles.meta}>{analytics.start_date} to {analytics.end_date}</Text> : null}
       <View style={styles.metrics}>
         <Metric label="Days logged" value={String(analytics?.days_logged ?? 0)} />
-        <Metric label="Avg calories" value={String(analytics?.averages.calories ?? 0)} />
-        <Metric label="Avg protein" value={`${analytics?.averages.protein_g ?? 0}g`} />
+        <Metric label="Cal / logged day" value={String(analytics?.averages.calories ?? 0)} />
+        <Metric label="Protein / logged day" value={`${analytics?.averages.protein_g ?? 0}g`} />
       </View>
       <View style={styles.analyticsList}>
         <MacroLine label="Calories" value={analytics?.totals.calories ?? 0} target={analytics?.targets.daily_calories ?? null} />
@@ -684,15 +758,15 @@ function MacroLine({
   target?: number | null;
   suffix?: string;
 }) {
-  const targetText = target ? ` / ${target}${suffix} daily target` : "";
+  const targetText = target ? `Daily target: ${target}${suffix}` : "";
   return (
     <View style={styles.macroLine}>
       <Text style={styles.macroLineLabel}>{label}</Text>
       <Text style={styles.macroLineValue}>
-        {value}
+        Total: {value}
         {suffix}
-        {targetText}
       </Text>
+      {targetText ? <Text style={styles.meta}>{targetText}</Text> : null}
     </View>
   );
 }
@@ -754,7 +828,7 @@ function macroEntryPayload({
 }
 
 async function deliverMacroExport(data: MacroExport) {
-  const filename = `dinner-swipe-macros-${todayISO()}.json`;
+  const filename = `dinner-swipe-macros-${data.analytics.start_date}-to-${data.analytics.end_date}.json`;
   const body = JSON.stringify(data, null, 2);
   if (Platform.OS === "web" && typeof document !== "undefined") {
     const blob = new Blob([body], { type: "application/json" });
@@ -783,24 +857,13 @@ function normalizeMealLabel(value: string | null | undefined): MealLabel {
   return "dinner";
 }
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function shiftISODate(value: string, days: number) {
-  const [year, month, day] = value.split("-").map(Number);
-  const current = new Date(Date.UTC(year, month - 1, day));
-  current.setUTCDate(current.getUTCDate() + days);
-  return current.toISOString().slice(0, 10);
-}
-
 function shortDate(value: string) {
   const [, month, day] = value.split("-").map(Number);
   return `${month}/${day}`;
 }
 
 const styles = StyleSheet.create({
-  panel: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 14, gap: 12, marginBottom: 12 },
+  panel: { gap: 16, marginBottom: 12 },
   header: { flexDirection: "row", justifyContent: "space-between", gap: 10, alignItems: "center" },
   section: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
   subsection: { color: Colors.ink, fontWeight: "900", fontSize: 16 },
@@ -826,7 +889,8 @@ const styles = StyleSheet.create({
   codeTitle: { color: Colors.ink, fontWeight: "900" },
   actions: { flexDirection: "row", gap: 10, flexWrap: "wrap", alignItems: "center" },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, backgroundColor: Colors.surface, flex: 1, color: Colors.ink },
-  dateInput: { textAlign: "center", fontWeight: "900" },
+  dateInput: { textAlign: "center", fontWeight: "900", minWidth: 118, paddingHorizontal: 4 },
+  dateArrow: { width: 36, minHeight: 44, alignItems: "center", justifyContent: "center" },
   divider: { height: 1, backgroundColor: Colors.border },
   lockedBox: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 6 },
   lockedTitle: { color: Colors.ink, fontWeight: "900" },
@@ -834,12 +898,12 @@ const styles = StyleSheet.create({
   metric: { flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10 },
   metricValue: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
   metricLabel: { color: Colors.muted, fontWeight: "800", fontSize: 12 },
-  targetBox: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 10 },
+  targetBox: { borderTopWidth: 1, borderColor: Colors.border, paddingVertical: 12, gap: 10 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   gridInput: { flex: 1, minWidth: 118 },
-  viewBox: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 12 },
-  dayHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
-  entryForm: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 10 },
+  viewBox: { borderTopWidth: 1, borderColor: Colors.border, paddingTop: 12, gap: 12 },
+  dayHeader: { flexDirection: "row", alignItems: "center", gap: 4 },
+  entryForm: { paddingVertical: 12, gap: 10 },
   entryList: { gap: 8 },
   entryRow: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10, gap: 10 },
   entryTitle: { color: Colors.ink, fontWeight: "900", fontSize: 15 },
@@ -850,7 +914,7 @@ const styles = StyleSheet.create({
   dayCalories: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 20 },
   miniLabel: { color: Colors.muted, fontWeight: "800", fontSize: 11, textTransform: "uppercase" },
   miniText: { color: Colors.muted, fontSize: 12 },
-  calendarRow: { flexDirection: "row", alignItems: "center", gap: 10 },
+  calendarRow: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44 },
   calendarLabel: { width: 58 },
   calendarTrack: { flex: 1, height: 12, borderRadius: 999, backgroundColor: Colors.softRed, overflow: "hidden" },
   calendarFill: { height: "100%", backgroundColor: Colors.tomato },
@@ -859,5 +923,7 @@ const styles = StyleSheet.create({
   macroLine: { borderBottomWidth: 1, borderBottomColor: Colors.border, paddingBottom: 8 },
   macroLineLabel: { color: Colors.ink, fontWeight: "900" },
   macroLineValue: { color: Colors.muted, marginTop: 2 },
-  status: { color: Colors.basil, fontWeight: "700" }
+  status: { color: Colors.basil, fontWeight: "700" },
+  error: { color: Colors.danger, fontWeight: "700" },
+  queryStatus: { gap: 8 }
 });

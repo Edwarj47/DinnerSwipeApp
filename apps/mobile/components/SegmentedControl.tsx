@@ -12,11 +12,12 @@ type Props<T extends string> = {
   options: Option<T>[];
   onChange: (value: T) => void;
   accessibilityLabel?: string;
+  wrap?: boolean;
 };
 
-export function SegmentedControl<T extends string>({ value, options, onChange, accessibilityLabel }: Props<T>) {
+export function SegmentedControl<T extends string>({ value, options, onChange, accessibilityLabel, wrap = false }: Props<T>) {
   return (
-    <View accessibilityLabel={accessibilityLabel} style={styles.segment}>
+    <View accessibilityLabel={accessibilityLabel} style={[styles.segment, wrap && styles.wrap]}>
       {options.map((option) => {
         const active = option.value === value;
         return (
@@ -25,7 +26,7 @@ export function SegmentedControl<T extends string>({ value, options, onChange, a
             accessibilityRole="button"
             accessibilityState={{ selected: active }}
             onPress={() => onChange(option.value)}
-            style={[styles.button, active ? styles.active : null]}
+            style={[styles.button, wrap && styles.wrapButton, active ? styles.active : null]}
           >
             <Text style={[styles.label, active ? styles.activeLabel : null]}>{option.label}</Text>
           </Pressable>
@@ -37,6 +38,8 @@ export function SegmentedControl<T extends string>({ value, options, onChange, a
 
 const styles = StyleSheet.create({
   segment: { flexDirection: "row", backgroundColor: Colors.softRed, borderRadius: 8, padding: 4, gap: 4 },
+  wrap: { flexWrap: "wrap" },
+  wrapButton: { flexBasis: 124, minWidth: 124, flexGrow: 1 },
   button: { flex: 1, minHeight: 42, alignItems: "center", justifyContent: "center", borderRadius: 7, paddingHorizontal: 8 },
   active: { backgroundColor: Colors.surface },
   label: { color: Colors.muted, fontWeight: "900" },

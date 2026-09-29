@@ -1,6 +1,47 @@
 # Android Preview UAT
 
-Updated 2026-09-28 for Android preview build 9.
+Updated 2026-09-29 for Android preview build 10.
+
+## Build 10 Update
+
+- Macro meal choices wrap into complete buttons on narrow phones; Breakfast
+  no longer splits. Day navigation includes a popup month calendar and keeps
+  direct ISO date input. Invalid/partial dates do not trigger requests.
+- Macro success notices expire after 3.5 seconds or a view change. Errors remain
+  visible so failures are not confused with a successful save.
+- Calendar rows label calories and support date/calorie sorting, all/logged-day
+  filtering, 14/30/90/365-day periods, and tapping a date to edit its entries.
+- Trends and exports share a 7/30/90/365-day or all-time range. Period totals
+  and daily targets are separate; averages are per logged day.
+- The top summary is explicitly Last 7 days, including consumed manual entries
+  and confirmed meals. The UAT code box is unchanged pending product discussion.
+- New API parameters enable exact historical day lookups and complete all-time
+  analytics/exports. Premium authorization and user scoping remain enforced.
+  All-time daily totals omit empty dates to avoid allocating years of empty rows;
+  `includes_empty_days` documents that behavior. No database migration is needed.
+- API deployed September 29 with owner approval. Public health, live route
+  parameters, anonymous-export rejection, and read-only account-scoped
+  analytics/export checks passed. Only the API container was recreated;
+  production web, worker, database schema, and unrelated services are unchanged.
+- Android build 10 is prepared locally but has not been built or published.
+  Build 9 does not contain these new macro screens.
+- Local checks: 54 API tests, 36 mobile tests (including cold-cache run), lint,
+  TypeScript, and mypy pass. Real-phone calendar/biometric UAT is still required.
+
+### API Deployment Recovery
+
+- Fresh Dinner Swipe-only custom-format backup:
+  `backups/postgres/dinner_swipe_20260929T001436Z_macro_ranges.dump` (mode 0600).
+  Archive listing validated; a full restore was not needed or performed.
+- Active image: `dinner-swipe-api:macro-ranges`, SHA prefix `947d1e333d33`.
+- Retained rollback image: `dinner-swipe-api:before-macro-ranges-20260929`.
+  No database restore or migration is needed for an API rollback. From the
+  repository root, retag the retained image and recreate only the API:
+
+```bash
+docker tag dinner-swipe-api:before-macro-ranges-20260929 dinner-swipe-dinner-swipe-api
+docker compose --profile production up -d --no-deps --no-build dinner-swipe-api
+```
 
 ## Build 9 Update
 
@@ -22,8 +63,11 @@ Updated 2026-09-28 for Android preview build 9.
   confirmation on/off, day/week scopes, cancellation, profile preservation,
   and Discover beyond the legacy target. Native biometric behavior is tested
   with mocked device events; physical-phone testing is still required.
-- Build artifact verification is pending. The completed private install link
-  will be shared with the tester, not committed here. Production web is unchanged.
+- Source `fc2d82a` is pushed; all three GitHub CI jobs passed. EAS finished
+  September 28 at 20:23 UTC. Download/ZIP/config/bundle checks passed and the
+  signing certificate matches build 8. The 79,300,350-byte APK was shared
+  privately. SHA-256: `e6ac6487dfb2ebf590ac4b16cd0e998c4395c496bc59b95642690ab6c4cadfbf`.
+  Production web is unchanged.
 
 ### Build 9 Phone Checks
 

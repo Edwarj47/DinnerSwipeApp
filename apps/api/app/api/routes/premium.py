@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import date
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Query, Request
@@ -109,9 +110,14 @@ def get_macro_summary(
 def get_macro_entries(
     db: DbDep,
     current_user: CurrentUser,
-    days: int = Query(default=7, ge=1, le=90),
+    days: int = Query(default=7, ge=1, le=366),
+    start_date: date | None = None,
+    end_date: date | None = None,
 ) -> list[dict[str, object]]:
-    return [serialize_confirmation(db, row) for row in list_macro_entries(db, current_user, days)]
+    return [
+        serialize_confirmation(db, row)
+        for row in list_macro_entries(db, current_user, days, start_date, end_date)
+    ]
 
 
 @router.post("/macros/entries", response_model=MealMacroConfirmationOut)
@@ -136,16 +142,26 @@ def remove_macro_entry(entry_id: str, db: DbDep, current_user: CurrentUser) -> d
 
 @router.get("/macros/analytics", response_model=MacroAnalytics)
 def get_macro_analytics(
-    db: DbDep, current_user: CurrentUser, days: int = Query(default=30, ge=1, le=90)
+    db: DbDep,
+    current_user: CurrentUser,
+    days: int = Query(default=30, ge=1, le=366),
+    start_date: date | None = None,
+    end_date: date | None = None,
+    all_time: bool = False,
 ) -> dict[str, object]:
-    return macro_analytics(db, current_user, days)
+    return macro_analytics(db, current_user, days, start_date, end_date, all_time)
 
 
 @router.get("/macros/export", response_model=MacroExport)
 def get_macro_export(
-    db: DbDep, current_user: CurrentUser, days: int = Query(default=30, ge=1, le=90)
+    db: DbDep,
+    current_user: CurrentUser,
+    days: int = Query(default=30, ge=1, le=366),
+    start_date: date | None = None,
+    end_date: date | None = None,
+    all_time: bool = False,
 ) -> dict[str, object]:
-    return macro_export(db, current_user, days)
+    return macro_export(db, current_user, days, start_date, end_date, all_time)
 
 
 @router.get("/macros/targets", response_model=MacroTargetOut)
