@@ -98,7 +98,9 @@ def serialize_recipe(
     }
 
 
-def create_recipe(db: Session, payload: RecipeCreate, user: User | None = None) -> Recipe:
+def create_recipe(
+    db: Session, payload: RecipeCreate, user: User | None = None, *, commit: bool = True
+) -> Recipe:
     ingredients = []
     for i in payload.ingredients:
         item = i.model_dump()
@@ -157,7 +159,10 @@ def create_recipe(db: Session, payload: RecipeCreate, user: User | None = None) 
         clean = normalize_name(tag)
         if clean:
             db.add(RecipeTag(recipe_id=recipe.id, tag=clean))
-    db.commit()
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(recipe)
     return recipe
 

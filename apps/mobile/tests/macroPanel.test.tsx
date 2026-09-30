@@ -45,7 +45,7 @@ test("macro success is transient, invalid dates do not query, and errors stay vi
   try {
     await screen.findByLabelText("Entry name");
     expect(screen.getByText("Last 7 days")).toBeTruthy();
-    expect(screen.getByText("Testing access code")).toBeTruthy();
+    expect(screen.queryByText("Testing access code")).toBeNull();
     fireEvent.changeText(screen.getByLabelText("Entry name"), "Breakfast oats");
     fireEvent.press(screen.getByText("Breakfast"));
     fireEvent.changeText(screen.getByLabelText("Calories"), "250");

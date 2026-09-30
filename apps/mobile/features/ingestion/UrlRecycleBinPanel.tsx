@@ -3,7 +3,6 @@ import { StyleSheet, Text, View } from "react-native";
 
 import { Button } from "@/components/Button";
 import { Colors } from "@/components/theme";
-import { formatCandidateStatus } from "@/features/recipes/recipeDisplay";
 import { apiFetch } from "@/services/api";
 
 type RecycledCandidate = {
@@ -20,7 +19,8 @@ export function UrlRecycleBinPanel() {
   const queryClient = useQueryClient();
   const recycled = useQuery<RecycledCandidate[]>({
     queryKey: ["url-ingestion-recycle-bin"],
-    queryFn: () => apiFetch<RecycledCandidate[]>("/api/v1/url-ingestion?recycled=true")
+    queryFn: () => apiFetch<RecycledCandidate[]>("/api/v1/url-ingestion?recycled=true"),
+    refetchInterval: 60_000
   });
   const restore = useMutation({
     mutationFn: (candidateId: string) =>
@@ -33,7 +33,7 @@ export function UrlRecycleBinPanel() {
     }
   });
 
-  const items: RecycledCandidate[] = recycled.data ?? [];
+  const items: RecycledCandidate[] = (recycled.data ?? []).filter((item: RecycledCandidate) => item.restore_until && new Date(utcTimestamp(item.restore_until)).getTime() > Date.now());
   if (!items.length) return null;
 
   return (
@@ -44,9 +44,9 @@ export function UrlRecycleBinPanel() {
       </View>
       {items.map((item) => (
         <View key={item.id} style={styles.row}>
-          <View style={{ flex: 1, minWidth: 0 }}>
+          <View style={{ flex: 1, flexBasis: 180, minWidth: 160 }}>
             <Text style={styles.name}>{item.recipe_name ?? "Untitled web draft"}</Text>
-            <Text numberOfLines={1} style={styles.meta}>{formatCandidateStatus(item.status)} • {restoreUntil(item.restore_until)}</Text>
+            <Text style={styles.meta}>{restoreUntil(item.restore_until)}</Text>
           </View>
           <Button
             label="Restore"
@@ -65,11 +65,13 @@ export function UrlRecycleBinPanel() {
   );
 }
 
+function utcTimestamp(value: string) {
+  return /Z$|[+-]\d{2}:\d{2}$/.test(value) ? value : `${value}Z`;
+}
 function restoreUntil(value: string | null | undefined) {
-  if (!value) return "restore window open";
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "restore window open";
-  return `restore by ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
+  if (!value) return "Expired";
+  const date = new Date(utcTimestamp(value));
+  return `Restore by ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
 }
 
 const styles = StyleSheet.create({
@@ -85,6 +87,7 @@ const styles = StyleSheet.create({
   title: { color: Colors.ink, fontSize: 20, fontWeight: "900" },
   row: {
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 10,
     borderRadius: 8,

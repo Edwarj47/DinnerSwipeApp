@@ -3,11 +3,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import Any
 
-import httpx
 import structlog
 from pydantic import BaseModel, Field
 
 from app.core.config import settings
+from app.ingestion.openai_responses import create_response
 
 logger = structlog.get_logger()
 
@@ -86,14 +86,7 @@ class OpenAIResponsesProvider(AiNormalizationProvider):
             },
         }
         try:
-            async with httpx.AsyncClient(timeout=60) as client:
-                response = await client.post(
-                    "https://api.openai.com/v1/responses",
-                    headers={"Authorization": f"Bearer {settings.openai_api_key}"},
-                    json=payload,
-                )
-                response.raise_for_status()
-            data = response.json()
+            data, model = await create_response(payload, timeout=60)
         except Exception as exc:
             logger.warning("ai_normalization_failed", error_type=type(exc).__name__)
             return {
@@ -128,7 +121,7 @@ class OpenAIResponsesProvider(AiNormalizationProvider):
         confidence = {item["field"]: item["score"] for item in parsed_data.pop("confidence", [])}
         return {
             "enabled": True,
-            "model": settings.openai_model,
+            "model": model,
             "prompt_version": self.prompt_version,
             "extraction_timestamp": datetime.now(UTC).isoformat(),
             **parsed_data,

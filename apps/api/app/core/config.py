@@ -16,7 +16,10 @@ class Settings(BaseSettings):
     refresh_token_days: int = 30
     openai_api_key: str = ""
     openai_model: str = "gpt-5-mini"
+    openai_fallback_models: str = "gpt-4.1-mini"
     ai_ingestion_enabled: bool = False
+    ai_recipe_enabled: bool = False
+    ai_recipe_model: str = "gpt-5.4-mini"
     max_upload_size_bytes: int = 10_485_760
     max_import_rows: int = 2_000
     max_cell_length: int = 10_000

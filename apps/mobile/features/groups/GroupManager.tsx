@@ -76,7 +76,7 @@ export function GroupManager({ current }: { current?: Household }) {
         <View style={styles.heading}><Text style={styles.title}>{action === "leave" ? "Leave this group?" : action === "invite" ? "Invite to your group" : action === "create" ? "Create a group" : "Join a group"}</Text><Pressable accessibilityRole="button" accessibilityLabel="Close group dialog" disabled={busy} onPress={close} style={styles.close}><Ionicons name="close" size={24} color={Colors.ink} /></Pressable></View>
         {(action === "create" || action === "join") && full ? <>
           <Text style={styles.meta}>Basic includes a private kitchen and one shared group. Premium lets you create or join unlimited groups.</Text>
-          <Button label="View Premium" icon="star-outline" onPress={() => { close(); router.push({ pathname: "/profile", params: { section: "premium" } }); }} />
+          <Button label="View Premium" icon="star-outline" onPress={() => { close(); router.push({ pathname: "/profile", params: { section: "account" } }); }} />
         </> : null}
         {action === "create" && !full ? <>
           <TextInput accessibilityLabel="Group name" placeholder="Group name" maxLength={120} value={name} onChangeText={setName} editable={!busy} style={styles.input} />

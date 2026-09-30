@@ -16,6 +16,7 @@ import { WeekDrag, WeekDragHandle, WeekDropDay } from "@/features/planner/WeekDr
 import { RecipePicker } from "@/features/recipes/RecipePicker";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { useCurrentWeek } from "@/features/planner/useCurrentWeek";
+import { TourTarget } from "@/features/onboarding/TourTarget";
 
 type WeeklySlot = WeeklyPlan["slots"][number];
 type SlotPatch = Partial<Omit<WeeklySlot, "id" | "recipe_name" | "recipe_photo_url" | "recipe_total_minutes" | "recipe_difficulty">>;
@@ -173,7 +174,7 @@ export default function WeekScreen() {
                 startPremiumCheckout.mutate();
                 return;
               }
-              router.push({ pathname: "/profile", params: { section: "premium" } });
+              router.push({ pathname: "/profile", params: { section: "account" } });
             }}
           />
         </View>
@@ -184,6 +185,7 @@ export default function WeekScreen() {
       }}>
         {groups.map(group => (
           <WeekDropDay key={group.iso} day={group.iso}>
+            <TourTarget id={group.iso === dayOptions[0]?.iso ? "week" : `week-${group.iso}`}>
             <View style={styles.groupHeader}>
               <View style={{ flex: 1 }}><Text style={styles.groupTitle}>{group.label}</Text><Text style={styles.meta}>{group.short}</Text></View>
               {group.iso && group.slots.some(slot => slot.recipe_id || slot.slot_type !== "flexible") ? (
@@ -195,6 +197,7 @@ export default function WeekScreen() {
                 <Ionicons name="add" size={20} color={Colors.tomato} /><Text style={styles.addLabel}>Add meal</Text>
               </Pressable>
             </View>
+            </TourTarget>
             {!group.slots.length ? <Text style={styles.emptyDay}>No dinner planned</Text> : null}
         {group.slots.map((slot) => {
           const isExpanded = expandedSlotId === slot.id;

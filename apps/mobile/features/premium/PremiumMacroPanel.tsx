@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as Linking from "expo-linking";
 import { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -10,6 +9,7 @@ import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { MacroChoice } from "./MacroChoice";
 import { MacroDatePicker } from "./MacroDatePicker";
+import { TourTarget } from "@/features/onboarding/TourTarget";
 import { CalendarSort, calendarDays, isISODate, macroRangeQuery, shiftISODate, todayISO } from "./macroDates";
 import {
   MacroAnalytics,
@@ -17,9 +17,7 @@ import {
   MacroExport,
   MacroSummary,
   MacroTarget,
-  PremiumStatus,
-  SubscriptionPlanStatus,
-  SubscriptionTier
+  PremiumStatus
 } from "@/services/types";
 
 type MacroView = "day" | "grid" | "calendar" | "analytics";
@@ -34,7 +32,6 @@ const MEAL_LABEL_OPTIONS: { label: string; value: MealLabel }[] = [
 
 export function PremiumMacroPanel() {
   const queryClient = useQueryClient();
-  const [code, setCode] = useState("");
   const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
   const setStatus = (message: string) => setNotice({ message, error: false });
   const setError = (message: string) => setNotice({ message, error: true });
@@ -93,14 +90,6 @@ export function PremiumMacroPanel() {
     enabled: premiumActive && (macroView === "calendar" || macroView === "grid"),
     retry: false
   });
-  const basicPlan = useMemo(
-    () => subscription.data?.plans?.find((plan: SubscriptionPlanStatus) => plan.tier === "basic"),
-    [subscription.data?.plans]
-  );
-  const premiumPlan = useMemo(
-    () => subscription.data?.plans?.find((plan: SubscriptionPlanStatus) => plan.tier === "premium"),
-    [subscription.data?.plans]
-  );
   const selectedEntries = useMemo<MacroConfirmation[]>(
     () => (entries.data ?? []).filter((entry: MacroConfirmation) => entry.meal_date === selectedDate),
     [entries.data, selectedDate]
@@ -126,45 +115,6 @@ export function PremiumMacroPanel() {
     setFat(valueToInput(targets.data.daily_fat_g));
     setGoal(targets.data.goal ?? "");
   }, [targets.data]);
-
-  const applyCode = useMutation({
-    mutationFn: () =>
-      apiFetch<PremiumStatus>("/api/v1/subscription/waiver-code", {
-        method: "POST",
-        body: JSON.stringify({ code })
-      }),
-    onSuccess: async (data) => {
-      setCode("");
-      setStatus(data.premium_active ? "Premium access unlocked." : "Basic access unlocked.");
-      await refreshPremium(queryClient);
-    },
-    onError: (error) => setError(error instanceof Error ? error.message : "Unable to apply code.")
-  });
-
-  const startCheckout = useMutation({
-    mutationFn: (tier: SubscriptionTier) =>
-      apiFetch<{ checkout_url: string }>("/api/v1/subscription/checkout-session", {
-        method: "POST",
-        body: JSON.stringify({ tier })
-      }),
-    onSuccess: async (data) => {
-      setStatus("Opening checkout.");
-      await Linking.openURL(data.checkout_url);
-    },
-    onError: (error) => setError(error instanceof Error ? error.message : "Unable to start checkout.")
-  });
-
-  const manageBilling = useMutation({
-    mutationFn: () =>
-      apiFetch<{ portal_url: string }>("/api/v1/premium/billing-portal-session", {
-        method: "POST"
-      }),
-    onSuccess: async (data) => {
-      setStatus("Opening billing portal.");
-      await Linking.openURL(data.portal_url);
-    },
-    onError: (error) => setError(error instanceof Error ? error.message : "Unable to open billing.")
-  });
 
   const saveTargets = useMutation({
     mutationFn: () =>
@@ -263,84 +213,12 @@ export function PremiumMacroPanel() {
     setEntryNotes("");
   }
 
-  const currentTier = subscription.data?.current_tier ?? "none";
-  const trialDays = subscription.data?.trial_days_remaining ?? 0;
   const activeQuery = macroView === "day" ? entries : macroView === "analytics" ? analytics : calendarAnalytics;
   function pickDay(day: string) { setSelectedDate(day); clearEntryForm(); setMacroView("day"); }
 
   return (
     <View style={styles.panel}>
-      <View style={styles.header}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.section}>Subscription</Text>
-          <Text style={styles.meta}>{tierSummary(currentTier, trialDays)}</Text>
-        </View>
-        <View style={[styles.statusPill, premiumActive ? styles.activePill : styles.lockedPill]}>
-          <Text style={[styles.statusText, premiumActive ? styles.activeText : styles.lockedText]}>
-            {currentTier === "none" ? "Inactive" : currentTier}
-          </Text>
-        </View>
-      </View>
-
-      <View style={styles.planList}>
-        <PlanCard
-          name="Basic"
-          plan={basicPlan}
-          fallbackPriceCents={subscription.data?.basic_monthly_price_cents ?? 599}
-          fallbackDescription="Recipe saving, weekly plans, grocery lists, group voting, and web recipe imports."
-          active={Boolean(subscription.data?.basic_active) && !premiumActive}
-          badge={subscription.data?.trial_active ? `${trialDays} trial days left` : "Card required for trial"}
-          actionLabel={subscription.data?.basic_active ? "Current" : "Start Basic"}
-          disabled={Boolean(subscription.data?.basic_active) || !subscription.data?.basic_stripe_configured || startCheckout.isPending}
-          onPress={() => startCheckout.mutate("basic")}
-        />
-        <PlanCard
-          name="Premium"
-          plan={premiumPlan}
-          fallbackPriceCents={subscription.data?.premium_monthly_price_cents ?? 999}
-          fallbackDescription="Everything in Basic plus daily macros, planned-meal logging, analytics, and exports."
-          active={premiumActive}
-          badge="Macro tracking"
-          actionLabel={premiumActive ? "Current" : "Upgrade"}
-          disabled={premiumActive || !subscription.data?.premium_stripe_configured || startCheckout.isPending}
-          onPress={() => startCheckout.mutate("premium")}
-        />
-      </View>
-      <Text style={styles.meta}>Basic includes a private kitchen and one shared group. Premium includes unlimited shared groups.</Text>
-
-      <View style={styles.codeBox}>
-        <Text style={styles.codeTitle}>Testing access code</Text>
-        <View style={styles.actions}>
-          <TextInput
-            autoCapitalize="none"
-            accessibilityLabel="Subscription access code"
-            value={code}
-            onChangeText={setCode}
-            placeholder="Access code"
-            placeholderTextColor="#9b928b"
-            style={styles.input}
-          />
-          <Button
-            label="Apply"
-            icon="ticket"
-            variant="primary"
-            disabled={applyCode.isPending || code.trim().length < 3}
-            onPress={() => applyCode.mutate()}
-          />
-        </View>
-      </View>
-
-      {subscription.data?.billing_management_available ? (
-        <Button
-          label="Manage billing"
-          icon="card"
-          disabled={manageBilling.isPending}
-          onPress={() => manageBilling.mutate()}
-        />
-      ) : null}
-
-      <View style={styles.divider} />
-      <Text style={styles.section}>Premium macros</Text>
+      <Text style={styles.section}>Macro Tracker</Text>
       {!premiumActive ? (
         <View style={styles.lockedBox}>
           <Text style={styles.lockedTitle}>Upgrade to track macros.</Text>
@@ -355,13 +233,13 @@ export function PremiumMacroPanel() {
         </View>
       ) : (
         <>
-          <Text style={styles.subsection}>Last 7 days</Text>
+          <TourTarget id="macros"><Text style={styles.subsection}>Last 7 days</Text>
           {summary.data ? <Text style={styles.meta}>{summary.data.start_date} to {summary.data.end_date}</Text> : null}
           <View style={styles.metrics}>
             <Metric label="Consumed" value={summary.data ? String(summary.data.eaten_meals) : "-"} />
             <Metric label="Protein" value={summary.data ? `${summary.data.totals.protein_g}g` : "-"} />
             <Metric label="Calories" value={summary.data ? String(summary.data.totals.calories) : "-"} />
-          </View>
+          </View></TourTarget>
 
           <View style={styles.targetBox}>
             <Text style={styles.subsection}>Targets</Text>
@@ -682,48 +560,6 @@ function AnalyticsMacroView({
   );
 }
 
-function PlanCard({
-  name,
-  plan,
-  fallbackPriceCents,
-  fallbackDescription,
-  active,
-  badge,
-  actionLabel,
-  disabled,
-  onPress
-}: {
-  name: string;
-  plan?: SubscriptionPlanStatus;
-  fallbackPriceCents: number;
-  fallbackDescription: string;
-  active: boolean;
-  badge: string;
-  actionLabel: string;
-  disabled: boolean;
-  onPress: () => void;
-}) {
-  const price = plan?.monthly_price_cents ?? fallbackPriceCents;
-  return (
-    <View style={[styles.planCard, active ? styles.planCardActive : null]}>
-      <View style={styles.planTop}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.planName}>{plan?.display_name ?? name}</Text>
-          <Text style={styles.planDescription}>{plan?.description ?? fallbackDescription}</Text>
-        </View>
-        <View style={styles.priceBox}>
-          <Text style={styles.price}>${(price / 100).toFixed(2)}</Text>
-          <Text style={styles.pricePeriod}>/mo</Text>
-        </View>
-      </View>
-      <View style={styles.planFooter}>
-        <Text style={styles.planBadge}>{active ? "Active" : badge}</Text>
-        <Button label={actionLabel} icon={active ? "checkmark" : "card"} disabled={disabled} onPress={onPress} />
-      </View>
-    </View>
-  );
-}
-
 function Metric({ label, value }: { label: string; value: string }) {
   return (
     <View style={styles.metric}>
@@ -780,15 +616,6 @@ async function refreshPremium(queryClient: ReturnType<typeof useQueryClient>) {
     queryClient.invalidateQueries({ queryKey: ["macro-entries"] }),
     queryClient.invalidateQueries({ queryKey: ["macro-analytics"] })
   ]);
-}
-
-function tierSummary(currentTier: string, trialDays: number) {
-  if (currentTier === "premium") return "Premium is active.";
-  if (currentTier === "basic") return "Basic is active. Upgrade anytime for macro tracking.";
-  if (currentTier === "trial") {
-    return `Basic trial is active. ${trialDays} day${trialDays === 1 ? "" : "s"} left.`;
-  }
-  return "Start Basic with a card on file or choose Premium for macro tracking.";
 }
 
 function macroEntryPayload({

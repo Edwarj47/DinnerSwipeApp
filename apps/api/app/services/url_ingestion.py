@@ -102,6 +102,11 @@ def reject_url_candidate(db: Session, user: User, candidate_id: str) -> dict[str
     candidate = db.get(UrlIngestionCandidate, candidate_id)
     if not candidate or candidate.user_id != user.id:
         raise HTTPException(status_code=404, detail="Candidate not found")
+    if candidate.status in RECYCLED_CANDIDATE_STATUSES:
+        return {
+            "status": candidate.status,
+            "restore_until": recycle_restore_until(candidate).isoformat(),
+        }
     candidate.status = "recycled"
     candidate.rejected_at = utcnow_naive()
     db.commit()
@@ -131,7 +136,7 @@ def recycle_restore_until(candidate: UrlIngestionCandidate) -> datetime:
 
 
 def candidate_can_restore(candidate: UrlIngestionCandidate) -> bool:
-    return recycle_restore_until(candidate) >= utcnow_naive()
+    return recycle_restore_until(candidate) > utcnow_naive()
 
 
 def utcnow_naive() -> datetime:
@@ -163,8 +168,7 @@ def _user_facing_warning(raw: str) -> str:
         return "Automatic cleanup had trouble with this page. Review the recipe before approving."
     if "ai normalization returned invalid" in lower:
         return (
-            "Automatic cleanup returned an unexpected format. "
-            "Review the recipe before approving."
+            "Automatic cleanup returned an unexpected format. Review the recipe before approving."
         )
     if lower == "missing photo":
         return "Add a photo link or approve a placeholder."

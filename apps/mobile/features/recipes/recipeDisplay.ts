@@ -12,6 +12,8 @@ export function formatSourceType(value: string | null | undefined) {
       return "OneNote";
     case "ai_generated":
       return "AI draft";
+    case "ai_assisted":
+      return "AI assisted";
     case "migrated":
       return "Imported";
     default:

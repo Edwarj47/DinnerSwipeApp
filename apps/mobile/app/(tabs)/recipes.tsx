@@ -9,7 +9,7 @@ import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
-import { ImportPanel } from "@/features/imports/ImportPanel";
+import { AiRecipePanel } from "@/features/recipes/AiRecipePanel";
 import { UrlIngestionPanel } from "@/features/ingestion/UrlIngestionPanel";
 import { UrlRecycleBinPanel } from "@/features/ingestion/UrlRecycleBinPanel";
 import { ManualRecipePanel } from "@/features/recipes/ManualRecipePanel";
@@ -17,13 +17,14 @@ import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
 import { formatDifficulty, formatMealType } from "@/features/recipes/recipeDisplay";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
+import { TourTarget } from "@/features/onboarding/TourTarget";
 
 type PageMode = "library" | "add" | "review";
-type AddMode = "web" | "manual" | "file";
+type AddMode = "web" | "manual" | "ai";
 
 export default function RecipesScreen() {
   const queryClient = useQueryClient();
-  const params = useLocalSearchParams<{ mode?: string; method?: string }>();
+  const params = useLocalSearchParams<{ mode?: string; method?: string; tour?: string }>();
   const [q, setQ] = useState("");
   const [pageMode, setPageMode] = useState<PageMode>("library");
   const [addMode, setAddMode] = useState<AddMode>("web");
@@ -33,9 +34,10 @@ export default function RecipesScreen() {
   useEffect(() => {
     if (params.mode === "add") {
       setPageMode("add");
-      setAddMode(params.method === "manual" ? "manual" : "web");
+      setAddMode(params.method === "manual" || params.method === "ai" ? params.method : "web");
     }
-  }, [params.mode, params.method]);
+    if (params.mode === "library" || params.mode === "review") setPageMode(params.mode);
+  }, [params.mode, params.method, params.tour]);
   const { data } = useQuery<Recipe[]>({
     queryKey: ["recipes", q],
     queryFn: () => apiFetch<Recipe[]>(`/api/v1/recipes?q=${encodeURIComponent(q)}`)
@@ -100,7 +102,7 @@ export default function RecipesScreen() {
           <Text style={styles.subtitle}>Save, import, and review meals before they hit Discover.</Text>
         </View>
       </View>
-      <SegmentedControl
+      <TourTarget id="recipe-library"><SegmentedControl
         accessibilityLabel="Recipe sections"
         value={pageMode}
         onChange={setPageMode}
@@ -109,10 +111,10 @@ export default function RecipesScreen() {
           { label: "Add", value: "add" },
           { label: "Needs Work", value: "review" }
         ]}
-      />
+      /></TourTarget>
       {pageMode === "add" ? (
         <>
-          <View style={styles.addSegment}>
+          <TourTarget id="recipe-add"><View style={styles.addSegment}>
             <SegmentedControl
               accessibilityLabel="Recipe add options"
               value={addMode}
@@ -120,13 +122,13 @@ export default function RecipesScreen() {
               options={[
                 { label: "Web", value: "web" },
                 { label: "Manual", value: "manual" },
-                { label: "CSV", value: "file" }
+                { label: "AI", value: "ai" }
               ]}
             />
-          </View>
+          </View></TourTarget>
           {addMode === "web" ? <UrlIngestionPanel /> : null}
           {addMode === "manual" ? <ManualRecipePanel /> : null}
-          {addMode === "file" ? <ImportPanel /> : null}
+          {addMode === "ai" ? <AiRecipePanel /> : null}
         </>
       ) : null}
       {pageMode === "review" ? <UrlRecycleBinPanel /> : null}

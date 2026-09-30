@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { revealTourTarget, TourScrollContext } from "@/features/onboarding/TourContext";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { Colors } from "@/components/theme";
@@ -26,6 +27,8 @@ export function WeekDrag({ days, disabled, onAssign, children }: {
 }) {
   const root = useRef<View>(null);
   const scroll = useRef<ScrollView>(null);
+  const tourContent = useRef<View>(null);
+  const revealTour = useCallback((node: View) => revealTourTarget(node, tourContent.current, scroll.current), []);
   const viewport = useRef<Rect>({ x: 0, y: 0, width: 320, height: 0 });
   const offset = useRef(0);
   const contentHeight = useRef(0);
@@ -95,7 +98,9 @@ export function WeekDrag({ days, disabled, onAssign, children }: {
           <ScrollView ref={scroll} scrollEnabled={!dragging} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled"
             onContentSizeChange={(_, height) => { contentHeight.current = height; measure(); }}
             onScroll={event => { offset.current = event.nativeEvent.contentOffset.y; if (active.current) measure(); }} scrollEventThrottle={16}>
-            {children}
+            <TourScrollContext.Provider value={revealTour}>
+              <View ref={tourContent} collapsable={false} style={{ gap: 18 }}>{children}</View>
+            </TourScrollContext.Provider>
           </ScrollView>
           {drag ? (
             <View pointerEvents="none" style={[styles.ghost, {

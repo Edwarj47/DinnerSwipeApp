@@ -29,7 +29,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#d71920"
       },
-      "versionCode": 10
+      "versionCode": 11
     },
     "web": {
       "bundler": "metro",
@@ -44,6 +44,14 @@
       "expo-router",
       "expo-secure-store",
       "expo-notifications",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Choose a recipe photo from your library.",
+          "cameraPermission": "Take a photo for a recipe.",
+          "microphonePermission": false
+        }
+      ],
       [
         "expo-local-authentication",
         {

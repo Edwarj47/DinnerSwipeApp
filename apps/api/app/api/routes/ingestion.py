@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import timedelta
 
 from fastapi import APIRouter, Query
-from sqlalchemy import or_, select
+from sqlalchemy import func, select
 
 from app.api.deps import BasicUser, DbDep
 from app.models.entities import UrlIngestionCandidate
@@ -53,10 +53,11 @@ def list_candidates(
         cutoff = utcnow_naive() - timedelta(days=URL_CANDIDATE_RECYCLE_DAYS)
         query = query.where(
             UrlIngestionCandidate.status.in_(RECYCLED_CANDIDATE_STATUSES),
-            or_(
-                UrlIngestionCandidate.rejected_at.is_(None),
-                UrlIngestionCandidate.rejected_at >= cutoff,
-            ),
+            func.coalesce(
+                UrlIngestionCandidate.rejected_at,
+                UrlIngestionCandidate.updated_at,
+                UrlIngestionCandidate.created_at,
+            ) > cutoff,
         )
     else:
         query = query.where(UrlIngestionCandidate.status.notin_(RECYCLED_CANDIDATE_STATUSES))

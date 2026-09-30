@@ -2,11 +2,41 @@ from __future__ import annotations
 
 from datetime import timedelta
 
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.models.entities import UrlIngestionCandidate, User
 from app.services.url_ingestion import utcnow_naive
+
+
+@pytest.mark.parametrize("age,visible", [(14, True), (15, False), (16, False)])
+def test_legacy_rejection_has_bounded_window(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    db_session: Session,
+    age: int,
+    visible: bool,
+) -> None:
+    user = db_session.query(User).one()
+    timestamp = utcnow_naive() - timedelta(days=age)
+    candidate = UrlIngestionCandidate(
+        user_id=user.id,
+        source_url="https://example.com/old",
+        status="rejected",
+        rejected_at=None,
+        created_at=timestamp,
+        updated_at=timestamp,
+    )
+    db_session.add(candidate)
+    db_session.commit()
+    items = client.get("/api/v1/url-ingestion?recycled=true", headers=auth_headers).json()
+    assert bool(items) == visible
+    # Repeating rejection cannot extend the restore deadline.
+    client.post(f"/api/v1/url-ingestion/{candidate.id}/reject", headers=auth_headers)
+    assert candidate.updated_at == timestamp
+    restored = client.post(f"/api/v1/url-ingestion/{candidate.id}/restore", headers=auth_headers)
+    assert restored.status_code == (200 if visible else 410)
 
 
 def test_url_candidate_rejects_to_recycle_bin_and_restores(

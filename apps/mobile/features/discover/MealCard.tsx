@@ -1,6 +1,6 @@
 import { Image } from "expo-image";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, {
   Extrapolation,
@@ -26,6 +26,7 @@ type Props = {
   recipe: Recipe;
   onAction: (action: MealAction) => void;
   onOpen: () => void;
+  compact?: boolean;
 };
 
 const EXIT_TARGETS: Record<MealAction, { x: number; y: number }> = {
@@ -35,7 +36,8 @@ const EXIT_TARGETS: Record<MealAction, { x: number; y: number }> = {
   hide: { x: 0, y: 760 }
 };
 
-export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ recipe, onAction, onOpen }, ref) {
+export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ recipe, onAction, onOpen, compact = false }, ref) {
+  const { height } = useWindowDimensions();
   const [isLeaving, setIsLeaving] = useState(false);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -114,7 +116,7 @@ export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ re
             source={{ uri: recipe.photo_url ?? undefined }}
             placeholder={require("../../assets/icon.png")}
             accessibilityLabel={recipe.name}
-            style={styles.image}
+            style={[styles.image, compact && { maxHeight: Math.max(100, Math.min(320, height - 420)) }]}
             contentFit="cover"
           />
           <View style={styles.body}>

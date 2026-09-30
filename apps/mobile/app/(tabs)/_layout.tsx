@@ -3,7 +3,7 @@ import { Tabs } from "expo-router";
 
 import { Colors } from "@/components/theme";
 import { OnboardingGuide } from "@/features/onboarding/OnboardingGuide";
-import { useAppAccess } from "@/services/session";
+import { useAppAccess, useAuthSession } from "@/services/session";
 
 const icons = {
   index: "flame-outline",
@@ -15,10 +15,11 @@ const icons = {
 
 export default function TabLayout() {
   const canUseApp = useAppAccess();
+  const { email } = useAuthSession();
   // Keep the root Stack mounted for public routes; defer protected screens and queries here.
   if (!canUseApp) return null;
   return (
-    <>
+    <OnboardingGuide key={email}>
       <Tabs
         screenOptions={({ route }) => ({
           headerShown: false,
@@ -36,7 +37,6 @@ export default function TabLayout() {
         <Tabs.Screen name="recipes" options={{ title: "Recipes" }} />
         <Tabs.Screen name="profile" options={{ title: "Profile" }} />
       </Tabs>
-      <OnboardingGuide />
-    </>
+    </OnboardingGuide>
   );
 }

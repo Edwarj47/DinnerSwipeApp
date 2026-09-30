@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useLocalSearchParams } from "expo-router";
 import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
@@ -8,6 +9,7 @@ import { Screen } from "@/components/Screen";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
+import { TourTarget } from "@/features/onboarding/TourTarget";
 
 type GroceryItem = {
   id: string;
@@ -30,6 +32,10 @@ export default function GroceryScreen() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState("");
   const [mode, setMode] = useState<GroceryMode>("list");
+  const params = useLocalSearchParams<{ mode?: string; tour?: string }>();
+  useEffect(() => {
+    if (params.mode === "list" || params.mode === "add" || params.mode === "pantry") setMode(params.mode);
+  }, [params.mode, params.tour]);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
   const [manualName, setManualName] = useState("");
   const [manualQty, setManualQty] = useState("");
@@ -104,7 +110,7 @@ export default function GroceryScreen() {
         <Button label="Regenerate" icon="sync" onPress={() => regen.mutate()} />
       </View>
       {status ? <Text style={styles.status}>{status}</Text> : null}
-      <SegmentedControl
+      <TourTarget id="grocery-list"><SegmentedControl
         accessibilityLabel="Grocery sections"
         value={mode}
         onChange={setMode}
@@ -113,7 +119,7 @@ export default function GroceryScreen() {
           { label: "Add", value: "add" },
           { label: "Pantry", value: "pantry" }
         ]}
-      />
+      /></TourTarget>
       {mode === "add" ? (
       <View style={styles.panel}>
         <Text style={styles.sectionTitle}>Add household item</Text>
@@ -126,7 +132,7 @@ export default function GroceryScreen() {
       </View>
       ) : null}
       {mode === "pantry" ? (
-      <View style={styles.panel}>
+      <TourTarget id="grocery-pantry"><View style={styles.panel}>
         <Text style={styles.sectionTitle}>Pantry exclusions</Text>
         <View style={styles.inputRow}>
           <TextInput accessibilityLabel="Pantry item" value={pantryName} onChangeText={setPantryName} placeholder="Salt, olive oil, rice" style={styles.input} />
@@ -140,7 +146,7 @@ export default function GroceryScreen() {
             </Pressable>
           ))}
         </View>
-      </View>
+      </View></TourTarget>
       ) : null}
       {mode === "list" ? grouped.map(([category, items]) => (
         <View key={category} style={styles.group}>

@@ -1,8 +1,9 @@
-import { ReactNode } from "react";
+import { ReactNode, useCallback, useRef } from "react";
 import { ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Colors } from "@/components/theme";
+import { revealTourTarget, TourScrollContext, useGuidedTour } from "@/features/onboarding/TourContext";
 
 type Props = {
   children: ReactNode;
@@ -10,11 +11,17 @@ type Props = {
 };
 
 export function Screen({ children, scroll = true }: Props) {
-  const content = <View style={styles.content}>{children}</View>;
+  const tour = useGuidedTour();
+  const contentRef = useRef<View>(null);
+  const scrollRef = useRef<ScrollView>(null);
+  const reveal = useCallback((node: View) => revealTourTarget(node, contentRef.current, scrollRef.current), []);
+  const content = <View ref={contentRef} collapsable={false} style={[styles.content, !scroll && tour && { flex: 1, minHeight: 0, paddingBottom: 12 }]}>{children}</View>;
   return (
-    <SafeAreaView style={styles.root}>
-      {scroll ? <ScrollView keyboardShouldPersistTaps="handled">{content}</ScrollView> : content}
-    </SafeAreaView>
+    <TourScrollContext.Provider value={reveal}>
+      <SafeAreaView style={styles.root} edges={tour ? ["left", "right", "bottom"] : undefined}>
+        {scroll ? <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled">{content}</ScrollView> : content}
+      </SafeAreaView>
+    </TourScrollContext.Provider>
   );
 }
 

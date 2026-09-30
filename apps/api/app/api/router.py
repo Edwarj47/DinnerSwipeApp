@@ -3,6 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from app.api.routes import (
+    ai_recipes,
     auth,
     brand,
     grocery,
@@ -17,6 +18,7 @@ from app.api.routes import (
 )
 
 api_router = APIRouter(prefix="/api/v1")
+api_router.include_router(ai_recipes.router)
 api_router.include_router(health.router)
 api_router.include_router(brand.router)
 api_router.include_router(auth.router)

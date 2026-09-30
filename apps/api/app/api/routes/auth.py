@@ -23,6 +23,7 @@ from app.models.entities import (
     GroceryListItem,
     Household,
     HouseholdMember,
+    IngestionJob,
     MealMacroConfirmation,
     MealSwipe,
     Recipe,
@@ -311,6 +312,13 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
     ).all()
     return {
         "exported_at": datetime.now(UTC).isoformat(),
+        "ai_recipe_activity": [
+            {"created_at": job.created_at.isoformat(), "status": job.status,
+             "draft": job.progress.get("draft"), "recipe_id": job.progress.get("recipe_id")}
+            for job in db.scalars(select(IngestionJob).where(
+                IngestionJob.user_id == current_user.id, IngestionJob.job_type == "ai_recipe"
+            ).order_by(IngestionJob.created_at)).all()
+        ],
         "export_format_version": "2026-08-09",
         "export_scope": "Authenticated account export. Password hashes, tokens, token identifiers, provider keys, and other household members' private identifiers are excluded.",
         "account": {

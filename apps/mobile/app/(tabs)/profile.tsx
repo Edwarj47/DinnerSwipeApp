@@ -9,13 +9,15 @@ import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { HouseholdPanel } from "@/features/groups/HouseholdPanel";
 import { PremiumMacroPanel } from "@/features/premium/PremiumMacroPanel";
+import { SubscriptionPanel } from "@/features/subscription/SubscriptionPanel";
 import { apiFetch, clearAuthTokens, getRefreshToken, getToken, setAuthTokens } from "@/services/api";
 import { BiometricSettings, BiometricTimeout, authenticateForUnlock, getBiometricSettings, setBiometricPreference, setBiometricTimeout } from "@/services/biometrics";
 import { saveProfilePreferences, shouldConfirmPlanReset } from "@/services/profilePreferences";
 import { openTutorial } from "@/services/tutorial";
-import { UserProfile } from "@/services/types";
+import { PremiumStatus, UserProfile } from "@/services/types";
+import { TourTarget } from "@/features/onboarding/TourTarget";
 
-type ProfileSection = "account" | "meals" | "group" | "premium";
+type ProfileSection = "account" | "meals" | "group" | "macros";
 type AccountAction = "overview" | "reset" | "data" | "delete";
 type GroceryRetailer = UserProfile["preferred_grocery_retailer"];
 
@@ -28,7 +30,7 @@ const GROCERY_RETAILER_OPTIONS: { label: string; value: GroceryRetailer }[] = [
 
 export default function ProfileScreen() {
   const queryClient = useQueryClient();
-  const params = useLocalSearchParams<{ reset_token?: string; section?: string }>();
+  const params = useLocalSearchParams<{ reset_token?: string; section?: string; tour?: string }>();
   const router = useRouter();
   const [section, setSection] = useState<ProfileSection>("account");
   const [accountAction, setAccountAction] = useState<AccountAction>("overview");
@@ -54,10 +56,11 @@ export default function ProfileScreen() {
     }
   }, [params.reset_token]);
   useEffect(() => {
-    if (params.section === "account" || params.section === "meals" || params.section === "group" || params.section === "premium") {
+    if (params.section === "premium") setSection("macros");
+    if (params.section === "account" || params.section === "meals" || params.section === "group" || params.section === "macros") {
       setSection(params.section);
     }
-  }, [params.section]);
+  }, [params.section, params.tour]);
   const refreshBiometricSettings = useCallback(async () => {
     setBiometricSettings(await getBiometricSettings());
   }, []);
@@ -74,6 +77,12 @@ export default function ProfileScreen() {
     queryFn: () => apiFetch<UserProfile>("/api/v1/profile"),
     retry: false
   });
+  const subscription = useQuery({
+    queryKey: ["subscription-status"],
+    queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status"),
+    retry: false
+  });
+  const premiumActive = Boolean(subscription.data?.premium_active ?? subscription.data?.active);
   useEffect(() => {
     if (!profile.data) return;
     setHouseholdSize(String(profile.data.household_size));
@@ -221,18 +230,20 @@ export default function ProfileScreen() {
       <Text style={styles.title}>Profile</Text>
       <SegmentedControl
         accessibilityLabel="Profile sections"
+        wrap
         value={section}
         onChange={setSection}
         options={[
           { label: "Account", value: "account" },
           { label: "Meals", value: "meals" },
           { label: "Group", value: "group" },
-          { label: "Premium", value: "premium" }
+          { label: "Macro Tracker", value: "macros", icon: premiumActive ? undefined : "lock-closed-outline" }
         ]}
       />
       {status ? <Text style={styles.status}>{status}</Text> : null}
       {section === "account" ? (
         <>
+          <SubscriptionPanel />
           <View style={styles.panel}>
             <Text style={styles.section}>Account</Text>
             {authStatus.data ? (
@@ -259,12 +270,8 @@ export default function ProfileScreen() {
                 </View>
               </>
             )}
-          </View>
-          <View style={styles.panel}>
+            <View style={styles.divider} />
             <View style={styles.sectionHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.section}>Account tools</Text>
-              </View>
               {accountAction !== "overview" ? <Button label="Back" icon="arrow-back" onPress={() => {
                 setDeletePassword("");
                 setDeleteConfirmation("");
@@ -309,8 +316,9 @@ export default function ProfileScreen() {
               </View>
             ) : null}
           </View>
-          <View style={styles.panel}>
-            <Text style={styles.section}>Planning</Text>
+          <TourTarget id="account"><View style={styles.panel}>
+            <Text style={styles.section}>Account Settings</Text>
+            <Text style={styles.inputLabel}>Planning</Text>
             <View style={styles.toggleRow}>
               <Text style={[styles.toggleTitle, styles.toggleCopy]}>Confirm day and week resets</Text>
               <Switch
@@ -322,9 +330,8 @@ export default function ProfileScreen() {
                 trackColor={{ false: Colors.border, true: "#f4aaa8" }}
               />
             </View>
-          </View>
-          <View style={styles.panel}>
-            <Text style={styles.section}>Device security</Text>
+            <View style={styles.divider} />
+            <Text style={styles.inputLabel}>Device security</Text>
             <View style={styles.toggleRow}>
               <View style={styles.toggleCopy}>
                 <Text style={styles.toggleTitle}>Enable Biometrics</Text>
@@ -359,11 +366,11 @@ export default function ProfileScreen() {
                 </View>
               </View>
             ) : null}
-          </View>
+          </View></TourTarget>
         </>
       ) : null}
       {section === "meals" ? (
-        <View style={styles.panel}>
+        <TourTarget id="preferences"><View style={styles.panel}>
           <Text style={styles.section}>Food and shopping</Text>
           <Text style={styles.inputLabel}>Default servings</Text>
           <TextInput accessibilityLabel="Default servings" value={householdSize} onChangeText={setHouseholdSize} keyboardType="number-pad" placeholder="2" style={styles.input} />
@@ -392,10 +399,16 @@ export default function ProfileScreen() {
           />
           <Text style={styles.meta}>Allergens are stored per user. Group owners can warn or block matching recipes during group votes.</Text>
           <Button label="Save preferences" icon="save" variant="primary" disabled={!profile.data || saveProfile.isPending || resetPreference.isPending} onPress={() => saveProfile.mutate()} />
+        </View></TourTarget>
+      ) : null}
+      {section === "group" ? <TourTarget id="groups"><HouseholdPanel /></TourTarget> : null}
+      {section === "macros" ? premiumActive ? <PremiumMacroPanel /> : (
+        <View style={styles.panel}>
+          <Text style={styles.section}>Macro Tracker</Text>
+          <Text style={styles.meta}>{subscription.isPending ? "Checking access..." : subscription.isError ? "Unable to check your subscription." : "Available with Premium."}</Text>
+          <Button label="View subscription" icon="card" onPress={() => setSection("account")} />
         </View>
       ) : null}
-      {section === "group" ? <HouseholdPanel /> : null}
-      {section === "premium" ? <PremiumMacroPanel /> : null}
     </Screen>
   );
 }

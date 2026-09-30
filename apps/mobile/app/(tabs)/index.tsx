@@ -8,7 +8,8 @@ import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { MealCard, MealCardHandle } from "@/features/discover/MealCard";
-import { OnboardingNextStepCard } from "@/features/onboarding/OnboardingNextStepCard";
+import { TourTarget } from "@/features/onboarding/TourTarget";
+import { useGuidedTour } from "@/features/onboarding/TourContext";
 import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
 import { apiFetch } from "@/services/api";
 import { Recipe, WeeklyPlan } from "@/services/types";
@@ -17,6 +18,7 @@ import { shuffleRecipes } from "@/features/discover/deck";
 import { useCurrentWeek } from "@/features/planner/useCurrentWeek";
 
 export default function DiscoverScreen() {
+  const tour = useGuidedTour();
   const router = useRouter();
   const params = useLocalSearchParams<{ replace_slot_id?: string; replace_name?: string }>();
   const queryClient = useQueryClient();
@@ -115,7 +117,7 @@ export default function DiscoverScreen() {
   }
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={Boolean(tour?.expanded && tour.step.id === "discover")}>
       <View style={styles.header}>
         <View style={styles.brand}>
           <BrandLogo size={46} />
@@ -137,8 +139,8 @@ export default function DiscoverScreen() {
           />
         ) : null}
       </View>
-      <OnboardingNextStepCard />
       {status ? <Text style={styles.status}>{status}</Text> : null}
+      <TourTarget id="discover">
       {isLoading || plan.isLoading ? (
         <View style={styles.empty}>
           <ActivityIndicator color={Colors.tomato} />
@@ -161,7 +163,7 @@ export default function DiscoverScreen() {
           </View>
         </View>
       ) : current ? (
-        <MealCard key={current.id} ref={cardRef} recipe={current} onAction={act} onOpen={() => setSelectedRecipe(current)} />
+        <MealCard key={current.id} ref={cardRef} recipe={current} onAction={act} onOpen={() => setSelectedRecipe(current)} compact={Boolean(tour)} />
       ) : (
         <View style={styles.empty}>
           <Text style={styles.done}>You're caught up</Text>
@@ -170,6 +172,7 @@ export default function DiscoverScreen() {
           <Button label="Add a recipe" icon="add" onPress={() => router.push("/recipes?mode=add")} />
         </View>
       )}
+      </TourTarget>
       <RecipeDetailSheet
         recipe={selectedRecipe}
         visible={!!selectedRecipe}
