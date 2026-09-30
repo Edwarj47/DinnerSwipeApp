@@ -1,6 +1,53 @@
 # Android Preview UAT
 
-Updated 2026-09-29 for Android preview build 10.
+Updated 2026-09-30 for Android preview build 11.
+
+## Build 11 Update
+
+- Interactive onboarding visits the actual app screens, with section selection,
+  live controls, per-section skipping, and a full-tour exit. Replay uses the
+  same flow. See [guided tour checks](guided-tour-uat.md).
+- Subscription and testing access move to Profile > Account. Account Settings
+  groups Planning and Device security. Macro Tracker is Premium-only.
+- Manual recipes remove sample shortcuts and add camera capture. AI replaces
+  the CSV tab, with description/photo input, editable review, and saved drafts.
+  Basic receives three successful drafts per UTC calendar month; discarding
+  does not refund a use. Premium has no monthly draft count limit.
+- AI requests fall back from an unavailable model to the configured backup,
+  default `gpt-4.1-mini`. The fallback also covers web-import normalization.
+  Live synthetic text and image requests both recovered from a deliberately
+  unavailable primary model. See [AI contract and limits](profile-ai-recipes-uat.md).
+- Recycled web drafts enforce the 15-day restore boundary, including legacy
+  timestamps; expired items are hidden and cannot be restored. Expired database
+  records are not purged by this release.
+- Source `1bf8961` is pushed; backend, frontend, and Docker CI jobs passed.
+  Local checks passed: 75 API tests, 46 mobile tests, lint, types, and web export.
+- Android build 11 finished September 30 at 13:28 UTC from source `1bf8961`.
+  This standalone preview embeds JavaScript and does not require Metro.
+- Download, ZIP integrity, embedded package/version, production API URL, and
+  new-feature bundle checks passed. Package is `dev.dcss.dinnerswipe`, version
+  code `11`; the signing certificate matches build 10. The 79,530,761-byte APK
+  download link is shared privately. SHA-256:
+  `aa4251b389f61643b07d01b3bf8b02c55b7af31f9ad527e5ffdcb4f143879ee5`.
+- Physical-device installation and camera permission UAT remain required.
+- API and web deployment are pending separate owner approval. The existing
+  live API is healthy but does not yet serve the new AI recipe routes. Installing
+  the APK alone will not enable AI generation or the server-side restore fix.
+
+### Build 11 Phone Checks
+
+1. Install over the existing Dinner Swipe app without uninstalling.
+2. Replay the tour, try real controls, skip a section, and exit the full tour.
+   Completed/dismissed tours must not appear on every launch.
+3. Check Subscription at the top of Account and Planning/Device security under
+   Account Settings. Basic should see Macro Tracker locked; Premium can open it.
+4. Add a manual recipe photo: grant, deny, and cancel camera/library permission.
+   Verify rotation and large-photo errors on a real device.
+5. After the API deployment, generate from text and a photo, edit the draft,
+   save it, and discard a second draft. Basic's remaining allowance must reflect
+   successful generations, including discarded drafts; failed calls are free.
+6. Check recycled drafts near the 15-day boundary. Long names and restore dates
+   must remain readable; expired drafts must not be restorable.
 
 ## Build 10 Update
 
