@@ -1,6 +1,52 @@
 # Android Preview UAT
 
-Updated 2026-09-30 for Android preview build 11.
+Updated 2026-10-01 for Android preview build 12.
+
+## Build 12 Update
+
+- Coupon code replaces Testing access code in the paywall and Account. Access grants
+  and Stripe invoice discounts use the same entry point but have different billing effects.
+- Manual recipes and AI draft review support editable nutrition per serving or whole recipe.
+  Premium users can log a saved recipe with fractional portions and edit the resulting totals.
+- Library, Hidden Recipes, and Archived Recipes expand independently, with Unhide/Restore.
+- Live billing handles confirmed payments, portal upgrades, failed invoices, duplicate and
+  out-of-order events, card-required trials, and retry-safe checkout. Returning subscribers
+  do not receive another trial. Existing development access is unchanged.
+- Source `f06a087` is pushed. [CI 36799063096](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/36799063096)
+  passed backend, frontend, and Docker jobs. Local checks: 97 API tests, 49 mobile tests,
+  Ruff, mypy, ESLint, TypeScript, and web export.
+- Production web passed mocked-account browser tests at 320/390/1280 pixels for nutrition,
+  portion logging, coupons, and restoring recipes. No customer data was written.
+- API/web are deployed. Live Stripe Checkout creation was checked for both prices and the
+  Basic card requirement, then sessions were expired without entering a card or charging.
+  Signature rejection, unpaid-event rejection, protected routes, and account reads passed.
+- Backup: `backups/releases/20261001T005549Z_preview12`, private files, full isolated restore
+  verified. No migration. Current API image `2456868e5769`, web `3c2180921971`; rollback tags
+  `dinner-swipe-api:before-preview12` and `dinner-swipe-web:before-preview12`. Environment,
+  webhook, and portal configuration snapshots are in the same private release directory.
+- Only API/web containers changed. Worker, database, and all unrelated container identities,
+  image IDs, and start times were compared and are unchanged.
+- Android preview 12 completed October 1 at 01:10 UTC, EAS build
+  `81f33dee-a6ac-4d35-b50b-d6bd3be4f29d`, source `f06a087`. This standalone APK
+  embeds JavaScript and does not require Metro. The verified link is shared privately.
+- Download, ZIP integrity, embedded package/version, production API URL, and new feature
+  bundle checks passed. Package `dev.dcss.dinnerswipe`, version code `12`, signing certificate
+  matches build 11. Size 79,539,197 bytes; SHA-256:
+  `46b98ef87dd4a7f95e717ec24848276bf3bff66ed110162a07d56404c74040cd`.
+- Physical-phone installation/UAT remains to be confirmed by the tester. No real card was
+  charged during this release. A completed payment and renewal exercise remains outstanding.
+
+### Build 12 Phone Checks
+
+1. Install over build 11; confirm the saved account/session remains available.
+2. Add nutrition to a recipe, switch between per-serving and whole-recipe entry, and save.
+3. Log 1.5 servings from the recipe, adjust a nutrient manually, and verify daily totals/export.
+4. Hide and archive separate recipes, expand their sections, search, and restore each.
+5. Confirm Coupon code appears at signup and in Account. Development access still bypasses
+   billing. Normal checkout uses live payments; do not enter a real card just to test a button.
+6. Complete a separately authorized payment/UAT exercise before public rollout. See
+   [production billing readiness](production-billing-readiness.md) for remaining store,
+   payment lifecycle, tax, and support-policy requirements.
 
 ## Build 11 Update
 
