@@ -3,15 +3,17 @@ import * as Linking from "expo-linking";
 import { useMemo, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
-import { PremiumStatus, SubscriptionPlanStatus, SubscriptionTier } from "@/services/types";
+import { CouponResult, PremiumStatus, SubscriptionPlanStatus, SubscriptionTier } from "@/services/types";
 
 export function SubscriptionPanel() {
   const queryClient = useQueryClient();
   const [code, setCode] = useState("");
   const [status, setStatus] = useState("");
   const [error, setError] = useState("");
+  const [couponTier, setCouponTier] = useState<SubscriptionTier>("basic");
   const subscription = useQuery({
     queryKey: ["subscription-status"],
     queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status"),
@@ -27,15 +29,18 @@ export function SubscriptionPanel() {
     [subscription.data?.plans]
   );
   const applyCode = useMutation({
+    onMutate: () => { setStatus(""); setError(""); },
     mutationFn: () =>
-      apiFetch<PremiumStatus>("/api/v1/subscription/waiver-code", {
+      apiFetch<CouponResult>("/api/v1/subscription/coupon-code", {
         method: "POST",
-        body: JSON.stringify({ code })
+        body: JSON.stringify({ code, tier: couponTier })
       }),
     onSuccess: async (data) => {
       setCode("");
       setError("");
-      setStatus(data.premium_active ? "Premium access unlocked." : "Basic access unlocked.");
+      setStatus(data.message);
+      if (data.subscription) queryClient.setQueryData(["subscription-status"], data.subscription);
+      if (data.checkout_url) await Linking.openURL(data.checkout_url);
       await queryClient.invalidateQueries({ queryKey: ["subscription-status"] });
       await queryClient.invalidateQueries({ queryKey: ["premium-status"] });
       await queryClient.invalidateQueries({ queryKey: ["ai-recipe-usage"] });
@@ -92,7 +97,7 @@ export function SubscriptionPanel() {
           fallbackPriceCents={subscription.data?.basic_monthly_price_cents ?? 599}
           fallbackDescription="Recipe saving, weekly plans, grocery lists, group voting, and web recipe imports."
           active={Boolean(subscription.data?.basic_active) && !premiumActive}
-          badge={premiumActive ? "Included with Premium" : subscription.data?.trial_active ? `${trialDays} trial days left` : "Card required for trial"}
+          badge={premiumActive ? "Included with Premium" : subscription.data?.trial_active ? `${trialDays} trial days left` : subscription.data?.basic_trial_eligible === false ? "Billed monthly" : "Card required for trial"}
           actionLabel={premiumActive ? "Included" : subscription.data?.basic_active ? "Current" : "Start Basic"}
           disabled={Boolean(subscription.data?.basic_active) || !subscription.data?.basic_stripe_configured || startCheckout.isPending}
           onPress={() => startCheckout.mutate("basic")}
@@ -112,15 +117,18 @@ export function SubscriptionPanel() {
       <Text style={styles.meta}>Basic includes a private kitchen and one shared group. Premium includes unlimited shared groups.</Text>
 
       <View style={styles.codeBox}>
-        <Text style={styles.codeTitle}>Testing access code</Text>
-        <Text style={styles.meta}>For invited testers to activate or change access. Existing access stays active without re-entering a code.</Text>
+        <Text style={styles.codeTitle}>Coupon code</Text>
+        <Text style={styles.meta}>Discounts follow the coupon's terms. Free-access coupons do not charge a card.</Text>
+        {!subscription.data?.basic_active ? <SegmentedControl accessibilityLabel="Coupon plan" value={couponTier} onChange={setCouponTier}
+          options={[{ label: "Basic", value: "basic" }, { label: "Premium", value: "premium" }]} /> : null}
         <View style={styles.actions}>
           <TextInput
             autoCapitalize="none"
-            accessibilityLabel="Subscription access code"
+            accessibilityLabel="Coupon code"
             value={code}
             onChangeText={setCode}
-            placeholder="Access code"
+            placeholder="Coupon code"
+            autoCorrect={false}
             placeholderTextColor="#9b928b"
             style={styles.input}
           />

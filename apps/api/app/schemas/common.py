@@ -93,6 +93,7 @@ class PremiumStatus(ApiModel):
     trial_active: bool = False
     trial_ends_at: datetime | None = None
     trial_days_remaining: int = 0
+    basic_trial_eligible: bool = True
     basic_monthly_price_cents: int = 599
     premium_monthly_price_cents: int = 999
     basic_stripe_configured: bool = False
@@ -106,6 +107,16 @@ class PremiumWaiverRequest(ApiModel):
 
 class SubscriptionCheckoutRequest(ApiModel):
     tier: Literal["basic", "premium"] = "premium"
+
+
+class CouponRequest(PremiumWaiverRequest):
+    tier: Literal["basic", "premium"] = "basic"
+
+
+class CouponResult(ApiModel):
+    message: str
+    subscription: PremiumStatus | None = None
+    checkout_url: str | None = None
 
 
 class CheckoutSessionOut(ApiModel):
@@ -249,6 +260,14 @@ class InstructionIn(ApiModel):
     timer_minutes: int | None = None
 
 
+class RecipeNutrition(ApiModel):
+    calories: float | None = Field(default=None, ge=0, le=20000, allow_inf_nan=False)
+    protein_g: float | None = Field(default=None, ge=0, le=1000, allow_inf_nan=False)
+    carbs_g: float | None = Field(default=None, ge=0, le=2000, allow_inf_nan=False)
+    fat_g: float | None = Field(default=None, ge=0, le=1000, allow_inf_nan=False)
+    fiber_g: float | None = Field(default=None, ge=0, le=500, allow_inf_nan=False)
+
+
 class RecipeCreate(ApiModel):
     name: str = Field(min_length=2, max_length=240)
     description: str | None = None
@@ -267,6 +286,7 @@ class RecipeCreate(ApiModel):
     ingredients: list[IngredientIn]
     instructions: list[InstructionIn]
     accept_placeholder_photo: bool = False
+    nutrition: RecipeNutrition | None = None
 
 
 class RecipeOut(ApiModel):
@@ -295,6 +315,9 @@ class RecipeOut(ApiModel):
     tags: list[str] = Field(default_factory=list)
     is_favorite: bool = False
     is_hidden: bool = False
+    is_archived: bool = False
+    can_edit: bool = False
+    nutrition: RecipeNutrition | None = None
     last_selected_date: date | None = None
 
 

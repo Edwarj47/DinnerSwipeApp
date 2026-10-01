@@ -19,6 +19,7 @@ import { formatDifficulty, formatMealType, formatSourceType } from "@/features/r
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
+import { RecipeNutritionPanel } from "./RecipeNutritionPanel";
 
 type RecipeAction = "add" | "skip" | "favorite" | "hide";
 
@@ -125,7 +126,8 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
               <Stat label="Serves" value={String(recipe.servings)} />
               <Stat label="Level" value={formatDifficulty(recipe.difficulty)} />
             </View>
-            <View style={styles.actionPanel}>
+            <RecipeNutritionPanel key={recipe.id} recipe={recipe} />
+            {!recipe.is_archived && !recipe.is_hidden ? <><View style={styles.actionPanel}>
               <Text style={styles.actionTitle}>Choose</Text>
               <View style={styles.actionGrid}>
                 <ActionTile
@@ -166,7 +168,7 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
                 <Button label="Maybe" icon="help-circle" onPress={() => vote.mutate({ recipe_id: recipe.id, vote: "maybe" })} />
                 <Button label="No" icon="close-circle" onPress={() => vote.mutate({ recipe_id: recipe.id, vote: "no" })} />
               </View>
-            </View>
+            </View></> : null}
             <RecipeSection title="Ingredients">
               {recipe.ingredients.map((item, index) => (
                 <View key={`${item.original_text}-${index}`} style={styles.ingredientRow}>

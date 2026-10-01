@@ -4,7 +4,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import Select, and_, func, or_, select
+from sqlalchemy import Select, and_, func, or_, select, true
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.entities import (
@@ -19,12 +19,13 @@ from app.models.entities import (
     Recipe,
     RecipeIngredient,
     RecipeInstructionStep,
+    RecipeMacroProfile,
     RecipeTag,
     User,
     WeeklyPlan,
     WeeklyPlanSlot,
 )
-from app.schemas.common import RecipeCreate
+from app.schemas.common import RecipeCreate, RecipeNutrition
 from app.services.parsing import normalize_name, parse_ingredients, recipe_hash
 from app.services.retailers import WalmartSearchLinkAdapter
 from app.services.validation import validate_recipe_payload
@@ -35,6 +36,16 @@ def serialize_recipe(
 ) -> dict[str, Any]:
     favorite = False
     hidden = False
+    nutrition = None
+    if db:
+        profile = db.scalar(
+            select(RecipeMacroProfile).where(RecipeMacroProfile.recipe_id == recipe.id)
+        )
+        if profile:
+            nutrition = {
+                field: getattr(profile, f"{field}_per_serving")
+                for field in RecipeNutrition.model_fields
+            }
     if user_id and db:
         favorite_count = db.scalar(
             select(func.count())
@@ -94,6 +105,9 @@ def serialize_recipe(
         "tags": [tag.tag for tag in recipe.tags],
         "is_favorite": favorite,
         "is_hidden": hidden,
+        "is_archived": recipe.archived_at is not None,
+        "can_edit": bool(user_id and recipe.owner_user_id == user_id),
+        "nutrition": nutrition,
         "last_selected_date": None,
     }
 
@@ -159,6 +173,8 @@ def create_recipe(
         clean = normalize_name(tag)
         if clean:
             db.add(RecipeTag(recipe_id=recipe.id, tag=clean))
+    if payload.nutrition is not None:
+        save_recipe_nutrition(db, recipe, payload.nutrition)
     if commit:
         db.commit()
     else:
@@ -167,7 +183,20 @@ def create_recipe(
     return recipe
 
 
-def accessible_recipes_query(user: User, household_id: str | None = None) -> Select[tuple[Recipe]]:
+def save_recipe_nutrition(db: Session, recipe: Recipe, nutrition: RecipeNutrition) -> None:
+    profile = db.scalar(select(RecipeMacroProfile).where(RecipeMacroProfile.recipe_id == recipe.id))
+    if not profile:
+        profile = RecipeMacroProfile(recipe_id=recipe.id)
+        db.add(profile)
+    for field, value in nutrition.model_dump().items():
+        setattr(profile, f"{field}_per_serving", value)
+    profile.source = "recipe"
+    profile.needs_review = False
+
+
+def accessible_recipes_query(
+    user: User, household_id: str | None = None, *, include_archived: bool = False
+) -> Select[tuple[Recipe]]:
     household_id = household_id or (user.profile.household_id if user.profile else None)
     return (
         select(Recipe)
@@ -177,7 +206,7 @@ def accessible_recipes_query(user: User, household_id: str | None = None) -> Sel
             selectinload(Recipe.tags),
         )
         .where(
-            Recipe.archived_at.is_(None),
+            true() if include_archived else Recipe.archived_at.is_(None),
             Recipe.validation_status == "approved",
             or_(
                 Recipe.owner_user_id.is_(None),

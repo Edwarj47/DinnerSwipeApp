@@ -292,7 +292,7 @@ def test_basic_checkout_uses_basic_price_and_card_required_trial(
 
     class FakeSessions:
         @staticmethod
-        def create(params: dict[str, Any]) -> SimpleNamespace:
+        def create(params: dict[str, Any], options: dict[str, Any]) -> SimpleNamespace:
             captured["params"] = params
             return SimpleNamespace(url="https://checkout.stripe.test/basic")
 
@@ -355,6 +355,7 @@ def test_signed_stripe_webhook_is_processed(
             "id": "evt_local_smoke",
             "object": "event",
             "type": "customer.subscription.updated",
+            "livemode": False,
             "data": {
                 "object": {
                     "id": "sub_local_smoke",
@@ -382,4 +383,4 @@ def test_signed_stripe_webhook_is_processed(
     )
 
     assert response.status_code == 200
-    assert response.json()["status"] == "processed"
+    assert response.json()["status"] == "ignored"

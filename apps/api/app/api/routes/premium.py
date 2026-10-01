@@ -9,6 +9,8 @@ from app.api.deps import CurrentUser, DbDep
 from app.schemas.common import (
     BillingPortalSessionOut,
     CheckoutSessionOut,
+    CouponRequest,
+    CouponResult,
     MacroAnalytics,
     MacroEntryUpdate,
     MacroExport,
@@ -31,6 +33,7 @@ from app.services.billing import (
     serialize_subscription_status,
     verify_stripe_event,
 )
+from app.services.coupons import apply_coupon
 from app.services.macros import (
     create_confirmation,
     delete_macro_entry,
@@ -46,6 +49,13 @@ from app.services.macros import (
 )
 
 router = APIRouter(tags=["premium"])
+
+
+@router.post("/subscription/coupon-code", response_model=CouponResult)
+def redeem_coupon(
+    payload: CouponRequest, db: DbDep, current_user: CurrentUser
+) -> dict[str, object]:
+    return apply_coupon(db, current_user, payload.code, payload.tier)
 
 
 @router.get("/premium/status", response_model=PremiumStatus)

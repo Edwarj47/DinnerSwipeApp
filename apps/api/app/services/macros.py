@@ -5,6 +5,7 @@ from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from fastapi import HTTPException
+from pydantic import ValidationError
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -15,10 +16,17 @@ from app.models.entities import (
     RecipeMacroProfile,
     User,
     UserSubscription,
+    WeeklyPlan,
     WeeklyPlanSlot,
 )
-from app.schemas.common import MacroEntryUpdate, MacroTargetIn, MealMacroConfirmationIn
+from app.schemas.common import (
+    MacroEntryUpdate,
+    MacroTargetIn,
+    MealMacroConfirmationIn,
+    RecipeNutrition,
+)
 from app.services.billing import is_premium_active, require_premium, serialize_premium_status
+from app.services.recipes import accessible_recipes_query
 
 
 def get_or_create_targets(db: Session, user: User) -> MacroProfileTarget:
@@ -69,8 +77,11 @@ def create_confirmation(
     recipe_id = payload.recipe_id
     if payload.weekly_plan_slot_id:
         slot = db.get(WeeklyPlanSlot, payload.weekly_plan_slot_id)
-        if not slot:
+        plan = db.get(WeeklyPlan, slot.weekly_plan_id) if slot else None
+        if not slot or not plan or plan.user_id != user.id:
             raise HTTPException(status_code=404, detail="Weekly plan slot not found")
+        if recipe_id and recipe_id != slot.recipe_id:
+            raise HTTPException(422, "Recipe does not match the planned meal")
         recipe_id = recipe_id or slot.recipe_id
     recipe = _accessible_recipe(db, user, recipe_id) if recipe_id else None
     if recipe_id and not recipe:
@@ -86,6 +97,7 @@ def create_confirmation(
             "fiber_g": 0,
         }
         macro_source = "skipped"
+    _validate_totals(macros)
     confirmation = MealMacroConfirmation(
         user_id=user.id,
         recipe_id=recipe.id if recipe else None,
@@ -142,6 +154,7 @@ def update_macro_entry(
         row.meal_date = updates["meal_date"]
     if "status" in updates and updates["status"] is not None:
         row.status = updates["status"]
+    previous_servings = row.servings_consumed
     if "servings_consumed" in updates and updates["servings_consumed"] is not None:
         row.servings_consumed = updates["servings_consumed"]
 
@@ -151,6 +164,17 @@ def update_macro_entry(
             setattr(row, field, 0)
         row.macro_source = "skipped"
     else:
+        if row.servings_consumed != previous_servings:
+            # Scale the logged snapshot; later recipe edits must not rewrite food history.
+            if previous_servings <= 0 and any(field not in updates for field in macro_fields):
+                raise HTTPException(422, "Enter nutrition totals when changing a zero portion")
+            for field in macro_fields:
+                if field not in updates:
+                    setattr(
+                        row,
+                        field,
+                        _scaled(getattr(row, field), row.servings_consumed / previous_servings),
+                    )
         changed_macro = False
         for field in macro_fields:
             if field in updates:
@@ -158,6 +182,7 @@ def update_macro_entry(
                 changed_macro = True
         if changed_macro:
             row.macro_source = "manual"
+    _validate_totals({field: getattr(row, field) for field in macro_fields})
     db.commit()
     db.refresh(row)
     return row
@@ -307,38 +332,42 @@ def _confirmation_macros(
         "fat_g": payload.fat_g,
         "fiber_g": payload.fiber_g,
     }
-    if any(value is not None for value in manual.values()):
-        return manual, "manual"
     if not recipe:
-        return manual, "unmatched_recipe"
+        return manual, "manual" if any(
+            v is not None for v in manual.values()
+        ) else "unmatched_recipe"
     profile = db.scalar(select(RecipeMacroProfile).where(RecipeMacroProfile.recipe_id == recipe.id))
-    if not profile:
-        return manual, "unmatched_recipe"
+    if not profile or all(getattr(profile, f"{field}_per_serving") is None for field in manual):
+        return manual, "manual" if any(
+            v is not None for v in manual.values()
+        ) else "unmatched_recipe"
     scale = payload.servings_consumed
-    return {
+    calculated = {
         "calories": _scaled(profile.calories_per_serving, scale),
         "protein_g": _scaled(profile.protein_g_per_serving, scale),
         "carbs_g": _scaled(profile.carbs_g_per_serving, scale),
         "fat_g": _scaled(profile.fat_g_per_serving, scale),
         "fiber_g": _scaled(profile.fiber_g_per_serving, scale),
-    }, profile.source
+    }
+    supplied = payload.model_fields_set.intersection(manual)
+    return calculated | {
+        key: manual[key] for key in supplied
+    }, "manual" if supplied else profile.source
 
 
 def _accessible_recipe(db: Session, user: User, recipe_id: str | None) -> Recipe | None:
     if not recipe_id:
         return None
-    household_id = user.profile.household_id if user.profile else None
-    return db.scalar(
-        select(Recipe).where(
-            Recipe.id == recipe_id,
-            Recipe.archived_at.is_(None),
-            (
-                (Recipe.owner_user_id.is_(None))
-                | (Recipe.owner_user_id == user.id)
-                | (Recipe.household_id == household_id)
-            ),
-        )
-    )
+    return db.scalar(accessible_recipes_query(user).where(Recipe.id == recipe_id))
+
+
+def _validate_totals(macros: dict[str, float | None]) -> None:
+    try:
+        RecipeNutrition.model_validate(macros)
+    except ValidationError as exc:
+        raise HTTPException(
+            422, "Nutrition totals are too large. Check the servings and amounts."
+        ) from exc
 
 
 def _scaled(value: float | None, scale: float) -> float | None:

@@ -8,6 +8,7 @@ import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { MacroChoice } from "./MacroChoice";
+import { RecipeMacroLogger } from "@/features/recipes/RecipeMacroLogger";
 import { MacroDatePicker } from "./MacroDatePicker";
 import { TourTarget } from "@/features/onboarding/TourTarget";
 import { CalendarSort, calendarDays, isISODate, macroRangeQuery, shiftISODate, todayISO } from "./macroDates";
@@ -53,6 +54,7 @@ export function PremiumMacroPanel() {
   const [entryFat, setEntryFat] = useState("");
   const [entryFiber, setEntryFiber] = useState("");
   const [entryNotes, setEntryNotes] = useState("");
+  const [recipeLog, setRecipeLog] = useState<MacroConfirmation | "new" | null>(null);
 
   const subscription = useQuery({
     queryKey: ["subscription-status"],
@@ -188,6 +190,7 @@ export function PremiumMacroPanel() {
   });
 
   function beginEdit(entry: MacroConfirmation) {
+    if (entry.recipe_id) { setRecipeLog(entry); return; }
     setEditingEntryId(entry.id);
     setSelectedDate(entry.meal_date);
     setEntryName(entry.entry_name ?? entry.recipe_name ?? "");
@@ -277,6 +280,7 @@ export function PremiumMacroPanel() {
           </View> : activeQuery.isLoading && (macroView !== "day" || isISODate(selectedDate)) ? <Text style={styles.meta}>Loading macros...</Text> : null}
 
           {macroView === "day" ? (
+            <><Button label="Log a saved recipe" icon="restaurant-outline" onPress={() => setRecipeLog("new")} />
             <DayMacroView
               selectedDate={selectedDate}
               setSelectedDate={setSelectedDate}
@@ -305,8 +309,10 @@ export function PremiumMacroPanel() {
               onClear={clearEntryForm}
               onDelete={() => editingEntryId ? deleteEntry.mutate(editingEntryId) : undefined}
               onEdit={beginEdit}
-            />
+            /></>
           ) : null}
+          {recipeLog ? <RecipeMacroLogger entry={recipeLog === "new" ? undefined : recipeLog} date={selectedDate}
+            onClose={() => setRecipeLog(null)} /> : null}
 
           {macroView === "grid" ? (
             <GridMacroView dailyTotals={calendarAnalytics.data?.daily_totals ?? []} onPickDay={pickDay} />

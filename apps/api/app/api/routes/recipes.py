@@ -1,14 +1,15 @@
 from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
+from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile
-from sqlalchemy import func, or_, select
+from sqlalchemy import delete, func, or_, select
 
 from app.api.deps import BasicUser, DbDep
 from app.core.config import settings
 from app.models.entities import Favorite, HiddenRecipe, MealSwipe, Recipe, WeeklyPlanSlot
-from app.schemas.common import RecipeCreate, RecipeOut, SwipeRequest
+from app.schemas.common import RecipeCreate, RecipeNutrition, RecipeOut, SwipeRequest
 from app.services.media_storage import get_media_storage
 from app.services.recipes import (
     accessible_recipes_query,
@@ -17,6 +18,7 @@ from app.services.recipes import (
     current_week_start,
     get_or_create_current_plan,
     record_swipe,
+    save_recipe_nutrition,
     serialize_recipe,
 )
 
@@ -36,8 +38,16 @@ def list_recipes(
     max_total_minutes: int | None = Query(default=None, ge=1, le=1440),
     limit: int = Query(30, ge=1, le=100),
     offset: int = Query(0, ge=0),
+    collection: Literal["library", "hidden", "archived"] | None = None,
 ) -> list[dict[str, object]]:
-    query = accessible_recipes_query(current_user)
+    query = accessible_recipes_query(current_user, include_archived=collection == "archived")
+    hidden_ids = select(HiddenRecipe.recipe_id).where(HiddenRecipe.user_id == current_user.id)
+    if collection == "archived":
+        query = query.where(
+            Recipe.owner_user_id == current_user.id, Recipe.archived_at.is_not(None)
+        )
+    elif collection == "hidden":
+        query = query.where(Recipe.id.in_(hidden_ids))
     if owned_only:
         query = query.where(Recipe.owner_user_id == current_user.id)
     if q:
@@ -57,15 +67,14 @@ def list_recipes(
         )
     effective_max = max_total_minutes or (
         current_user.profile.max_cook_minutes
-        if apply_preferences and current_user.profile
+        if apply_preferences and not collection and current_user.profile
         else None
     )
     if effective_max:
         query = query.where(
             or_(Recipe.total_minutes.is_(None), Recipe.total_minutes <= effective_max)
         )
-    if not include_hidden:
-        hidden_ids = select(HiddenRecipe.recipe_id).where(HiddenRecipe.user_id == current_user.id)
+    if collection == "library" or (not collection and not include_hidden):
         query = query.where(Recipe.id.not_in(hidden_ids))
     recipes = db.scalars(query.limit(limit).offset(offset)).unique().all()
     return [serialize_recipe(recipe, current_user.id, db) for recipe in recipes]
@@ -123,6 +132,51 @@ def archive_recipe(recipe_id: str, db: DbDep, current_user: BasicUser) -> dict[s
     recipe.archived_at = datetime.utcnow()
     db.commit()
     return {"status": "archived"}
+
+
+@router.post("/{recipe_id}/restore")
+def restore_recipe(recipe_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
+    recipe = db.get(Recipe, recipe_id)
+    if not recipe or recipe.owner_user_id != current_user.id:
+        raise HTTPException(404, "Recipe not found")
+    recipe.archived_at = None
+    db.execute(
+        delete(HiddenRecipe).where(
+            HiddenRecipe.user_id == current_user.id,
+            HiddenRecipe.recipe_id == recipe_id,
+        )
+    )
+    db.commit()
+    return {"status": "restored"}
+
+
+@router.post("/{recipe_id}/unhide")
+def unhide_recipe(recipe_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
+    if not db.scalar(accessible_recipes_query(current_user).where(Recipe.id == recipe_id)):
+        raise HTTPException(404, "Recipe not found")
+    db.execute(
+        delete(HiddenRecipe).where(
+            HiddenRecipe.user_id == current_user.id,
+            HiddenRecipe.recipe_id == recipe_id,
+        )
+    )
+    db.commit()
+    return {"status": "visible"}
+
+
+@router.put("/{recipe_id}/nutrition", response_model=RecipeOut)
+def update_recipe_nutrition(
+    recipe_id: str,
+    payload: RecipeNutrition,
+    db: DbDep,
+    current_user: BasicUser,
+) -> dict[str, object]:
+    recipe = db.get(Recipe, recipe_id)
+    if not recipe or recipe.owner_user_id != current_user.id:
+        raise HTTPException(404, "Recipe not found")
+    save_recipe_nutrition(db, recipe, payload)
+    db.commit()
+    return serialize_recipe(recipe, current_user.id, db)
 
 
 @router.post("/swipes")

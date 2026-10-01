@@ -16,6 +16,16 @@ export type Instruction = {
   timer_minutes?: number | null;
 };
 
+export type RecipeNutrition = {
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  fiber_g: number | null;
+};
+
+export type CouponResult = { message: string; subscription?: PremiumStatus | null; checkout_url?: string | null };
+
 export type Recipe = {
   id: string;
   name: string;
@@ -39,6 +49,9 @@ export type Recipe = {
   tags: string[];
   is_favorite: boolean;
   is_hidden: boolean;
+  is_archived?: boolean;
+  can_edit?: boolean;
+  nutrition?: RecipeNutrition | null;
   last_selected_date?: string | null;
 };
 
@@ -133,6 +146,7 @@ export type PremiumStatus = {
   trial_active: boolean;
   trial_ends_at?: string | null;
   trial_days_remaining: number;
+  basic_trial_eligible?: boolean;
   basic_monthly_price_cents: number;
   premium_monthly_price_cents: number;
   basic_stripe_configured: boolean;

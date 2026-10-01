@@ -14,6 +14,7 @@ import { UrlIngestionPanel } from "@/features/ingestion/UrlIngestionPanel";
 import { UrlRecycleBinPanel } from "@/features/ingestion/UrlRecycleBinPanel";
 import { ManualRecipePanel } from "@/features/recipes/ManualRecipePanel";
 import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
+import { RecipeLibrarySection } from "@/features/recipes/RecipeLibrarySection";
 import { formatDifficulty, formatMealType } from "@/features/recipes/recipeDisplay";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
@@ -39,8 +40,9 @@ export default function RecipesScreen() {
     if (params.mode === "library" || params.mode === "review") setPageMode(params.mode);
   }, [params.mode, params.method, params.tour]);
   const { data } = useQuery<Recipe[]>({
-    queryKey: ["recipes", q],
-    queryFn: () => apiFetch<Recipe[]>(`/api/v1/recipes?q=${encodeURIComponent(q)}`)
+    queryKey: ["recipes", "review", q],
+    queryFn: () => apiFetch<Recipe[]>(`/api/v1/recipes?collection=library&q=${encodeURIComponent(q)}`),
+    enabled: pageMode === "review"
   });
   const refreshRecipes = async () => {
     await Promise.all([
@@ -135,19 +137,21 @@ export default function RecipesScreen() {
       {pageMode !== "add" ? (
         <>
           <TextInput accessibilityLabel="Search recipes" value={q} onChangeText={setQ} placeholder="Search saved recipes" style={styles.search} />
-          <View style={styles.listHeader}>
+          {pageMode === "review" ? <View style={styles.listHeader}>
             <Text style={styles.sectionTitle}>{pageMode === "review" ? "Recipes needing attention" : "Recipe library"}</Text>
             <Text style={styles.count}>{visibleRecipes.length}</Text>
-          </View>
+          </View> : null}
         </>
       ) : null}
-      {pageMode !== "add" && !visibleRecipes.length ? (
+      {pageMode === "library" ? (["library", "hidden", "archived"] as const).map(collection => <RecipeLibrarySection
+        key={collection} collection={collection} q={q} onOpen={setSelectedRecipe} onActions={recipe => { setActionStatus(""); setQuickActionRecipe(recipe); }} />) : null}
+      {pageMode === "review" && !visibleRecipes.length ? (
         <View style={styles.emptyPanel}>
           <Text style={styles.emptyTitle}>{pageMode === "review" ? "Nothing needs review" : "No recipes found"}</Text>
           <Text style={styles.empty}>{pageMode === "review" ? "Recipes already in your library that still have warnings will appear here." : "Try another search or add a recipe."}</Text>
         </View>
       ) : null}
-      {pageMode !== "add" ? visibleRecipes.map((recipe: Recipe) => (
+      {pageMode === "review" ? visibleRecipes.map((recipe: Recipe) => (
         <Pressable
           key={recipe.id}
           accessibilityRole="button"
@@ -207,14 +211,14 @@ export default function RecipesScreen() {
                   if (quickActionRecipe) hideRecipe.mutate(quickActionRecipe.id);
                 }}
               />
-              <Button
+              {quickActionRecipe?.can_edit ? <Button
                 label="Archive my recipe"
                 icon="archive"
                 disabled={hideRecipe.isPending || archiveRecipe.isPending}
                 onPress={() => {
                   if (quickActionRecipe) archiveRecipe.mutate(quickActionRecipe.id);
                 }}
-              />
+              /> : null}
               <Button label="Cancel" icon="close-circle" onPress={() => setQuickActionRecipe(null)} />
             </View>
             {actionStatus ? <Text style={styles.quickStatus}>{actionStatus}</Text> : null}

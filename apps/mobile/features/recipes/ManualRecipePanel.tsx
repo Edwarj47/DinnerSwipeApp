@@ -4,10 +4,13 @@ import { useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
+import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { AiRecipeJob } from "./aiRecipeTypes";
 import { appendRecipeImage, RecipeImage, RecipePhotoPicker } from "./RecipePhotoPicker";
+import { NutritionFields } from "./NutritionFields";
+import { EMPTY_NUTRITION, parseNutrition } from "./recipeNutrition";
 
 function splitLines(value: string) {
   return value
@@ -32,6 +35,8 @@ export function ManualRecipePanel({ initialDraft, onSaved }: { initialDraft?: Ai
   const [ingredients, setIngredients] = useState(draft?.ingredients.join("\n") ?? "");
   const [instructions, setInstructions] = useState(draft?.instructions.join("\n") ?? "");
   const [status, setStatus] = useState("");
+  const [nutrition, setNutrition] = useState(EMPTY_NUTRITION);
+  const [nutritionBasis, setNutritionBasis] = useState<"serving" | "recipe">("serving");
   const ingredientRows = splitLines(ingredients);
   const instructionRows = splitLines(instructions);
   const hasRequiredFields = name.trim().length > 1 && ingredientRows.length > 0 && instructionRows.length > 0;
@@ -62,6 +67,7 @@ export function ManualRecipePanel({ initialDraft, onSaved }: { initialDraft?: Ai
           ingredients: ingredientRows.map((original_text, index) => ({ original_text, sort_order: index })),
           instructions: instructionRows.map((text, index) => ({ text, step_number: index + 1 })),
           source_type: "manual",
+          nutrition: parseNutrition(nutrition, nutritionBasis === "recipe" ? Number(servings) : 1),
           accept_placeholder_photo: !photoUrl
         })
       });
@@ -79,6 +85,8 @@ export function ManualRecipePanel({ initialDraft, onSaved }: { initialDraft?: Ai
       setTags("");
       setIngredients("");
       setInstructions("");
+      setNutrition(EMPTY_NUTRITION);
+      setNutritionBasis("serving");
       setStatus("Recipe saved. It is ready for planning.");
       await queryClient.invalidateQueries({ queryKey: ["recipes"] });
       onSaved?.();
@@ -117,6 +125,10 @@ export function ManualRecipePanel({ initialDraft, onSaved }: { initialDraft?: Ai
       <TextInput accessibilityLabel="Ingredients" value={ingredients} onChangeText={setIngredients} placeholder="Ingredients, one per line" multiline style={[styles.input, styles.area]} />
       <Text style={styles.fieldLabel}>Instructions</Text>
       <TextInput accessibilityLabel="Instructions" value={instructions} onChangeText={setInstructions} placeholder="Instructions, one step per line" multiline style={[styles.input, styles.area]} />
+      <Text style={styles.title}>Nutrition (optional)</Text>
+      <SegmentedControl accessibilityLabel="Nutrition amounts" value={nutritionBasis} onChange={setNutritionBasis}
+        options={[{ label: "Per serving", value: "serving" }, { label: "Whole recipe", value: "recipe" }]} />
+      <NutritionFields value={nutrition} onChange={setNutrition} />
       <View style={styles.summary}>
         <Text style={styles.meta}>{ingredientRows.length} ingredient{ingredientRows.length === 1 ? "" : "s"} • {instructionRows.length} step{instructionRows.length === 1 ? "" : "s"}</Text>
         {!canSave ? <Text style={styles.warning}>Name, at least one ingredient, and at least one instruction are required.</Text> : null}

@@ -30,9 +30,17 @@ Updated 2026-09-30 for Android preview build 11.
   download link is shared privately. SHA-256:
   `aa4251b389f61643b07d01b3bf8b02c55b7af31f9ad527e5ffdcb4f143879ee5`.
 - Physical-device installation and camera permission UAT remain required.
-- API and web deployment are pending separate owner approval. The existing
-  live API is healthy but does not yet serve the new AI recipe routes. Installing
-  the APK alone will not enable AI generation or the server-side restore fix.
+- API and web deployed September 30 at 17:58 UTC with owner approval. AI recipe
+  generation is enabled and the server-side recycle-bin fix is live. APK 11
+  already includes the matching client; no further phone build is needed.
+- The fresh backup passed a full restore into an isolated temporary database.
+  Public health, protected-route rejection, a live synthetic AI request, and
+  read-only usage/expiry checks passed. The expired draft is hidden and restore
+  returns 410. Production web passed browser checks at 320/390/1280px with
+  mocked accounts, without writing customer data.
+- Only API and web containers changed. The worker, database container, schema,
+  and unrelated services were unchanged. Recovery details are in
+  [Profile and AI Recipe UAT](profile-ai-recipes-uat.md#deployment-record).
 
 ### Build 11 Phone Checks
 
@@ -43,7 +51,7 @@ Updated 2026-09-30 for Android preview build 11.
    Account Settings. Basic should see Macro Tracker locked; Premium can open it.
 4. Add a manual recipe photo: grant, deny, and cancel camera/library permission.
    Verify rotation and large-photo errors on a real device.
-5. After the API deployment, generate from text and a photo, edit the draft,
+5. Generate from text and a photo, edit the draft,
    save it, and discard a second draft. Basic's remaining allowance must reflect
    successful generations, including discarded drafts; failed calls are free.
 6. Check recycled drafts near the 15-day boundary. Long names and restore dates

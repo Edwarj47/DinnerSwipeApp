@@ -2,9 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import math
-import random
 import secrets
-import string
 from datetime import datetime
 from typing import Any, Literal, cast
 
@@ -14,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
+from app.core.rate_limit import auth_rate_limiter
 from app.models.entities import AuditEvent, User, UserSubscription
 
 stripe_client: Any | None
@@ -53,11 +52,21 @@ def subscription_for_user(db: Session, user: User) -> UserSubscription | None:
     return db.scalar(select(UserSubscription).where(UserSubscription.user_id == user.id))
 
 
+def basic_trial_eligible(subscription: UserSubscription | None) -> bool:
+    return settings.basic_free_trial_days > 0 and not (
+        subscription
+        and (subscription.stripe_subscription_id or subscription.metadata_json.get("trial_used"))
+    )
+
+
 def is_subscription_active(subscription: UserSubscription | None) -> bool:
     if not subscription:
         return False
     if subscription.source == "waiver_code" and subscription.status == "active":
-        return True
+        return (
+            not subscription.current_period_end
+            or subscription.current_period_end > datetime.utcnow()
+        )
     return subscription.status in ACTIVE_STATUSES
 
 
@@ -148,6 +157,7 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
         "trial_active": trial_active,
         "trial_ends_at": trial_end,
         "trial_days_remaining": remaining_trial_days,
+        "basic_trial_eligible": basic_trial_eligible(subscription),
         "basic_monthly_price_cents": settings.basic_monthly_price_cents,
         "premium_monthly_price_cents": settings.premium_monthly_price_cents,
         "basic_stripe_configured": settings.stripe_basic_configured,
@@ -184,12 +194,22 @@ def require_premium(db: Session, user: User) -> UserSubscription:
 
 
 def redeem_waiver_code(db: Session, user: User, code: str) -> dict[str, Any]:
+    auth_rate_limiter.check(f"access-code:{user.id}", 10, 60)
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
     normalized = code.strip().lower()
     tier = _tier_for_waiver_code(normalized)
     if not tier:
         raise HTTPException(status_code=400, detail="Invalid access code")
     code_hash = waiver_code_hash(normalized)
     subscription = subscription_for_user(db, user)
+    if (
+        subscription
+        and subscription.source == "stripe"
+        and subscription.status not in {"canceled", "cancelled", "incomplete_expired"}
+    ):
+        raise HTTPException(
+            409, "Manage your existing billing before redeeming a free-access coupon."
+        )
     if not subscription:
         subscription = UserSubscription(user_id=user.id)
         db.add(subscription)
@@ -200,7 +220,11 @@ def redeem_waiver_code(db: Session, user: User, code: str) -> dict[str, Any]:
     subscription.current_period_end = None
     subscription.cancel_at_period_end = False
     subscription.fee_waiver_code_hash = code_hash
-    subscription.metadata_json = {"waiver": "uat", "tier": tier}
+    subscription.metadata_json = {
+        **(subscription.metadata_json or {}),
+        "waiver": "uat",
+        "tier": tier,
+    }
     event_type = "premium_waiver_redeemed" if tier == PREMIUM_TIER else "basic_waiver_redeemed"
     db.add(
         AuditEvent(
@@ -215,10 +239,20 @@ def redeem_waiver_code(db: Session, user: User, code: str) -> dict[str, Any]:
     return serialize_subscription_status(db, user)
 
 
-def create_checkout_session(db: Session, user: User, tier: SubscriptionTier = PREMIUM_TIER) -> str:
+def create_checkout_session(
+    db: Session,
+    user: User,
+    tier: SubscriptionTier = PREMIUM_TIER,
+    promotion_code_id: str | None = None,
+) -> str:
+    auth_rate_limiter.check(f"checkout:{user.id}", 10, 60)
     tier = _normalize_tier(tier)
     client = _configured_stripe_client(tier)
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
     subscription = subscription_for_user(db, user)
+    if subscription and subscription.source == "stripe" and subscription.stripe_subscription_id:
+        if subscription.status not in {"canceled", "cancelled", "incomplete_expired"}:
+            raise HTTPException(409, "Open Manage billing to change your existing subscription.")
     if (
         tier == BASIC_TIER
         and subscription
@@ -236,16 +270,13 @@ def create_checkout_session(db: Session, user: User, tier: SubscriptionTier = PR
             status_code=409,
             detail="Open Manage billing to upgrade an existing Basic subscription.",
         )
-    success_url = (
-        f"{settings.app_public_url.rstrip('/')}/profile?subscription=success&tier={tier}"
-    )
-    cancel_url = (
-        f"{settings.app_public_url.rstrip('/')}/profile?subscription=cancelled&tier={tier}"
-    )
+    success_url = f"{settings.app_public_url.rstrip('/')}/profile?subscription=success&tier={tier}"
+    cancel_url = f"{settings.app_public_url.rstrip('/')}/profile?subscription=cancelled&tier={tier}"
     plan_key = PLAN_KEY_BY_TIER[tier]
     metadata = {"user_id": user.id, "plan_key": plan_key, "tier": tier}
     subscription_data: dict[str, Any] = {"metadata": metadata}
-    if tier == BASIC_TIER:
+    trial_eligible = basic_trial_eligible(subscription)
+    if tier == BASIC_TIER and trial_eligible:
         trial_days = max(0, settings.basic_free_trial_days)
         if trial_days > 0:
             subscription_data["trial_period_days"] = trial_days
@@ -261,18 +292,69 @@ def create_checkout_session(db: Session, user: User, tier: SubscriptionTier = PR
         "client_reference_id": user.id,
         "metadata": metadata,
         "subscription_data": subscription_data,
-        "integration_identifier": f"dinner_swipe_{tier}_{_random_letters(8)}",
+        "integration_identifier": f"dinner_swipe_{tier}_{user.id[:8]}",
     }
-    if tier == BASIC_TIER and settings.basic_free_trial_days > 0:
+    if tier == BASIC_TIER and trial_eligible:
         params["payment_method_collection"] = "always"
+    if promotion_code_id:
+        params.pop("allow_promotion_codes")
+        params["discounts"] = [{"promotion_code": promotion_code_id}]
     if subscription and subscription.stripe_customer_id:
         params["customer"] = subscription.stripe_customer_id
     else:
         params["customer_email"] = user.email
-    session = client.v1.checkout.sessions.create(params)
-    url = getattr(session, "url", None)
+    if not subscription:
+        subscription = UserSubscription(user_id=user.id, status="inactive", metadata_json={})
+        db.add(subscription)
+    pending = subscription.metadata_json.get("pending_checkout")
+    try:
+        if isinstance(pending, dict) and pending.get("id"):
+            previous = stripe_object_dict(client.v1.checkout.sessions.retrieve(pending["id"]))
+            if previous.get("status") == "complete":
+                raise HTTPException(409, "Your payment is being confirmed. Please refresh shortly.")
+            if previous.get("status") == "open":
+                if pending.get("tier") == tier and pending.get("promotion") == promotion_code_id:
+                    return str(previous["url"])
+                client.v1.checkout.sessions.expire(pending["id"])
+        # Persist the attempt before contacting Stripe so a network retry reuses its key.
+        attempt_hash = hashlib.sha256(repr(params).encode()).hexdigest()
+        attempt = subscription.metadata_json.get("checkout_attempt")
+        now = int(datetime.utcnow().timestamp())
+        if not (
+            isinstance(attempt, dict)
+            and attempt.get("hash") == attempt_hash
+            and now - int(attempt.get("created", 0)) < 1800
+            and not pending
+        ):
+            attempt = {"hash": attempt_hash, "created": now, "key": secrets.token_hex(16)}
+        subscription.metadata_json = {
+            **subscription.metadata_json,
+            "checkout_attempt": attempt,
+            "pending_checkout": None,
+        }
+        db.commit()
+        session = client.v1.checkout.sessions.create(
+            params, options={"idempotency_key": f"checkout-{user.id}-{attempt['key']}"}
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("stripe_checkout_failed", error_type=type(exc).__name__)
+        raise HTTPException(503, "Checkout is temporarily unavailable. Please try again.") from exc
+    url = _stripe_object_value(session, "url")
     if not url:
         raise HTTPException(status_code=502, detail="Stripe did not return a checkout URL")
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    db.refresh(subscription)
+    subscription.metadata_json = {
+        **subscription.metadata_json,
+        "pending_checkout": {
+            "id": _stripe_object_value(session, "id"),
+            "tier": tier,
+            "promotion": promotion_code_id,
+        },
+    }
+    db.commit()
     return str(url)
 
 
@@ -308,11 +390,11 @@ def verify_stripe_event(payload: bytes, signature: str | None) -> dict[str, Any]
     except Exception as exc:
         logger.warning("stripe_webhook_verification_failed", error_type=type(exc).__name__)
         raise HTTPException(status_code=400, detail="Invalid Stripe webhook signature") from exc
-    if hasattr(event, "to_dict"):
-        return cast(dict[str, Any], event.to_dict())
-    if hasattr(event, "_to_dict_recursive"):
-        return cast(dict[str, Any], event._to_dict_recursive())
-    return cast(dict[str, Any], event)
+    result = stripe_object_dict(event)
+    live_key = settings.stripe_secret_key.startswith(("sk_live_", "rk_live_"))
+    if result.get("livemode") is not live_key:
+        raise HTTPException(400, "Stripe event mode does not match billing configuration")
+    return result
 
 
 def handle_stripe_event(db: Session, event: dict[str, Any]) -> dict[str, str]:
@@ -321,81 +403,140 @@ def handle_stripe_event(db: Session, event: dict[str, Any]) -> dict[str, str]:
     obj = data.get("object", {}) if isinstance(data, dict) else {}
     if not isinstance(obj, dict):
         return {"status": "ignored"}
-    if event_type == "checkout.session.completed":
-        _handle_checkout_completed(db, obj)
-    elif event_type in {"customer.subscription.created", "customer.subscription.updated"}:
-        _handle_subscription_update(db, obj)
-    elif event_type == "customer.subscription.deleted":
-        _handle_subscription_update(db, obj, deleted=True)
+    if event_type in {"checkout.session.completed", "checkout.session.async_payment_succeeded"}:
+        if obj.get("mode") != "subscription" or obj.get("payment_status") not in {
+            "paid",
+            "no_payment_required",
+        }:
+            return {"status": "ignored"}
+        stripe_id = _nullable_str(obj.get("subscription"))
+    elif event_type in {
+        "customer.subscription.created",
+        "customer.subscription.updated",
+        "customer.subscription.deleted",
+        "customer.subscription.paused",
+        "customer.subscription.resumed",
+    }:
+        stripe_id = _nullable_str(obj.get("id"))
+    elif event_type in {
+        "invoice.paid",
+        "invoice.payment_failed",
+        "invoice.payment_action_required",
+    }:
+        stripe_id = _nullable_str(obj.get("subscription")) or _nullable_str(
+            (obj.get("parent") or {}).get("subscription_details", {}).get("subscription")
+        )
     else:
         return {"status": "ignored"}
+    if not stripe_id or not event.get("id"):
+        return {"status": "ignored"}
+    linked = db.scalar(
+        select(UserSubscription).where(UserSubscription.stripe_subscription_id == stripe_id)
+    )
+    metadata = obj.get("metadata") or {}
+    user_id = linked.user_id if linked else metadata.get("user_id")
+    user = db.scalar(select(User).where(User.id == user_id).with_for_update()) if user_id else None
+    if not user:
+        return {"status": "ignored"}
+    event_hash = hashlib.sha256(str(event["id"]).encode()).hexdigest()[:32]
+    if db.scalar(
+        select(AuditEvent.id).where(
+            AuditEvent.user_id == user.id,
+            AuditEvent.event_type == "stripe_event_processed",
+            AuditEvent.entity_id == event_hash,
+        )
+    ):
+        return {"status": "duplicate"}
+    # Fetch inside the account lock: delayed events must not undo newer billing state.
+    try:
+        current = stripe_object_dict(
+            _configured_stripe_client().v1.subscriptions.retrieve(stripe_id)
+        )
+    except Exception as exc:
+        logger.warning("stripe_subscription_sync_failed", error_type=type(exc).__name__)
+        raise HTTPException(503, "Subscription confirmation will be retried") from exc
+    current_metadata = current.get("metadata") or {}
+    if current_metadata.get("user_id") != user.id:
+        return {"status": "ignored"}
+    price_id = _price_id_from_subscription_event(current)
+    tier = next(
+        (
+            tier
+            for tier in PLAN_KEY_BY_TIER
+            if price_id and price_id == settings.stripe_price_id_for_tier(tier)
+        ),
+        None,
+    )
+    subscription = subscription_for_user(db, user)
+    customer_id = _nullable_str(current.get("customer"))
+    if (
+        subscription
+        and subscription.stripe_customer_id
+        and subscription.stripe_customer_id != customer_id
+    ):
+        return {"status": "ignored"}
+    if subscription and subscription.stripe_subscription_id != stripe_id:
+        if current.get("status") not in ACTIVE_STATUSES:
+            return {"status": "ignored"}
+        if subscription.source == "stripe" and is_subscription_active(subscription):
+            logger.error("stripe_duplicate_subscription", user_id=user.id)
+            raise HTTPException(409, "A different subscription is already active")
+    if (
+        subscription
+        and subscription.source == "waiver_code"
+        and current.get("status") not in ACTIVE_STATUSES
+    ):
+        return {"status": "ignored"}
+    if tier is None and not linked:
+        return {"status": "ignored"}
+    if not subscription:
+        subscription = UserSubscription(user_id=user.id, metadata_json={})
+        db.add(subscription)
+    subscription.plan_key = PLAN_KEY_BY_TIER[tier] if tier else "unsupported"
+    subscription.status = str(current.get("status", "inactive")) if tier else "inactive"
+    subscription.source = "stripe"
+    subscription.stripe_customer_id = customer_id
+    subscription.stripe_subscription_id = stripe_id
+    subscription.stripe_price_id = price_id
+    subscription.cancel_at_period_end = bool(current.get("cancel_at_period_end", False))
+    items = (current.get("items") or {}).get("data", [])
+    period_end = current.get("current_period_end") or next(
+        (
+            item.get("current_period_end")
+            for item in items
+            if (item.get("price") or {}).get("id") == price_id
+        ),
+        None,
+    )
+    if subscription.status == "trialing":
+        period_end = current.get("trial_end") or period_end
+    subscription.current_period_end = (
+        datetime.utcfromtimestamp(period_end) if isinstance(period_end, int) else None
+    )
+    subscription.metadata_json = {
+        **(subscription.metadata_json or {}),
+        "stripe_status": subscription.status,
+        "trial_used": True,
+        "pending_checkout": None,
+        "checkout_attempt": None,
+    }
+    db.add(
+        AuditEvent(
+            user_id=user.id,
+            event_type="stripe_event_processed",
+            entity_type="stripe_event",
+            entity_id=event_hash,
+            payload={"type": event_type, "status": subscription.status},
+        )
+    )
     db.commit()
     return {"status": "processed"}
 
 
-def _handle_checkout_completed(db: Session, session: dict[str, Any]) -> None:
-    user_id = session.get("client_reference_id") or session.get("metadata", {}).get("user_id")
-    if not user_id:
-        return
-    user = db.get(User, str(user_id))
-    if not user:
-        return
-    metadata = session.get("metadata", {})
-    plan_key = _plan_key_from_metadata(metadata if isinstance(metadata, dict) else {})
-    tier = _tier_from_plan_key(plan_key) or PREMIUM_TIER
-    subscription = subscription_for_user(db, user)
-    if not subscription:
-        subscription = UserSubscription(user_id=user.id)
-        db.add(subscription)
-    subscription.plan_key = plan_key
-    subscription.status = (
-        "trialing" if tier == BASIC_TIER and settings.basic_free_trial_days > 0 else "active"
-    )
-    subscription.source = "stripe"
-    subscription.stripe_customer_id = _nullable_str(session.get("customer"))
-    subscription.stripe_subscription_id = _nullable_str(session.get("subscription"))
-    subscription.stripe_price_id = settings.stripe_price_id_for_tier(tier)
-    subscription.metadata_json = {"checkout_session_id": session.get("id"), "tier": tier}
-
-
-def _handle_subscription_update(
-    db: Session, subscription_event: dict[str, Any], deleted: bool = False
-) -> None:
-    stripe_subscription_id = _nullable_str(subscription_event.get("id"))
-    if not stripe_subscription_id:
-        return
-    subscription = db.scalar(
-        select(UserSubscription).where(
-            UserSubscription.stripe_subscription_id == stripe_subscription_id
-        )
-    )
-    metadata = subscription_event.get("metadata", {})
-    metadata = metadata if isinstance(metadata, dict) else {}
-    user_id = metadata.get("user_id")
-    if not subscription and user_id:
-        user = db.get(User, str(user_id))
-        if not user:
-            return
-        subscription = UserSubscription(user_id=user.id)
-        db.add(subscription)
-    if not subscription:
-        return
-    price_id = _price_id_from_subscription_event(subscription_event)
-    plan_key = _plan_key_from_metadata(metadata, price_id, subscription.plan_key)
-    subscription.plan_key = plan_key
-    subscription.status = (
-        "cancelled" if deleted else str(subscription_event.get("status", "inactive"))
-    )
-    subscription.source = "stripe"
-    subscription.stripe_customer_id = _nullable_str(subscription_event.get("customer"))
-    subscription.stripe_subscription_id = stripe_subscription_id
-    subscription.stripe_price_id = price_id or subscription.stripe_price_id
-    subscription.cancel_at_period_end = bool(subscription_event.get("cancel_at_period_end", False))
-    period_end = subscription_event.get("current_period_end")
-    subscription.current_period_end = (
-        datetime.utcfromtimestamp(period_end) if isinstance(period_end, int) else None
-    )
-    subscription.metadata_json = {"stripe_status": subscription.status, "plan_key": plan_key}
+def stripe_object_dict(obj: Any) -> dict[str, Any]:
+    if isinstance(obj, dict):
+        return obj
+    return cast(dict[str, Any], obj.to_dict())
 
 
 def _nullable_str(value: object) -> str | None:
@@ -474,28 +615,6 @@ def _tier_from_plan_key(plan_key: str | None) -> SubscriptionTier | None:
     return None
 
 
-def _plan_key_from_metadata(
-    metadata: dict[str, Any],
-    price_id: str | None = None,
-    fallback: str | None = None,
-) -> str:
-    metadata_plan_key = str(metadata.get("plan_key") or "")
-    if metadata_plan_key in PLAN_RANK:
-        return metadata_plan_key
-    metadata_tier = str(metadata.get("tier") or "")
-    if metadata_tier == BASIC_TIER:
-        return BASIC_PLAN_KEY
-    if metadata_tier == PREMIUM_TIER:
-        return PREMIUM_PLAN_KEY
-    if price_id == settings.stripe_basic_price_id:
-        return BASIC_PLAN_KEY
-    if price_id == settings.stripe_premium_price_id:
-        return PREMIUM_PLAN_KEY
-    if fallback in PLAN_RANK:
-        return str(fallback)
-    return PREMIUM_PLAN_KEY
-
-
 def _price_id_from_subscription_event(subscription_event: dict[str, Any]) -> str | None:
     items = subscription_event.get("items")
     if not isinstance(items, dict):
@@ -510,7 +629,3 @@ def _price_id_from_subscription_event(subscription_event: dict[str, Any]) -> str
     if not isinstance(price, dict):
         return None
     return _nullable_str(price.get("id"))
-
-
-def _random_letters(length: int) -> str:
-    return "".join(random.SystemRandom().choice(string.ascii_lowercase) for _ in range(length))

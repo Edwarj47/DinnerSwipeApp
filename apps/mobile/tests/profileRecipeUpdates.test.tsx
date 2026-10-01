@@ -44,22 +44,22 @@ function mount(element: React.ReactElement) {
   const screen = render(<QueryClientProvider client={client}>{element}</QueryClientProvider>);
   return { ...screen, close: () => { screen.unmount(); client.clear(); } };
 }
-test("Account owns subscription and testing codes; Basic cannot open macro controls", async () => {
+test("Account owns subscription and coupon codes; Basic cannot open macro controls", async () => {
   const screen = mount(<ProfileScreen />);
   try {
     await screen.findByText("tester@example.com");
     expect(screen.getByText("Subscription")).toBeTruthy();
-    expect(screen.getByText("Testing access code")).toBeTruthy();
+    expect(screen.getByText("Coupon code")).toBeTruthy();
     expect(screen.getByText("Account Settings")).toBeTruthy();
     expect(screen.getByText("Planning")).toBeTruthy();
     expect(screen.getByText("Device security")).toBeTruthy();
     expect(screen.queryByText("Account tools")).toBeNull();
     fireEvent.press(screen.getByText("Macro Tracker"));
     await screen.findByText("Available with Premium.");
-    expect(screen.queryByText("Testing access code")).toBeNull();
+    expect(screen.queryByText("Coupon code")).toBeNull();
     expect(request.mock.calls.some(([path]) => path.includes("/macros/"))).toBe(false);
     fireEvent.press(screen.getByLabelText("View subscription"));
-    expect(screen.getByText("Testing access code")).toBeTruthy();
+    expect(screen.getByText("Coupon code")).toBeTruthy();
   } finally { screen.close(); }
 });
 test("Manual form has no prefilled samples and camera permission is handled", async () => {

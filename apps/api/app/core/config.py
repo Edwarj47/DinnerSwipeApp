@@ -1,9 +1,15 @@
 from __future__ import annotations
 
 from functools import lru_cache
+from typing import Literal
 
-from pydantic import Field, field_validator
+from pydantic import BaseModel, Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+
+class AccessCoupon(BaseModel):
+    tier: Literal["basic", "premium"]
+    months: int | None = Field(default=None, ge=1, le=36)
 
 
 class Settings(BaseSettings):
@@ -48,12 +54,13 @@ class Settings(BaseSettings):
     stripe_premium_price_id: str = ""
     stripe_portal_configuration_id: str = ""
     stripe_expected_account_id: str = ""
-    stripe_api_version: str = "2026-07-29.dahlia"
+    stripe_api_version: str = "2026-08-26.dahlia"
     basic_monthly_price_cents: int = 599
     basic_free_trial_days: int = 30
     premium_monthly_price_cents: int = 999
     basic_waiver_codes: str = ""
     premium_waiver_codes: str = ""
+    access_coupon_grants: dict[str, AccessCoupon] = Field(default_factory=dict)
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 

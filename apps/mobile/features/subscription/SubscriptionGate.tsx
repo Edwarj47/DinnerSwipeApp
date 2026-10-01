@@ -11,7 +11,7 @@ import { Button } from "@/components/Button";
 import { Colors } from "@/components/theme";
 import { apiFetch, clearAuthTokens } from "@/services/api";
 import { AppAccessContext, useAuthSession } from "@/services/session";
-import { PremiumStatus, SubscriptionTier } from "@/services/types";
+import { CouponResult, PremiumStatus, SubscriptionTier } from "@/services/types";
 import { PlanPicker } from "./PlanPicker";
 import { monthlyPrice, planFeatures } from "./planOptions";
 
@@ -70,14 +70,15 @@ export function SubscriptionGate({ children }: Props) {
   const applyCode = useMutation({
     onMutate: () => { setStatus(""); setStatusIsError(false); },
     mutationFn: () =>
-      apiFetch<PremiumStatus>("/api/v1/subscription/waiver-code", {
+      apiFetch<CouponResult>("/api/v1/subscription/coupon-code", {
         method: "POST",
-        body: JSON.stringify({ code })
+        body: JSON.stringify({ code, tier: selectedTier })
       }),
     onSuccess: async (data) => {
       setCode("");
-      setStatus(data.premium_active ? "Premium access unlocked." : "Basic access unlocked.");
-      queryClient.setQueryData(["subscription-status"], data);
+      setStatus(data.message);
+      if (data.subscription) queryClient.setQueryData(["subscription-status"], data.subscription);
+      if (data.checkout_url) await Linking.openURL(data.checkout_url);
       await refreshSubscriptions(queryClient);
     },
     onError: (error) => { setStatusIsError(true); setStatus(error instanceof Error ? error.message : "Unable to apply code."); }
@@ -100,6 +101,7 @@ export function SubscriptionGate({ children }: Props) {
   const basicPrice = subscription.data?.basic_monthly_price_cents ?? 599;
   const premiumPrice = subscription.data?.premium_monthly_price_cents ?? 999;
   const isBasic = selectedTier === "basic";
+  const hasTrial = isBasic && subscription.data?.basic_trial_eligible !== false;
   const checkoutConfigured = isBasic ? subscription.data?.basic_stripe_configured : subscription.data?.premium_stripe_configured;
   const busy = startCheckout.isPending || applyCode.isPending;
 
@@ -172,15 +174,15 @@ export function SubscriptionGate({ children }: Props) {
                 ))}
               </View>
               <View style={styles.billingSummary}>
-                <Text style={styles.billingTitle}>{isBasic ? "First 30 days free" : monthlyPrice(premiumPrice)}</Text>
+                <Text style={styles.billingTitle}>{hasTrial ? "First 30 days free" : monthlyPrice(isBasic ? basicPrice : premiumPrice)}</Text>
                 <Text style={styles.nativeNote}>
-                  {isBasic
+                  {hasTrial
                     ? `Card required. Then ${monthlyPrice(basicPrice)} unless canceled. Upgrade anytime.`
                     : "Billed monthly from today. Cancel anytime."}
                 </Text>
               </View>
               <Button
-                label={startCheckout.isPending ? "Opening checkout..." : isBasic ? "Start Basic free trial" : "Subscribe to Premium"}
+                label={startCheckout.isPending ? "Opening checkout..." : hasTrial ? "Start Basic free trial" : isBasic ? "Subscribe to Basic" : "Subscribe to Premium"}
                 icon="card"
                 variant="primary"
                 disabled={!checkoutConfigured || busy}
@@ -190,16 +192,17 @@ export function SubscriptionGate({ children }: Props) {
                 Confirm your subscription securely with Stripe. Cancel in Manage billing.
               </Text>
               <View style={styles.codeBox}>
-                <Text style={styles.codeTitle}>Testing access code</Text>
+                <Text style={styles.codeTitle}>Coupon code</Text>
+                <Text style={styles.nativeNote}>Discounts are confirmed in checkout. Free-access coupons apply immediately.</Text>
                 <View style={styles.codeRow}>
                   <TextInput
-                    accessibilityLabel="Testing access code"
+                    accessibilityLabel="Coupon code"
                     autoCapitalize="none"
                     autoCorrect={false}
                     value={code}
                     onChangeText={(value) => { setCode(value); setStatus(""); }}
                     onSubmitEditing={() => { if (code.trim().length >= 3 && !busy) applyCode.mutate(); }}
-                    placeholder="Access code"
+                    placeholder="Coupon code"
                     placeholderTextColor="#9b928b"
                     style={styles.input}
                   />

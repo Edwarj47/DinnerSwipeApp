@@ -72,7 +72,7 @@ test("access unlock retries a cached blocked recipe request without reloading", 
   let unlocked = false;
   const subscription = () => ({ basic_active: unlocked, premium_active: unlocked });
   request.mockImplementation(async (path) => {
-    if (path.endsWith("waiver-code")) { unlocked = true; return subscription(); }
+    if (path.endsWith("coupon-code")) { unlocked = true; return { message: "Access granted.", subscription: subscription() }; }
     if (path.endsWith("subscription/status")) return subscription();
     if (path.endsWith("recipes")) {
       if (!unlocked) throw new Error("Subscription required");
@@ -92,7 +92,7 @@ test("access unlock retries a cached blocked recipe request without reloading", 
   try {
     await screen.findByText("fixture@example.com");
     expect(request.mock.calls.some(([path]) => path.endsWith("recipes"))).toBe(false);
-    fireEvent.changeText(screen.getByLabelText("Testing access code"), "test-fixture");
+    fireEvent.changeText(screen.getByLabelText("Coupon code"), "test-fixture");
     fireEvent.press(screen.getByLabelText("Apply"));
     await screen.findByText("Saved dinner");
     expect(screen.queryByText("Choose your plan")).toBeNull();

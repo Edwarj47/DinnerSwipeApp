@@ -20,7 +20,7 @@ dependencies = [
   "python-multipart>=0.0.9",
   # SQLAlchemy 2.1 changes Select/Row generics; migrate annotations before upgrading.
   "sqlalchemy>=2.0.32,<2.1",
-  "stripe>=10.12.0",
+  "stripe==15.6.1",
   "structlog>=24.4.0",
   "uvicorn[standard]>=0.30.6"
 ]
