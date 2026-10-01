@@ -59,7 +59,7 @@ and [image inputs](https://developers.openai.com/api/docs/guides/images-vision).
   pre-release copy. No Stripe configuration or customer data was changed by release checks.
 - Android build `78059c0e-b313-4ded-9f30-417a60714502` finished October 1 at 19:37 UTC
   from `394ceab`. Its initial 45-minute monitor expired while queued; a fresh EAS read
-  confirmed completion and the downloaded APK was verified at 22:59 UTC.
+  confirmed completion and the downloaded APK was verified at 22:58 UTC.
 - Download, ZIP integrity, embedded package/version, production API URL and new-feature
   bundle checks passed. Package `dev.dcss.dinnerswipe`, version code `13`; signing
   certificate matches build 12. Size 79,540,743 bytes. SHA-256:
