@@ -179,3 +179,54 @@ def test_chain_deduplicated_bounded_and_can_be_disabled(monkeypatch: pytest.Monk
     assert openai_responses.model_candidates("a") == ["a", "b", "c", "d"]
     monkeypatch.setattr(settings, "openai_fallback_models", "")
     assert openai_responses.model_candidates("a") == ["a"]
+
+
+def test_label_nutrition_is_in_strict_schema_and_preserved(monkeypatch: pytest.MonkeyPatch) -> None:
+    nutrition = {"calories": 160, "protein_g": 30, "carbs_g": 4, "fat_g": 3, "fiber_g": 2}
+    calls = install_transport(
+        monkeypatch, [completed(DRAFT | {"nutrition": nutrition, "nutrition_basis": "serving"})]
+    )
+    result = asyncio.run(generate("", b"image-fixture", "image/jpeg"))
+    assert result.nutrition is not None and result.nutrition.model_dump() == nutrition
+    assert result.nutrition_basis == "serving"
+    schema = calls[0]["text"]["format"]["schema"]
+    assert {"nutrition", "nutrition_basis"} <= set(schema["required"])
+    nutrients = schema["$defs"]["RecipeNutrition"]
+    assert set(nutrients["required"]) == set(nutrition)
+    assert nutrients["additionalProperties"] is False
+    assert calls[0]["input"][1]["content"][1]["detail"] == "high"
+    assert "NOT percent daily values" in calls[0]["input"][0]["content"]
+
+
+def test_missing_nutrition_stays_unknown_and_explicit_zero_survives(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    install_transport(
+        monkeypatch,
+        [
+            completed(DRAFT),
+            completed(
+                DRAFT
+                | {"nutrition": {"calories": 0, "protein_g": None}, "nutrition_basis": "recipe"}
+            ),
+        ],
+    )
+    assert asyncio.run(generate("Carrot soup", None, None)).nutrition is None
+    result = asyncio.run(generate("Zero calorie water", None, None))
+    assert result.nutrition is not None
+    assert result.nutrition.calories == 0 and result.nutrition.protein_g is None
+    assert result.nutrition_basis == "recipe"
+
+
+@pytest.mark.parametrize(
+    "nutrition,basis",
+    [({"calories": -1}, "serving"), ({"fat_g": 1001}, "serving"), ({}, "unknown")],
+)
+def test_invalid_nutrition_or_basis_fails_validation(
+    monkeypatch: pytest.MonkeyPatch, nutrition: dict[str, int], basis: str
+) -> None:
+    install_transport(
+        monkeypatch, [completed(DRAFT | {"nutrition": nutrition, "nutrition_basis": basis})]
+    )
+    with pytest.raises(ValueError):
+        asyncio.run(generate("Label", None, None))

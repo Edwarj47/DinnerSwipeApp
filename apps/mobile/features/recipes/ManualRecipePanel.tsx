@@ -10,7 +10,7 @@ import { apiFetch } from "@/services/api";
 import { AiRecipeJob } from "./aiRecipeTypes";
 import { appendRecipeImage, RecipeImage, RecipePhotoPicker } from "./RecipePhotoPicker";
 import { NutritionFields } from "./NutritionFields";
-import { EMPTY_NUTRITION, parseNutrition } from "./recipeNutrition";
+import { EMPTY_NUTRITION, nutritionInputs, parseNutrition } from "./recipeNutrition";
 
 function splitLines(value: string) {
   return value
@@ -35,8 +35,8 @@ export function ManualRecipePanel({ initialDraft, onSaved }: { initialDraft?: Ai
   const [ingredients, setIngredients] = useState(draft?.ingredients.join("\n") ?? "");
   const [instructions, setInstructions] = useState(draft?.instructions.join("\n") ?? "");
   const [status, setStatus] = useState("");
-  const [nutrition, setNutrition] = useState(EMPTY_NUTRITION);
-  const [nutritionBasis, setNutritionBasis] = useState<"serving" | "recipe">("serving");
+  const [nutrition, setNutrition] = useState(() => nutritionInputs(draft?.nutrition));
+  const [nutritionBasis, setNutritionBasis] = useState<"serving" | "recipe">(draft?.nutrition_basis ?? "serving");
   const ingredientRows = splitLines(ingredients);
   const instructionRows = splitLines(instructions);
   const hasRequiredFields = name.trim().length > 1 && ingredientRows.length > 0 && instructionRows.length > 0;
@@ -104,7 +104,7 @@ export function ManualRecipePanel({ initialDraft, onSaved }: { initialDraft?: Ai
       <Text style={styles.fieldLabel}>Name</Text>
       <TextInput accessibilityLabel="Recipe name" value={name} onChangeText={setName} placeholder="Recipe name" style={styles.input} />
       <Text style={styles.fieldLabel}>Description</Text>
-      <TextInput accessibilityLabel="Recipe description" value={description} onChangeText={setDescription} placeholder="Short description" style={styles.input} />
+      <TextInput accessibilityLabel="Recipe description" value={description} onChangeText={setDescription} placeholder="Short description" multiline style={[styles.input, styles.area]} />
       <Text style={styles.fieldLabel}>Recipe photo</Text>
       <RecipePhotoPicker onSelect={uploadPhoto} disabled={create.isPending} />
       <TextInput accessibilityLabel="Photo URL" value={photoUrl} onChangeText={setPhotoUrl} placeholder="Photo URL or upload result" autoCapitalize="none" style={styles.input} />

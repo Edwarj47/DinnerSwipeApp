@@ -13,11 +13,12 @@ from app.core.config import settings
 from app.ingestion.ai_provider import _strict_json_schema
 from app.ingestion.openai_responses import create_response
 from app.models.entities import IngestionJob, User
+from app.schemas.common import RecipeNutrition
 from app.services.billing import is_premium_active, subscription_for_user
 
 JOB_TYPE = "ai_recipe"
 BASIC_LIMIT = 3
-PROMPT_VERSION = "recipe-draft-v1"
+PROMPT_VERSION = "recipe-draft-v2-nutrition"
 
 
 class RecipeDraft(BaseModel):
@@ -33,6 +34,8 @@ class RecipeDraft(BaseModel):
     ingredients: list[str] = Field(min_length=1, max_length=80)
     instructions: list[str] = Field(min_length=1, max_length=40)
     review_notes: list[str] = Field(max_length=8)
+    nutrition: RecipeNutrition | None = None
+    nutrition_basis: Literal["serving", "recipe"] = "serving"
 
 
 def now() -> datetime:
@@ -137,7 +140,7 @@ def reserve(db: Session, user: User, request_id: str) -> tuple[IngestionJob, boo
 
 async def generate(description: str, image: bytes | None, mime: str | None) -> RecipeDraft:
     content: list[dict[str, Any]] = [
-        {"type": "input_text", "text": description or "Read this recipe image."}
+        {"type": "input_text", "text": description or "Read this recipe or nutrition label image."}
     ]
     if image:
         encoded = base64.b64encode(image).decode("ascii")
@@ -159,7 +162,27 @@ async def generate(description: str, image: bytes | None, mime: str | None) -> R
                     "a plausible recipe and note that quantities and timing are estimates in "
                     "review_notes. Never claim to identify hidden allergens or verify food "
                     "safety from a photo. No medical advice, URLs, HTML, markdown, provenance "
-                    "claims or nutrition guesses. Ingredients must be separate plain-text "
+                    "claims or nutrition guesses. Extract explicitly stated nutrition from "
+                    "readable labels or user text into nutrition: calories (kcal), protein_g, "
+                    "carbs_g (total carbohydrate), fat_g (total fat), and fiber_g. Use gram "
+                    "amounts, NOT percent daily values; do not substitute sugars for carbs "
+                    "or saturated fat for total fat. Preserve explicit zeros. Set missing or "
+                    "unreadable nutrients to null; never estimate from a food photo or "
+                    "ingredients. Set nutrition to null if no nutrition amounts are stated. "
+                    "Prefer a per-serving column (nutrition_basis=serving). If only totals "
+                    "for the whole recipe/container are given, use nutrition_basis=recipe "
+                    "and its stated number of servings. Never mix columns. If values are "
+                    "only per 100 g and serving mass is not given, use one 100 g serving "
+                    "and say so in the description; do not invent a conversion. Mention "
+                    "the label's serving size in the description when visible. "
+                    "A readable nutrition label is valid input even without a cooking recipe. "
+                    "For a ready-to-eat packaged item, create a simple food entry with the "
+                    "item itself as one ingredient and a plain serving step, not an invented "
+                    "ingredient list or cooking recipe. Set preparation/cooking times to zero "
+                    "when no preparation is needed. Do not warn that cooking times are "
+                    "estimated for such items. Keep description factual and brief; put "
+                    "uncertainty only in review_notes without repeating it. "
+                    "Ingredients must be separate plain-text "
                     "lines; instructions separate ordered steps without numeric prefixes. "
                     "Only concise plain-English review_notes for genuine uncertainty. "
                     "Refuse unrelated or unreadable input instead of inventing a recipe."

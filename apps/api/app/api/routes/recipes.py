@@ -124,6 +124,26 @@ def get_recipe(recipe_id: str, db: DbDep, current_user: BasicUser) -> dict[str, 
     return serialize_recipe(recipe, current_user.id, db)
 
 
+@router.put("/{recipe_id}/photo", response_model=RecipeOut)
+async def update_recipe_photo(
+    recipe_id: str, file: UploadFile, db: DbDep, current_user: BasicUser
+) -> dict[str, object]:
+    recipe = db.get(Recipe, recipe_id)
+    if not recipe or recipe.owner_user_id != current_user.id:
+        raise HTTPException(404, "Recipe not found")
+    stored = await upload_recipe_photo(file, current_user)
+    recipe.photo_url = stored["photo_url"]
+    recipe.photo_source_url = stored["photo_url"]
+    recipe.image_status = "validated"
+    recipe.validation_warnings = [
+        warning
+        for warning in recipe.validation_warnings or []
+        if warning != "Photo missing; placeholder accepted"
+    ]
+    db.commit()
+    return serialize_recipe(recipe, current_user.id, db)
+
+
 @router.post("/{recipe_id}/archive")
 def archive_recipe(recipe_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
     recipe = db.get(Recipe, recipe_id)

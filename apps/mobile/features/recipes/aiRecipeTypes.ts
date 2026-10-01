@@ -1,3 +1,5 @@
+import { RecipeNutrition } from "@/services/types";
+
 export type AiRecipeDraft = {
   name: string;
   description: string;
@@ -10,6 +12,8 @@ export type AiRecipeDraft = {
   ingredients: string[];
   instructions: string[];
   review_notes: string[];
+  nutrition?: RecipeNutrition | null;
+  nutrition_basis?: "serving" | "recipe";
 };
 
 export type AiRecipeJob = { id: string; status: string; draft: AiRecipeDraft | null };

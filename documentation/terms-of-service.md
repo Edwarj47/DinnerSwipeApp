@@ -1,6 +1,6 @@
 # Dinner Swipe Terms Of Service
 
-Effective date: August 3, 2026
+Effective date: October 1, 2026
 
 Dinner Swipe is provided by Data Centric Software Solutions LLC as a meal discovery, recipe organization, weekly planning, group voting, and grocery list application.
 
@@ -11,6 +11,10 @@ You are responsible for your account activity and group invite codes. Dinner gro
 ## Recipes, Photos, And Sources
 
 You are responsible for recipe content and photos you create, upload, import, approve, or share. URL-ingested and file-imported recipes require review before approval. Preserve attribution and do not use content in ways that violate another party's rights.
+
+## AI-Assisted Recipes And Nutrition
+
+Add with AI is optional. Selecting Create draft submits your description and any selected photo to OpenAI for processing as described in the Privacy Policy. AI-generated recipes and extracted label values can contain errors. Review ingredients, nutrition amounts, serving sizes and preparation steps before saving or using them. Nutrition is a planning aid, not medical advice. You must have permission to submit the text and photos you provide.
 
 ## Food, Allergy, And Nutrition Disclaimer
 

@@ -40,7 +40,7 @@ type Props = {
 };
 
 const PUBLIC_PATHS = new Set(["/privacy", "/terms"]);
-const LEGAL_DOCUMENT_VERSION = "2026-08-03";
+const LEGAL_DOCUMENT_VERSION = "2026-10-01";
 type AuthMode = "choice" | "login" | "register";
 
 export function AuthGate({ children }: Props) {

@@ -53,7 +53,7 @@ export function AiRecipePanel() {
       <Button label="Back to drafts" icon="arrow-back" onPress={() => { setSelected(null); void refresh(); }} />
       <Button label="Discard draft" icon="trash-outline" disabled={discard.isPending} onPress={() => discard.mutate()} />
     </View>
-    <Text style={styles.meta}>AI-generated draft. Check quantities, cooking times and allergens before saving.</Text>
+    <Text style={styles.meta}>Review ingredients, nutrition and serving sizes before saving.</Text>
     {selected.draft.review_notes.map((note, index) => <Text key={index} style={styles.note}>{note}</Text>)}
     {discard.error ? <Text style={styles.error}>{discard.error.message}</Text> : null}
     <ManualRecipePanel key={selected.id} initialDraft={selected} onSaved={() => { setSelected(null); setDescription(""); setImage(null); setStatus("Recipe saved."); void refresh(); }} />
@@ -70,7 +70,6 @@ export function AiRecipePanel() {
       <Image source={{ uri: preview }} style={styles.preview} contentFit="contain" />
       <Button label="Remove photo" icon="close" disabled={generate.isPending} onPress={() => { setImage(null); requestId.current = ""; }} />
     </View> : null}
-    <Text style={styles.meta}>Your description and photo are sent to OpenAI to prepare a draft. Only the draft is saved, not your input photo.</Text>
     {usage.data && !usage.data.enabled ? <Text style={styles.meta}>AI recipes are currently unavailable.</Text> : null}
     <Button label={generate.isPending ? "Preparing draft..." : "Create draft"} icon="sparkles-outline" variant="primary"
       disabled={generate.isPending || !usage.data?.enabled || usage.data.remaining === 0 || (!description.trim() && !image)} onPress={() => generate.mutate()} />

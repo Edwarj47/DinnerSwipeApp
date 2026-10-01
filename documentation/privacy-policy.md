@@ -1,6 +1,6 @@
 # Dinner Swipe Privacy Policy
 
-Effective date: August 3, 2026
+Effective date: October 1, 2026
 
 Dinner Swipe is provided by Data Centric Software Solutions LLC. This policy adapts the existing DCSS website privacy approach for the Dinner Swipe meal-planning application.
 
@@ -13,6 +13,10 @@ We record meal choices (plan, favorite, skip, and hide), when they happen, and w
 ## Recipe And Web Ingestion Data
 
 When you submit a public recipe URL, Dinner Swipe fetches and analyzes the page to create a reviewable recipe candidate. Source URLs, source titles, detected images, extraction warnings, confidence metadata, and approval history may be stored to preserve attribution and provenance.
+
+## AI Recipe Processing
+
+When you choose Create draft in Add with AI, Dinner Swipe sends the description and photo you provide to OpenAI to generate a recipe or read a nutrition label. We save the resulting draft, including any extracted nutrition, until you save or discard it, and retain generation status and usage records. The input photo is not added to your recipe or retained in Dinner Swipe's recipe-photo storage. Photos you separately attach to a recipe are stored as recipe photos. OpenAI processes submitted content under its applicable data-processing and retention policies; Dinner Swipe does not promise zero retention by the provider. Avoid submitting personal or sensitive information that is not needed for your recipe.
 
 ## Group Voting
 

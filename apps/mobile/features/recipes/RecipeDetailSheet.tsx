@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Image } from "expo-image";
 import { useMemo, type ReactNode } from "react";
 import {
   Linking,
@@ -20,6 +19,7 @@ import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { RecipeNutritionPanel } from "./RecipeNutritionPanel";
+import { RecipePhotoEditor } from "./RecipePhotoEditor";
 
 type RecipeAction = "add" | "skip" | "favorite" | "hide";
 
@@ -100,13 +100,7 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
             <Ionicons name="close" size={24} color={Colors.ink} />
           </Pressable>
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-            <Image
-              source={{ uri: recipe.photo_url ?? undefined }}
-              placeholder={require("../../assets/icon.png")}
-              accessibilityLabel={recipe.name}
-              style={styles.photo}
-              contentFit="cover"
-            />
+            <RecipePhotoEditor key={recipe.id} recipe={recipe} />
             <View style={styles.titleRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.kicker}>{formatMealType(recipe.meal_type)} • {formatSourceType(recipe.source_type)}</Text>
@@ -270,7 +264,6 @@ const styles = StyleSheet.create({
   grabber: { width: 42, height: 5, borderRadius: 999, backgroundColor: Colors.border },
   close: { position: "absolute", top: 14, right: 14, zIndex: 2, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.9)", alignItems: "center", justifyContent: "center" },
   content: { padding: 16, paddingBottom: 30, gap: 14 },
-  photo: { width: "100%", aspectRatio: 1.25, borderRadius: 8, backgroundColor: Colors.border },
   titleRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   kicker: { color: Colors.basil, fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
   title: { color: Colors.ink, fontSize: 28, lineHeight: 33, fontWeight: "900" },

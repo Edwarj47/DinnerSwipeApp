@@ -10,6 +10,11 @@ export const privacySections = [
       "When you submit a public recipe URL, Dinner Swipe fetches and analyzes the page to create a reviewable recipe candidate. Source URLs, source titles, detected images, extraction warnings, confidence metadata, and approval history may be stored to preserve attribution and provenance."
   },
   {
+    title: "AI Recipe Processing",
+    body:
+      "When you choose Create draft in Add with AI, Dinner Swipe sends the description and photo you provide to OpenAI to generate a recipe or read a nutrition label. We save the resulting draft, including any extracted nutrition, until you save or discard it, and retain generation status and usage records. The input photo is not added to your recipe or retained in Dinner Swipe's recipe-photo storage. Photos you separately attach to a recipe are stored as recipe photos. OpenAI processes submitted content under its applicable data-processing and retention policies; Dinner Swipe does not promise zero retention by the provider. Avoid submitting personal or sensitive information that is not needed for your recipe."
+  },
+  {
     title: "Group Voting",
     body:
       "Members of a dinner group can vote on recipe ideas. Group owners may see vote summaries, percentages, counts, winners and non-winning choices, and which member voted for each visible choice. Zero-count choices are not shown in owner vote detail charts. Group owners can also configure whether member allergens and disliked ingredients are used as warnings or filters during group voting."
@@ -61,6 +66,11 @@ export const termsSections = [
     title: "Recipes, Photos, And Sources",
     body:
       "You are responsible for recipe content and photos you create, upload, import, approve, or share. URL-ingested and file-imported recipes require review before approval. Preserve attribution and do not use content in ways that violate another party's rights."
+  },
+  {
+    title: "AI-Assisted Recipes And Nutrition",
+    body:
+      "Add with AI is optional. Selecting Create draft submits your description and any selected photo to OpenAI for processing as described in the Privacy Policy. AI-generated recipes and extracted label values can contain errors. Review ingredients, nutrition amounts, serving sizes and preparation steps before saving or using them. Nutrition is a planning aid, not medical advice. You must have permission to submit the text and photos you provide."
   },
   {
     title: "Food, Allergy, And Nutrition Disclaimer",
