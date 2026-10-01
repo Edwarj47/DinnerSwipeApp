@@ -1,6 +1,39 @@
 # Android Preview UAT
 
-Updated 2026-10-01 for Android preview build 12.
+Updated 2026-10-01 for Android preview build 13.
+
+## Build 13 Update
+
+- AI drafts extract printed calories, protein, carbs, fat and fiber into editable
+  nutrition fields, preserving serving basis, missing values and explicit zeros.
+- Packaged-food labels no longer need invented cooking instructions or time estimates.
+- Saved recipe owners can Add photo / Change photo from details using camera or library.
+  Failed uploads preserve the previous image. Portrait photos are shown without cropping.
+- AI processing disclosure moves from the form to Privacy and Terms. The short review
+  reminder remains. Existing model fallback, quotas and user acceptance history are unchanged.
+- API/web are live from `394ceab`; all GitHub CI jobs passed. Local checks passed:
+  104 API tests, 54 mobile tests, lint, types and web export. Deployed browser checks
+  passed at 320/390/1280 pixels with mocked accounts, without customer-data writes.
+- Backup restore, rollback images, live checks and release evidence are in
+  [AI label and recipe photo UAT](ai-labels-recipe-photos-uat.md#deployment-record).
+- Android preview 13 finished October 1 at 19:37 UTC from `394ceab`, EAS build
+  `78059c0e-b313-4ded-9f30-417a60714502`. The standalone APK does not require Metro.
+- Download, ZIP integrity, embedded package/version, production API URL and feature bundle
+  checks passed. Package `dev.dcss.dinnerswipe`, version code `13`; signing certificate
+  matches build 12. Size 79,540,743 bytes; SHA-256:
+  `738badb7a820ad44a87a5b40757e7f8d5835fe076afdaa26ec407ac0f83fba12`.
+  The verified link is shared privately. Physical-phone installation/UAT is still pending.
+
+### Build 13 Phone Checks
+
+1. Install over build 12 without uninstalling; confirm the saved session remains available.
+2. Create an AI draft from a clear nutrition label. Check values and serving basis in review,
+   adjust as needed, save, and log a fractional portion in Macro Tracker.
+3. Open an existing owned recipe, choose Add photo / Change photo, and try camera and library.
+   Test permission denial, cancellation, a failed upload and retry, then reopen the recipe.
+4. Confirm full portrait photos remain visible and Photo updated disappears after a few seconds.
+5. Check Privacy and Terms include AI processing information and the AI form has no repeated
+   provider disclosure paragraph. Physical-phone installation and camera UAT remain pending.
 
 ## Build 12 Update
 

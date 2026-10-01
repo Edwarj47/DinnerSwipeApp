@@ -2,9 +2,8 @@
 
 ## Status
 
-Implemented and tested locally on 2026-10-01. Prepared for Android preview build 13.
-Deployment and artifact verification are pending; the release record will be added below.
-Deploy the API before the updated client. No database migration is required.
+API and web deployed on 2026-10-01 from source `394ceab`. Android preview build 13
+finished and its downloaded artifact is verified. No database migration was required.
 
 ## Changes
 
@@ -38,8 +37,39 @@ Deploy the API before the updated client. No database migration is required.
 - Server tests cover ownership, authentication, size/type rejection, photo replacement and
   nutrition preservation. Mobile tests cover camera cancellation, retry, cache invalidation,
   transient success notices, whole-container normalization and old drafts without nutrition.
-- Physical phone camera/library and label-reading UAT remain necessary after the next APK.
+- Physical phone camera/library and label-reading UAT remain necessary with APK 13.
   AI extraction can still make mistakes, so values remain editable before saving.
 
 Implementation references: [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
 and [image inputs](https://developers.openai.com/api/docs/guides/images-vision).
+
+## Deployment Record
+
+- Source `394ceab` pushed. [CI 36900357332](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/36900357332)
+  passed backend, frontend (including cold-cache mobile tests), and Docker jobs.
+- Fresh private backup: `backups/releases/20261001T173224Z_preview13`. Full restore
+  into an isolated temporary database passed. Schema remains `d8126c4ab391`.
+- Active API image `6fe1c7aab487`, web `df5d9859bf00`. Retained prior images:
+  `dinner-swipe-api:before-preview13` and `dinner-swipe-web:before-preview13`.
+- Live health, AI nutrition schema, and anonymous photo-upload/AI-usage rejection passed.
+  Production web passed mocked-account browser checks at 320/390/1280 pixels for label
+  review/save, photo failure/retry/reopen, and legal pages. Screenshots inspected.
+- Only API and web containers changed. Database, worker, and all unrelated service IDs,
+  image IDs and start times are unchanged. The environment file is byte-identical to the
+  pre-release copy. No Stripe configuration or customer data was changed by release checks.
+- Android build `78059c0e-b313-4ded-9f30-417a60714502` finished October 1 at 19:37 UTC
+  from `394ceab`. Its initial 45-minute monitor expired while queued; a fresh EAS read
+  confirmed completion and the downloaded APK was verified at 22:59 UTC.
+- Download, ZIP integrity, embedded package/version, production API URL and new-feature
+  bundle checks passed. Package `dev.dcss.dinnerswipe`, version code `13`; signing
+  certificate matches build 12. Size 79,540,743 bytes. SHA-256:
+  `738badb7a820ad44a87a5b40757e7f8d5835fe076afdaa26ec407ac0f83fba12`.
+  The direct download link is shared privately. This standalone APK does not need Metro.
+
+Rollback needs no database restore. From the repository root:
+
+```bash
+docker tag dinner-swipe-api:before-preview13 dinner-swipe-dinner-swipe-api
+docker tag dinner-swipe-web:before-preview13 dinner-swipe-dinner-swipe-web
+docker compose --profile production up -d --no-deps --no-build --wait dinner-swipe-api dinner-swipe-web
+```
