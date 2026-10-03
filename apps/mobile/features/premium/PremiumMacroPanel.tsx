@@ -6,7 +6,8 @@ import { Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from "r
 import { Button } from "@/components/Button";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
-import { apiFetch } from "@/services/api";
+import { apiFetch, savedMessage } from "@/services/api";
+import { useOfflineStatus } from "@/services/offlineStore";
 import { MacroChoice } from "./MacroChoice";
 import { RecipeMacroLogger } from "@/features/recipes/RecipeMacroLogger";
 import { MacroDatePicker } from "./MacroDatePicker";
@@ -32,6 +33,7 @@ const MEAL_LABEL_OPTIONS: { label: string; value: MealLabel }[] = [
 ];
 
 export function PremiumMacroPanel() {
+  const pendingMacros = useOfflineStatus(state => state.edits.some(edit => edit.kind.startsWith("macro_")));
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
   const setStatus = (message: string) => setNotice({ message, error: false });
@@ -162,7 +164,7 @@ export function PremiumMacroPanel() {
       });
     },
     onSuccess: async () => {
-      setStatus(editingEntryId ? "Macro entry updated." : "Macro entry added.");
+      setStatus(savedMessage(editingEntryId ? "Macro entry updated." : "Macro entry added."));
       clearEntryForm();
       await refreshPremium(queryClient);
     },
@@ -173,7 +175,7 @@ export function PremiumMacroPanel() {
     mutationFn: (entryId: string) =>
       apiFetch<{ status: string }>(`/api/v1/macros/entries/${entryId}`, { method: "DELETE" }),
     onSuccess: async () => {
-      setStatus("Macro entry removed.");
+      setStatus(savedMessage("Macro entry removed."));
       clearEntryForm();
       await refreshPremium(queryClient);
     },
@@ -237,6 +239,7 @@ export function PremiumMacroPanel() {
       ) : (
         <>
           <TourTarget id="macros"><Text style={styles.subsection}>Last 7 days</Text>
+          {pendingMacros ? <Text style={styles.meta}>Summary and trends exclude changes waiting to sync.</Text> : null}
           {summary.data ? <Text style={styles.meta}>{summary.data.start_date} to {summary.data.end_date}</Text> : null}
           <View style={styles.metrics}>
             <Metric label="Consumed" value={summary.data ? String(summary.data.eaten_meals) : "-"} />
@@ -328,7 +331,7 @@ export function PremiumMacroPanel() {
               analytics={analytics.data}
               range={trendRange}
               onRange={setTrendRange}
-              exportPending={exportMacros.isPending || !analytics.data || analytics.isError}
+              exportPending={pendingMacros || exportMacros.isPending || !analytics.data || analytics.isError}
               onExport={() => exportMacros.mutate()}
             />
           ) : null}

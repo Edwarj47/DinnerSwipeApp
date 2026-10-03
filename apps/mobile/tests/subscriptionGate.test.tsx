@@ -15,6 +15,7 @@ jest.mock("@/services/api", () => ({
   getToken: jest.fn().mockResolvedValue("fixture-token"),
   addAuthChangeListener: () => () => undefined,
   clearAuthTokens: jest.fn(),
+  reconnectOffline: jest.fn(),
   apiFetch: jest.fn()
 }));
 

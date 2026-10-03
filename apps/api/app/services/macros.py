@@ -71,7 +71,8 @@ def serialize_targets(target: MacroProfileTarget | None) -> dict[str, Any]:
 
 
 def create_confirmation(
-    db: Session, user: User, payload: MealMacroConfirmationIn
+    db: Session, user: User, payload: MealMacroConfirmationIn, *, commit: bool = True,
+    entry_id: str | None = None,
 ) -> MealMacroConfirmation:
     require_premium(db, user)
     recipe_id = payload.recipe_id
@@ -115,8 +116,10 @@ def create_confirmation(
         macro_source=macro_source,
         notes=payload.notes,
     )
+    if entry_id:
+        confirmation.id = entry_id
     db.add(confirmation)
-    db.commit()
+    db.commit() if commit else db.flush()
     db.refresh(confirmation)
     return confirmation
 
@@ -134,7 +137,7 @@ def list_macro_entries(
 
 
 def update_macro_entry(
-    db: Session, user: User, entry_id: str, payload: MacroEntryUpdate
+    db: Session, user: User, entry_id: str, payload: MacroEntryUpdate, *, commit: bool = True
 ) -> MealMacroConfirmation:
     require_premium(db, user)
     row = db.scalar(
@@ -142,6 +145,7 @@ def update_macro_entry(
             MealMacroConfirmation.id == entry_id,
             MealMacroConfirmation.user_id == user.id,
         )
+        .with_for_update()
     )
     if not row:
         raise HTTPException(status_code=404, detail="Macro entry not found")
@@ -183,23 +187,24 @@ def update_macro_entry(
         if changed_macro:
             row.macro_source = "manual"
     _validate_totals({field: getattr(row, field) for field in macro_fields})
-    db.commit()
+    db.commit() if commit else db.flush()
     db.refresh(row)
     return row
 
 
-def delete_macro_entry(db: Session, user: User, entry_id: str) -> None:
+def delete_macro_entry(db: Session, user: User, entry_id: str, *, commit: bool = True) -> None:
     require_premium(db, user)
     row = db.scalar(
         select(MealMacroConfirmation).where(
             MealMacroConfirmation.id == entry_id,
             MealMacroConfirmation.user_id == user.id,
         )
+        .with_for_update()
     )
     if not row:
         raise HTTPException(status_code=404, detail="Macro entry not found")
     db.delete(row)
-    db.commit()
+    db.commit() if commit else db.flush()
 
 
 def macro_summary(db: Session, user: User, days: int) -> dict[str, Any]:
@@ -299,6 +304,7 @@ def serialize_confirmation(db: Session, row: MealMacroConfirmation) -> dict[str,
     recipe = db.get(Recipe, row.recipe_id) if row.recipe_id else None
     return {
         "id": row.id,
+        "revision": row.updated_at.isoformat(),
         "recipe_id": row.recipe_id,
         "recipe_name": recipe.name if recipe else None,
         "weekly_plan_slot_id": row.weekly_plan_slot_id,

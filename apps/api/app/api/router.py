@@ -11,6 +11,7 @@ from app.api.routes import (
     health,
     imports,
     ingestion,
+    offline,
     plans,
     premium,
     profile,
@@ -30,3 +31,4 @@ api_router.include_router(imports.router)
 api_router.include_router(ingestion.router)
 api_router.include_router(groups.router)
 api_router.include_router(premium.router)
+api_router.include_router(offline.router)

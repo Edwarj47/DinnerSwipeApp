@@ -4,11 +4,14 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AuthGate } from "@/components/AuthGate";
+import { OfflineRuntime } from "@/components/OfflineRuntime";
 import { BiometricGate } from "@/components/BiometricGate";
 import { Colors } from "@/components/theme";
 import { SubscriptionGate } from "@/features/subscription/SubscriptionGate";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({ defaultOptions: {
+  queries: { networkMode: "always", retry: false }, mutations: { networkMode: "always", retry: false }
+} });
 
 export default function RootLayout() {
   return (
@@ -17,6 +20,7 @@ export default function RootLayout() {
         <BiometricGate>
           <AuthGate>
             <SubscriptionGate>
+              <OfflineRuntime />
               <Stack screenOptions={{ headerShown: false }} />
             </SubscriptionGate>
             <StatusBar style="dark" />

@@ -48,6 +48,7 @@ def list_current(
         "items": [
             {
                 "id": item.id,
+                "revision": item.updated_at.isoformat(),
                 "normalized_name": item.normalized_name,
                 "display_name": item.display_name,
                 "quantity": item.quantity,
@@ -71,6 +72,7 @@ def _owned_grocery_item(db: DbDep, current_user: BasicUser, item_id: str) -> Gro
         select(GroceryListItem)
         .join(GroceryList, GroceryList.id == GroceryListItem.grocery_list_id)
         .where(GroceryListItem.id == item_id, GroceryList.user_id == current_user.id)
+        .with_for_update(of=GroceryListItem)
     )
     if not item:
         raise HTTPException(status_code=404, detail="Item not found")

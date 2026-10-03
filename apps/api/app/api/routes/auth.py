@@ -26,6 +26,7 @@ from app.models.entities import (
     IngestionJob,
     MealMacroConfirmation,
     MealSwipe,
+    OfflineReceipt,
     Recipe,
     UrlIngestionCandidate,
     User,
@@ -154,6 +155,7 @@ def logout(
 @router.get("/status", response_model=AuthStatus)
 def status_route(current_user: CurrentUser) -> AuthStatus:
     return AuthStatus(
+        user_id=current_user.id,
         email=current_user.email,
         email_verified=current_user.email_verified,
         smtp_configured=settings.smtp_configured,
@@ -447,6 +449,13 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
             for choice in db.scalars(select(MealSwipe).where(
                 MealSwipe.user_id == current_user.id
             ).order_by(MealSwipe.created_at)).all()
+        ],
+        "offline_sync_receipts": [
+            {"operation_id": receipt.operation_id, "result": receipt.result,
+             "created_at": receipt.created_at.isoformat()}
+            for receipt in db.scalars(select(OfflineReceipt).where(
+                OfflineReceipt.user_id == current_user.id
+            ).order_by(OfflineReceipt.created_at)).all()
         ],
         "account_activity": [_audit_event_for_account_export(event) for event in audit_events],
     }

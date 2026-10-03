@@ -46,6 +46,16 @@ class User(Base, TimestampMixin):
     profile: Mapped[UserProfile] = relationship(back_populates="user", uselist=False)
 
 
+class OfflineReceipt(Base, TimestampMixin):
+    __tablename__ = "offline_receipts"
+    __table_args__ = (UniqueConstraint("user_id", "operation_id"),)
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), index=True)
+    operation_id: Mapped[str] = mapped_column(String(36), nullable=False)
+    request_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    result: Mapped[dict[str, object]] = mapped_column(JSON, nullable=False)
+
+
 class EmailVerificationToken(Base, TimestampMixin):
     __tablename__ = "email_verification_tokens"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)

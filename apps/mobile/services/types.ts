@@ -130,6 +130,8 @@ export type SubscriptionPlanStatus = {
 };
 
 export type PremiumStatus = {
+  offline_until?: string | null;
+  offline_sync_version?: number;
   active: boolean;
   plan_key: string;
   status: string;
@@ -164,6 +166,7 @@ export type MacroTarget = {
 };
 
 export type MacroConfirmation = {
+  revision?: string;
   id: string;
   recipe_id?: string | null;
   recipe_name?: string | null;

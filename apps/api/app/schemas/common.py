@@ -38,6 +38,7 @@ class LogoutRequest(ApiModel):
 
 
 class AuthStatus(ApiModel):
+    user_id: str
     email: EmailStr
     email_verified: bool
     smtp_configured: bool
@@ -77,6 +78,8 @@ class SubscriptionPlanStatus(ApiModel):
 
 
 class PremiumStatus(ApiModel):
+    offline_until: datetime | None = None
+    offline_sync_version: int = 0
     active: bool
     plan_key: str = "macro_tracker_monthly"
     status: str = "inactive"
@@ -170,6 +173,7 @@ class MacroEntryUpdate(ApiModel):
 
 
 class MealMacroConfirmationOut(ApiModel):
+    revision: str
     id: str
     recipe_id: str | None
     recipe_name: str | None

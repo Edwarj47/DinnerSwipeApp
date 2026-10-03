@@ -7,7 +7,7 @@ import { apiFetch } from "@/services/api";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-linking", () => ({ openURL: jest.fn() }));
-jest.mock("@/services/api", () => ({ apiFetch: jest.fn() }));
+jest.mock("@/services/api", () => ({ apiFetch: jest.fn(), savedMessage: (message: string) => message }));
 jest.mock("react-native-calendars", () => ({ Calendar: ({ onDayPress }: { onDayPress: (day: { dateString: string }) => void }) => {
   const { Button } = jest.requireActual("react-native");
   return <Button title="Pick leap day" onPress={() => onDayPress({ dateString: "2024-02-29" })} />;

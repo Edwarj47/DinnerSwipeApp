@@ -9,7 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
 import { Colors } from "@/components/theme";
-import { apiFetch, clearAuthTokens } from "@/services/api";
+import { apiFetch, clearAuthTokens, reconnectOffline } from "@/services/api";
 import { AppAccessContext, useAuthSession } from "@/services/session";
 import { CouponResult, PremiumStatus, SubscriptionTier } from "@/services/types";
 import { PlanPicker } from "./PlanPicker";
@@ -124,8 +124,8 @@ export function SubscriptionGate({ children }: Props) {
             ) : (
               <>
                 <Text style={styles.title}>Unable to check your access</Text>
-                <Text style={styles.subtitle}>Check your connection and try again.</Text>
-                <Button label="Try again" icon="refresh" disabled={subscription.isFetching} onPress={() => { void subscription.refetch(); }} />
+                <Text style={styles.subtitle}>{subscription.error instanceof Error ? subscription.error.message : "Check your connection and try again."}</Text>
+                <Button label="Try again" icon="refresh" disabled={subscription.isFetching} onPress={async () => { await reconnectOffline(); await subscription.refetch(); }} />
                 <Button label="Switch account" icon="swap-horizontal" onPress={() => { void switchAccount(); }} />
               </>
             )}

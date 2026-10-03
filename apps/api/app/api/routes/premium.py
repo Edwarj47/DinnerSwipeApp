@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
 from fastapi import APIRouter, Header, Query, Request
@@ -65,7 +65,15 @@ def premium_status(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
 
 @router.get("/subscription/status", response_model=PremiumStatus)
 def subscription_status(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
-    return serialize_subscription_status(db, current_user)
+    status = serialize_subscription_status(db, current_user)
+    until = datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=72)
+    period_end = status.get("current_period_end")
+    if isinstance(period_end, datetime):
+        until = min(until, period_end.replace(tzinfo=None))
+    return status | {
+        "offline_until": until.replace(tzinfo=UTC) if status.get("basic_active") else None,
+        "offline_sync_version": 1,
+    }
 
 
 @router.post("/subscription/waiver-code", response_model=PremiumStatus)

@@ -39,7 +39,7 @@ test("recipe logging scales portions, permits individual overrides and saves its
     await waitFor(() => expect(close).toHaveBeenCalled());
     const payload = JSON.parse(request.mock.calls.find(([path]) => path === "/api/v1/macros/entries")![1]!.body as string);
     expect(payload).toMatchObject({ recipe_id: "recipe-1", servings_consumed: 1.5, meal_date: "2026-09-28", protein_g: 33 });
-    expect(payload.calories).toBeUndefined();
+    expect(payload).toMatchObject({ calories: 600, fat_g: 0, carbs_g: null, fiber_g: null });
   } finally { screen.close(); }
 });
 

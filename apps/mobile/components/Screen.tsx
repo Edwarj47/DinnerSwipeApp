@@ -3,6 +3,7 @@ import { ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Colors } from "@/components/theme";
+import { OfflineStatusBar } from "@/components/OfflineStatusBar";
 import { revealTourTarget, TourScrollContext, useGuidedTour } from "@/features/onboarding/TourContext";
 
 type Props = {
@@ -19,6 +20,7 @@ export function Screen({ children, scroll = true }: Props) {
   return (
     <TourScrollContext.Provider value={reveal}>
       <SafeAreaView style={styles.root} edges={tour ? ["left", "right", "bottom"] : undefined}>
+        <OfflineStatusBar />
         {scroll ? <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled">{content}</ScrollView> : content}
       </SafeAreaView>
     </TourScrollContext.Provider>

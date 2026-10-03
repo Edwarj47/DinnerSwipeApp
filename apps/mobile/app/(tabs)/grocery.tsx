@@ -41,7 +41,7 @@ export default function GroceryScreen() {
   const [manualQty, setManualQty] = useState("");
   const [manualUnit, setManualUnit] = useState("");
   const [pantryName, setPantryName] = useState("");
-  const { data } = useQuery<GroceryListResponse>({ queryKey: ["grocery"], queryFn: () => apiFetch<GroceryListResponse>("/api/v1/grocery-lists/current") });
+  const { data, error: loadError } = useQuery<GroceryListResponse>({ queryKey: ["grocery"], queryFn: () => apiFetch<GroceryListResponse>("/api/v1/grocery-lists/current") });
   const { data: pantry } = useQuery<PantryItem[]>({ queryKey: ["pantry"], queryFn: () => apiFetch<PantryItem[]>("/api/v1/grocery-lists/pantry") });
   const grouped = useMemo(() => groupItems(data?.items ?? []), [data?.items]);
   const itemsLeft = data?.items.filter((item: GroceryItem) => !item.is_checked).length ?? 0;
@@ -100,6 +100,7 @@ export default function GroceryScreen() {
       await queryClient.invalidateQueries({ queryKey: ["pantry"] });
     }
   });
+  const error = [loadError, regen.error, patchItem.error, deleteItem.error, addManual.error, addPantry.error, deletePantry.error].find(Boolean);
   return (
     <Screen>
       <View style={styles.header}>
@@ -110,6 +111,7 @@ export default function GroceryScreen() {
         <Button label="Regenerate" icon="sync" onPress={() => regen.mutate()} />
       </View>
       {status ? <Text style={styles.status}>{status}</Text> : null}
+      {error ? <Text accessibilityRole="alert" style={{ color: Colors.danger, marginBottom: 10 }}>{error.message}</Text> : null}
       <TourTarget id="grocery-list"><SegmentedControl
         accessibilityLabel="Grocery sections"
         value={mode}
@@ -155,7 +157,7 @@ export default function GroceryScreen() {
             const isExpanded = expandedItemId === item.id;
             return (
             <View key={item.id} style={[styles.item, isExpanded ? styles.itemExpanded : null]}>
-              <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: item.is_checked }} onPress={() => patchItem.mutate({ item, patch: { is_checked: !item.is_checked } })} style={[styles.checkbox, item.is_checked && styles.checkboxChecked]}>
+              <Pressable accessibilityRole="checkbox" accessibilityLabel={item.display_name} aria-checked={item.is_checked} accessibilityState={{ checked: item.is_checked }} onPress={() => patchItem.mutate({ item, patch: { is_checked: !item.is_checked } })} style={[styles.checkbox, item.is_checked && styles.checkboxChecked]}>
                 {item.is_checked ? <Ionicons name="checkmark" size={19} color="#fff" /> : null}
               </Pressable>
               <View style={styles.itemBody}>
@@ -184,7 +186,7 @@ export default function GroceryScreen() {
           })}
         </View>
       )) : null}
-      {mode === "list" && !data?.items?.length ? (
+      {mode === "list" && data && !data.items?.length ? (
         <View style={styles.emptyPanel}>
           <Text style={styles.emptyTitle}>No grocery items yet</Text>
           <Text style={styles.empty}>Choose meals or add a household item, then regenerate the list.</Text>
@@ -213,7 +215,7 @@ function retailerUrl(item: GroceryItem) {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
+  header: { flexDirection: "row", flexWrap: "wrap", gap: 10, justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
   title: { fontSize: 32, fontWeight: "900", color: Colors.ink },
   subtitle: { color: Colors.muted },
   status: { color: Colors.basil, fontWeight: "800", marginBottom: 10 },

@@ -26,6 +26,8 @@ import {
   clearAuthTokens,
   getRefreshToken,
   getToken,
+  isAuthenticationError,
+  reconnectOffline,
   setAuthTokens
 } from "@/services/api";
 import {
@@ -47,6 +49,7 @@ export function AuthGate({ children }: Props) {
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const [checking, setChecking] = useState(true);
+  const [connectionError, setConnectionError] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
   const sessionCheck = useRef(0);
@@ -70,6 +73,7 @@ export function AuthGate({ children }: Props) {
     const [token, refreshToken] = await Promise.all([getToken(), getRefreshToken()]);
     if (check !== sessionCheck.current) return;
     if (!token && !refreshToken) {
+      setConnectionError("");
       if (previousEmail.current) {
         previousEmail.current = null;
         void queryClient.cancelQueries();
@@ -96,9 +100,11 @@ export function AuthGate({ children }: Props) {
       previousEmail.current = session.email;
       setSessionEmail(session.email);
       setAuthenticated(true);
-    } catch {
+      setConnectionError("");
+    } catch (error) {
       if (check !== sessionCheck.current) return;
-      await clearAuthTokens();
+      if (isAuthenticationError(error)) await clearAuthTokens();
+      else setConnectionError(error instanceof Error ? error.message : "Unable to check your session. Try again.");
       setAuthenticated(false);
       setSessionEmail(null);
     } finally {
@@ -201,6 +207,12 @@ export function AuthGate({ children }: Props) {
         {checking ? (
           <View style={styles.centered}>
             <ActivityIndicator color="#fff" />
+          </View>
+        ) : connectionError ? (
+          <View style={styles.centered}>
+            <Text style={styles.subtitle}>{connectionError}</Text>
+            <Button label="Try again" icon="refresh" onPress={async () => { setChecking(true); await reconnectOffline(); await checkSession(); }} />
+            <Button label="Switch account" icon="swap-horizontal" onPress={() => void clearAuthTokens()} />
           </View>
         ) : (
           <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.keyboard}>

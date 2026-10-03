@@ -11,7 +11,7 @@ import { isISODate, todayISO } from "@/features/premium/macroDates";
 import { apiFetch } from "@/services/api";
 import { MacroConfirmation, Recipe } from "@/services/types";
 import { NutritionFields } from "./NutritionFields";
-import { NUTRIENTS, nutritionInputs, parseNutrition, scaleNutritionInputs } from "./recipeNutrition";
+import { nutritionInputs, parseNutrition, scaleNutritionInputs } from "./recipeNutrition";
 
 // Mount a fresh logger for each entry so drafts cannot leak between recipes or days.
 export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayISO(), onClose }: {
@@ -47,10 +47,10 @@ export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayIS
       if (!portions.trim() || amount <= 0 || amount > 20 || !Number.isFinite(amount)) throw new Error("Enter between 0 and 20 servings, excluding zero.");
       if (!isISODate(mealDate)) throw new Error("Enter a valid date.");
       const totals = parseNutrition(nutrition);
-      const defaults = parseNutrition(nutritionInputs(recipe?.nutrition, amount));
-      const overrides = entry ? totals : Object.fromEntries(NUTRIENTS.filter(([key]) => totals[key] !== defaults[key]).map(([key]) => [key, totals[key]]));
+      // Save the reviewed totals, including explicit unknowns, so offline replay
+      // cannot recalculate history from a recipe edited after this meal was logged.
       return apiFetch(entry ? `/api/v1/macros/entries/${entry.id}` : "/api/v1/macros/entries", { method: entry ? "PUT" : "POST",
-        body: JSON.stringify({ ...overrides, ...(!entry ? { recipe_id: recipe?.id } : {}), entry_name: entry?.entry_name ?? recipe?.name,
+        body: JSON.stringify({ ...totals, ...(!entry ? { recipe_id: recipe?.id } : {}), entry_name: entry?.entry_name ?? recipe?.name,
           meal_date: mealDate, meal_label: label, servings_consumed: amount, status: "ate", notes: notes.trim() || null }) });
     },
     onSuccess: async () => {
