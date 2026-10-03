@@ -1,6 +1,43 @@
 # Android Preview UAT
 
-Updated 2026-10-01 for Android preview build 13.
+Updated 2026-10-03 for Android preview build 14.
+
+## Build 14 Update
+
+- Source `bbe2e76` pushed. [CI 37115832445](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/37115832445)
+  passed backend, frontend (including cold-cache tests), and Docker jobs.
+- Connection failures preserve sign-in credentials. Downloaded data, durable grocery
+  check-offs/quantity changes and personal macro edits add bounded offline support.
+- Queued changes keep stable operation IDs, survive restarts, and stop for review if
+  another device changed the same item. Recipe macro logs preserve reviewed totals.
+- Local verification: 72 mobile tests, 109 API tests, lint/types, Ruff/mypy and web export.
+  A separate disposable PostgreSQL test passed concurrent retries and migration rollback.
+  Mocked-API browser checks passed at 320/390/1280 pixels.
+- Android preview 14 finished October 3 at 10:27 UTC from `bbe2e76`, EAS build
+  `3694f29e-1eae-408f-bec5-a58979a19056`. The standalone APK does not need Metro.
+- Download, ZIP integrity, embedded package/version, production API URL and offline
+  feature bundle checks passed. Package `dev.dcss.dinnerswipe`, version code `14`;
+  signing certificate matches build 13. Size 79,584,098 bytes; SHA-256:
+  `b741bcfa2a6a05c39aa034b1d906c1cf2f125b505930c17991656ef540c55aa1`.
+  The verified download link is shared privately. Physical-phone UAT remains pending.
+- API/database and web deployment are **not part of this push/build request**.
+  The existing API does not advertise offline support. A new APK alone does not
+  activate cached offline access or queued writes. API migration `e19a71c042bf`
+  and deployment need separate approval, backup and rollback preparation.
+- Full behavior, storage limits, rollout order and phone acceptance steps are in
+  [Offline support](offline-support.md). No fully offline PWA shell is included.
+
+### Build 14 Phone Checks
+
+1. Install over build 13 without uninstalling; confirm the saved session remains available.
+2. After the API update, sign in online and allow downloads to finish. Open the
+   groceries and Macro Tracker Day screens before enabling airplane mode.
+3. Restart the app, check a grocery item and add a macro entry. Restart again;
+   both edits and the pending-sync count must remain. Reconnect and verify no duplicates.
+4. Exercise a same-item conflict using a second device. Review the saved local
+   values before discarding or re-entering them against refreshed server data.
+5. Test biometric unlock, offline access expiry, sign-out/account isolation, and
+   reconnect. First login, billing, AI and shared-plan changes remain online-only.
 
 ## Build 13 Update
 

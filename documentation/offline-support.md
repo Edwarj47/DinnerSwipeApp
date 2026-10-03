@@ -1,5 +1,16 @@
 # Offline Support: First Release
 
+## Release Status
+
+Source `bbe2e76` was pushed on 2026-10-03. All GitHub CI jobs passed. Standalone
+Android preview 14 completed and its APK passed artifact verification; see
+[the build record](android-preview-uat.md#build-14-update).
+
+The production API/database and web remain on their prior deployment. Offline
+cache access and queued writes require migration `e19a71c042bf` and the updated
+API; installing the APK alone does not activate them. Physical-phone acceptance
+testing remains pending after that deployment.
+
 ## Scope
 
 - First sign-in, account creation, password reset, billing/coupons, AI, web imports,
