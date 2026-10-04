@@ -119,9 +119,12 @@ async def stripe_webhook(
 
 @router.get("/macros/summary", response_model=MacroSummary)
 def get_macro_summary(
-    db: DbDep, current_user: CurrentUser, days: int = Query(default=7, ge=1, le=90)
+    db: DbDep,
+    current_user: CurrentUser,
+    days: int = Query(default=7, ge=1, le=366),
+    end_date: date | None = None,
 ) -> dict[str, object]:
-    return macro_summary(db, current_user, days)
+    return macro_summary(db, current_user, days, end_date)
 
 
 @router.get("/macros/entries", response_model=list[MealMacroConfirmationOut])

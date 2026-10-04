@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
+import { SUCCESS_MESSAGE_MS } from "@/components/useTransientMessage";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch, savedMessage } from "@/services/api";
+import { saveProfilePreferences } from "@/services/profilePreferences";
 import { useOfflineStatus } from "@/services/offlineStore";
 import { MacroChoice } from "./MacroChoice";
 import { RecipeMacroLogger } from "@/features/recipes/RecipeMacroLogger";
@@ -19,11 +21,16 @@ import {
   MacroExport,
   MacroSummary,
   MacroTarget,
-  PremiumStatus
+  PremiumStatus,
+  UserProfile
 } from "@/services/types";
 
 type MacroView = "day" | "grid" | "calendar" | "analytics";
 type MealLabel = "breakfast" | "lunch" | "dinner" | "snack";
+const SUMMARY_RANGES = [
+  { value: "1", label: "Today" }, { value: "7", label: "Last 7 days" },
+  { value: "14", label: "Last 14 days" }, { value: "365", label: "Last 365 days" }
+];
 
 const MEAL_LABEL_OPTIONS: { label: string; value: MealLabel }[] = [
   { label: "Breakfast", value: "breakfast" },
@@ -57,6 +64,16 @@ export function PremiumMacroPanel() {
   const [entryFiber, setEntryFiber] = useState("");
   const [entryNotes, setEntryNotes] = useState("");
   const [recipeLog, setRecipeLog] = useState<MacroConfirmation | "new" | null>(null);
+  const [summarySelection, setSummarySelection] = useState<string | null>(null);
+  const profile = useQuery({ queryKey: ["profile"], queryFn: () => apiFetch<UserProfile>("/api/v1/profile") });
+  const storedRange = String(profile.data?.notification_preferences?.macro_summary_days ?? "7");
+  const summaryRange = summarySelection ?? (SUMMARY_RANGES.some(option => option.value === storedRange) ? storedRange : "7");
+  const summaryEnd = todayISO();
+  const saveSummaryRange = useMutation({
+    mutationFn: (range: string) => saveProfilePreferences({ notification_preferences: { macro_summary_days: Number(range) } }),
+    onSuccess: updated => { queryClient.setQueryData(["profile"], updated); setSummarySelection(null); },
+    onError: () => { setSummarySelection(null); setError("Couldn't save the summary period. Try again."); }
+  });
 
   const subscription = useQuery({
     queryKey: ["subscription-status"],
@@ -65,9 +82,13 @@ export function PremiumMacroPanel() {
   });
   const premiumActive = Boolean(subscription.data?.premium_active ?? subscription.data?.active);
   const summary = useQuery({
-    queryKey: ["macro-summary"],
-    queryFn: () => apiFetch<MacroSummary>("/api/v1/macros/summary?days=7"),
-    enabled: premiumActive,
+    queryKey: ["macro-summary", summaryRange, summaryEnd],
+    queryFn: async (): Promise<MacroSummary> => {
+      const start = shiftISODate(summaryEnd, 1 - Number(summaryRange));
+      const data = await apiFetch<MacroAnalytics>(`/api/v1/macros/analytics?start_date=${start}&end_date=${summaryEnd}`);
+      return { ...data, active: true, recent_confirmations: [] };
+    },
+    enabled: premiumActive && !profile.isLoading,
     retry: false
   });
   const targets = useQuery({
@@ -106,7 +127,7 @@ export function PremiumMacroPanel() {
 
   useEffect(() => {
     if (!notice || notice.error) return;
-    const timer = setTimeout(() => setNotice(null), 3500);
+    const timer = setTimeout(() => setNotice(null), SUCCESS_MESSAGE_MS);
     return () => clearTimeout(timer);
   }, [notice]);
   useEffect(() => { setNotice(null); }, [macroView]);
@@ -238,8 +259,11 @@ export function PremiumMacroPanel() {
         </View>
       ) : (
         <>
-          <TourTarget id="macros"><Text style={styles.subsection}>Last 7 days</Text>
+          <TourTarget id="macros"><MacroChoice label="Summary period" value={summaryRange} options={SUMMARY_RANGES} disabled={saveSummaryRange.isPending} onChange={range => {
+            setSummarySelection(range); saveSummaryRange.mutate(range);
+          }} />
           {pendingMacros ? <Text style={styles.meta}>Summary and trends exclude changes waiting to sync.</Text> : null}
+          {summary.isError ? <Button label="Retry summary" icon="refresh" onPress={() => { void summary.refetch(); }} /> : null}
           {summary.data ? <Text style={styles.meta}>{summary.data.start_date} to {summary.data.end_date}</Text> : null}
           <View style={styles.metrics}>
             <Metric label="Consumed" value={summary.data ? String(summary.data.eaten_meals) : "-"} />

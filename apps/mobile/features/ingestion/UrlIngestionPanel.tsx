@@ -1,9 +1,10 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Image } from "expo-image";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors } from "@/components/theme";
 import { formatCandidateStatus } from "@/features/recipes/recipeDisplay";
 import { apiFetch } from "@/services/api";
@@ -26,7 +27,10 @@ export function UrlIngestionPanel() {
   const queryClient = useQueryClient();
   const [url, setUrl] = useState("");
   const [candidate, setCandidate] = useState<Candidate | null>(null);
-  const [status, setStatus] = useState("");
+  const [busy, setBusy] = useState(false);
+  const running = useRef(false);
+  const [error, setError] = useState("");
+  const [status, setStatus] = useTransientMessage(busy);
   const [editName, setEditName] = useState("");
   const [editPhoto, setEditPhoto] = useState("");
   const [editIngredients, setEditIngredients] = useState("");
@@ -35,6 +39,20 @@ export function UrlIngestionPanel() {
     queryKey: ["url-ingestion-history"],
     queryFn: () => apiFetch<Candidate[]>("/api/v1/url-ingestion")
   });
+
+  async function run(operation: () => Promise<void>) {
+    if (running.current) return;
+    running.current = true;
+    setBusy(true); setError(""); setStatus("");
+    try { await operation(); }
+    catch (cause) { setStatus(""); setError(cause instanceof Error ? cause.message : "Unable to update this draft. Please try again."); }
+    finally { running.current = false; setBusy(false); }
+  }
+
+  function collapseReview() {
+    setCandidate(null); setEditName(""); setEditPhoto("");
+    setEditIngredients(""); setEditInstructions("");
+  }
 
   function linesFrom(value: unknown) {
     if (!Array.isArray(value)) return "";
@@ -108,6 +126,7 @@ export function UrlIngestionPanel() {
       })
     });
     setStatus("Approved into your recipe library.");
+    collapseReview();
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["recipes"] }),
       queryClient.invalidateQueries({ queryKey: ["url-ingestion-history"] })
@@ -118,19 +137,13 @@ export function UrlIngestionPanel() {
     if (!candidate) return;
     await apiFetch(`/api/v1/url-ingestion/${candidate.id}/reject`, { method: "POST" });
     setStatus("Draft moved to the recycle bin for 15 days.");
-    setCandidate(null);
-    setEditName("");
-    setEditPhoto("");
-    setEditIngredients("");
-    setEditInstructions("");
+    collapseReview();
     await queryClient.invalidateQueries({ queryKey: ["url-ingestion-history"] });
     await queryClient.invalidateQueries({ queryKey: ["url-ingestion-recycle-bin"] });
   }
 
   const warnings = friendlyWarnings(candidate?.validation_warnings ?? []);
-  const hasIngredients = splitReviewLines(editIngredients).length > 0;
-  const hasInstructions = splitReviewLines(editInstructions).length > 0;
-  const canApprove = Boolean(candidate && editName.trim().length > 1 && hasIngredients && hasInstructions && candidate.status !== "approved" && candidate.status !== "rejected");
+  const canApprove = Boolean(candidate && editName.trim().length > 1 && candidate.status !== "approved" && candidate.status !== "rejected");
 
   return (
     <View style={styles.panel}>
@@ -139,7 +152,7 @@ export function UrlIngestionPanel() {
         <Text style={styles.badge}>Review required</Text>
       </View>
       <TextInput accessibilityLabel="Recipe URL" value={url} onChangeText={setUrl} placeholder="Paste a recipe link" autoCapitalize="none" style={styles.input} />
-      <Button label="Fetch recipe" icon="link" variant="primary" onPress={() => void submit().catch((error) => setStatus(String(error)))} />
+      <Button label={busy ? "Working..." : "Fetch recipe"} disabled={busy || !url.trim()} icon="link" variant="primary" onPress={() => void run(submit)} />
       {candidate ? (
         <View style={styles.review}>
           <View style={styles.reviewHeader}>
@@ -167,9 +180,9 @@ export function UrlIngestionPanel() {
           <Text style={styles.inputLabel}>Instructions</Text>
           <TextInput accessibilityLabel="Review instructions" value={editInstructions} onChangeText={setEditInstructions} multiline style={[styles.input, styles.area]} />
           <View style={styles.reviewActions}>
-            <Button label="Approve" icon="checkmark-circle" variant="primary" disabled={!canApprove} onPress={() => void approve().catch((error) => setStatus(String(error)))} />
-            <Button label="Re-fetch" icon="refresh" onPress={() => void submit().catch((error) => setStatus(String(error)))} />
-            <Button label="Reject" icon="close-circle" variant="danger" disabled={!candidate || candidate.status === "rejected"} onPress={() => void reject().catch((error) => setStatus(String(error)))} />
+            <Button label="Approve" icon="checkmark-circle" variant="primary" disabled={busy || !canApprove} onPress={() => void run(approve)} />
+            <Button label="Re-fetch" disabled={busy} icon="refresh" onPress={() => void run(submit)} />
+            <Button label="Reject" icon="close-circle" variant="danger" disabled={busy || !candidate || candidate.status === "rejected" || candidate.status === "approved"} onPress={() => void run(reject)} />
           </View>
         </View>
       ) : null}
@@ -182,12 +195,13 @@ export function UrlIngestionPanel() {
                 <Text style={styles.historyName}>{item.recipe_name ?? "Untitled draft"}</Text>
                 <Text style={styles.meta}>{formatCandidateStatus(item.status)} • {friendlyWarnings(item.warnings ?? []).length} note{friendlyWarnings(item.warnings ?? []).length === 1 ? "" : "s"}</Text>
               </View>
-              <Button label="Open" icon="open" onPress={() => void openCandidate(item.id).catch((error) => setStatus(String(error)))} />
+              <Button label="Open" disabled={busy} icon="open" onPress={() => void run(() => openCandidate(item.id))} />
             </View>
           ))}
         </View>
       ) : null}
       {status ? <Text style={styles.status}>{status}</Text> : null}
+      {error ? <Text accessibilityRole="alert" style={{ color: Colors.danger }}>{error}</Text> : null}
     </View>
   );
 }

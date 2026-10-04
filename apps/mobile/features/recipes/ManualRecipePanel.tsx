@@ -4,9 +4,11 @@ import { useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
+import { Recipe } from "@/services/types";
 import { AiRecipeJob } from "./aiRecipeTypes";
 import { appendRecipeImage, RecipeImage, RecipePhotoPicker } from "./RecipePhotoPicker";
 import { NutritionFields } from "./NutritionFields";
@@ -19,27 +21,37 @@ function splitLines(value: string) {
     .filter(Boolean);
 }
 
-export function ManualRecipePanel({ initialDraft, onSaved }: { initialDraft?: AiRecipeJob; onSaved?: () => void } = {}) {
+export function ManualRecipePanel({ initialDraft, initialRecipe, onSaved, onCancel }: {
+  initialDraft?: AiRecipeJob;
+  initialRecipe?: Recipe;
+  onSaved?: (recipe: Recipe) => void;
+  onCancel?: () => void;
+} = {}) {
   const draft = initialDraft?.draft;
   const queryClient = useQueryClient();
-  const [name, setName] = useState(draft?.name ?? "");
-  const [description, setDescription] = useState(draft?.description ?? "");
-  const [photoUrl, setPhotoUrl] = useState("");
-  const [mealType, setMealType] = useState(draft?.meal_type ?? "dinner");
-  const [difficulty, setDifficulty] = useState(draft?.difficulty ?? "easy");
-  const [servings, setServings] = useState(String(draft?.servings ?? 4));
-  const [prepMinutes, setPrepMinutes] = useState(draft?.prep_minutes != null ? String(draft.prep_minutes) : "");
-  const [cookMinutes, setCookMinutes] = useState(draft?.cook_minutes != null ? String(draft.cook_minutes) : "");
-  const [totalMinutes, setTotalMinutes] = useState(draft?.total_minutes != null ? String(draft.total_minutes) : "");
-  const [tags, setTags] = useState("");
-  const [ingredients, setIngredients] = useState(draft?.ingredients.join("\n") ?? "");
-  const [instructions, setInstructions] = useState(draft?.instructions.join("\n") ?? "");
-  const [status, setStatus] = useState("");
-  const [nutrition, setNutrition] = useState(() => nutritionInputs(draft?.nutrition));
+  const initial = initialRecipe ?? draft;
+  const [name, setName] = useState(initial?.name ?? "");
+  const [description, setDescription] = useState(initial?.description ?? "");
+  const [photoUrl, setPhotoUrl] = useState(initialRecipe?.photo_url ?? "");
+  const [mealType, setMealType] = useState(initial?.meal_type ?? "dinner");
+  const [difficulty, setDifficulty] = useState(initial?.difficulty ?? "easy");
+  const [servings, setServings] = useState(String(initial?.servings ?? 4));
+  const [prepMinutes, setPrepMinutes] = useState(initial?.prep_minutes != null ? String(initial.prep_minutes) : "");
+  const [cookMinutes, setCookMinutes] = useState(initial?.cook_minutes != null ? String(initial.cook_minutes) : "");
+  const [totalMinutes, setTotalMinutes] = useState(initial?.total_minutes != null ? String(initial.total_minutes) : "");
+  const [cuisine, setCuisine] = useState(initialRecipe?.cuisine ?? "");
+  const [sourceUrl, setSourceUrl] = useState(initialRecipe?.source_url ?? "");
+  const [sourceTitle, setSourceTitle] = useState(initialRecipe?.source_title ?? "");
+  const [tags, setTags] = useState(initialRecipe?.tags.join(", ") ?? "");
+  const [ingredients, setIngredients] = useState(initialRecipe?.ingredients.map(item => item.original_text).join("\n") ?? draft?.ingredients.join("\n") ?? "");
+  const [instructions, setInstructions] = useState(initialRecipe?.instructions.map(item => item.text).join("\n") ?? draft?.instructions.join("\n") ?? "");
+  const [status, setStatus] = useTransientMessage();
+  const [nutrition, setNutrition] = useState(() => nutritionInputs(initial?.nutrition));
   const [nutritionBasis, setNutritionBasis] = useState<"serving" | "recipe">(draft?.nutrition_basis ?? "serving");
   const ingredientRows = splitLines(ingredients);
   const instructionRows = splitLines(instructions);
-  const hasRequiredFields = name.trim().length > 1 && ingredientRows.length > 0 && instructionRows.length > 0;
+  const hasRequiredFields = name.trim().length > 1 && Number.isInteger(Number(servings)) && Number(servings) >= 1 && Number(servings) <= 30;
+  const editingOwned = Boolean(initialRecipe?.can_edit);
 
   async function uploadPhoto(image: RecipeImage) {
     const form = new FormData();
@@ -51,28 +63,49 @@ export function ManualRecipePanel({ initialDraft, onSaved }: { initialDraft?: Ai
 
   const create = useMutation({
     mutationFn: () => {
-      return apiFetch(initialDraft ? `/api/v1/ai-recipes/${initialDraft.id}/approve` : "/api/v1/recipes", {
-        method: "POST",
+      const path = editingOwned ? `/api/v1/recipes/${initialRecipe!.id}` : initialDraft ? `/api/v1/ai-recipes/${initialDraft.id}/approve` : "/api/v1/recipes";
+      return apiFetch<Recipe>(path, {
+        method: editingOwned ? "PUT" : "POST",
         body: JSON.stringify({
           name,
           description: description || null,
           photo_url: photoUrl || null,
-          servings: Number(servings) || 4,
+          servings: Number(servings),
           prep_minutes: prepMinutes ? Number(prepMinutes) : null,
           cook_minutes: cookMinutes ? Number(cookMinutes) : null,
           total_minutes: totalMinutes ? Number(totalMinutes) : null,
           difficulty,
           meal_type: mealType,
+          cuisine: cuisine || null,
+          source_url: sourceUrl || null,
+          source_title: sourceTitle || null,
           tags: listFromText(tags),
-          ingredients: ingredientRows.map((original_text, index) => ({ original_text, sort_order: index })),
-          instructions: instructionRows.map((text, index) => ({ text, step_number: index + 1 })),
-          source_type: "manual",
+          ingredients: ingredientRows.map((original_text, index) => {
+            const original = initialRecipe?.ingredients[index];
+            return original?.original_text === original_text ? { ...original, sort_order: index } : { original_text, sort_order: index };
+          }),
+          instructions: instructionRows.map((text, index) => {
+            const original = initialRecipe?.instructions[index];
+            return original?.text === text ? { ...original, step_number: index + 1 } : { text, step_number: index + 1 };
+          }),
+          source_type: editingOwned ? initialRecipe!.source_type : "manual",
           nutrition: parseNutrition(nutrition, nutritionBasis === "recipe" ? Number(servings) : 1),
           accept_placeholder_photo: !photoUrl
         })
       });
     },
-    onSuccess: async () => {
+    onSuccess: async updated => {
+      if (initialRecipe) {
+        await Promise.all([
+          queryClient.invalidateQueries({ queryKey: ["recipes"] }),
+          queryClient.invalidateQueries({ queryKey: ["weekly-plan"] }),
+          queryClient.invalidateQueries({ queryKey: ["grocery"] }),
+          queryClient.invalidateQueries({ queryKey: ["vote-options"] })
+        ]);
+        setStatus(editingOwned ? "Recipe updated." : "Recipe copy saved.");
+        onSaved?.(updated);
+        return;
+      }
       setName("");
       setDescription("");
       setPhotoUrl("");
@@ -83,23 +116,27 @@ export function ManualRecipePanel({ initialDraft, onSaved }: { initialDraft?: Ai
       setCookMinutes("");
       setTotalMinutes("");
       setTags("");
+      setCuisine("");
+      setSourceUrl("");
+      setSourceTitle("");
       setIngredients("");
       setInstructions("");
       setNutrition(EMPTY_NUTRITION);
       setNutritionBasis("serving");
       setStatus("Recipe saved. It is ready for planning.");
       await queryClient.invalidateQueries({ queryKey: ["recipes"] });
-      onSaved?.();
+      onSaved?.(updated);
     },
-    onError: (error) => setStatus(String(error))
+    onMutate: () => setStatus(""),
+    onError: () => setStatus("")
   });
   const canSave = hasRequiredFields && !create.isPending;
 
   return (
     <View style={styles.panel}>
       <View style={styles.header}>
-        <Text style={styles.title}>{initialDraft ? "Review recipe" : "Create recipe"}</Text>
-        <Text style={styles.badge}>{initialDraft ? "AI draft" : "Manual"}</Text>
+        <Text style={styles.title}>{initialRecipe ? editingOwned ? "Edit recipe" : "Customize recipe" : initialDraft ? "Review recipe" : "Create recipe"}</Text>
+        {!initialRecipe ? <Text style={styles.badge}>{initialDraft ? "AI draft" : "Manual"}</Text> : null}
       </View>
       <Text style={styles.fieldLabel}>Name</Text>
       <TextInput accessibilityLabel="Recipe name" value={name} onChangeText={setName} placeholder="Recipe name" style={styles.input} />
@@ -121,9 +158,17 @@ export function ManualRecipePanel({ initialDraft, onSaved }: { initialDraft?: Ai
       </View>
       <Text style={styles.fieldLabel}>Tags</Text>
       <TextInput accessibilityLabel="Tags" value={tags} onChangeText={setTags} placeholder="Tags, comma separated" style={styles.input} />
-      <Text style={styles.fieldLabel}>Ingredients</Text>
+      <Text style={styles.fieldLabel}>Cuisine</Text>
+      <TextInput accessibilityLabel="Cuisine" value={cuisine} onChangeText={setCuisine} placeholder="Cuisine (optional)" style={styles.input} />
+      {initialRecipe ? <>
+        <Text style={styles.fieldLabel}>Source link</Text>
+        <TextInput accessibilityLabel="Source URL" value={sourceUrl} onChangeText={setSourceUrl} autoCapitalize="none" style={styles.input} />
+        <Text style={styles.fieldLabel}>Source title</Text>
+        <TextInput accessibilityLabel="Source title" value={sourceTitle} onChangeText={setSourceTitle} style={styles.input} />
+      </> : null}
+      <Text style={styles.fieldLabel}>Ingredients (optional)</Text>
       <TextInput accessibilityLabel="Ingredients" value={ingredients} onChangeText={setIngredients} placeholder="Ingredients, one per line" multiline style={[styles.input, styles.area]} />
-      <Text style={styles.fieldLabel}>Instructions</Text>
+      <Text style={styles.fieldLabel}>Instructions (optional)</Text>
       <TextInput accessibilityLabel="Instructions" value={instructions} onChangeText={setInstructions} placeholder="Instructions, one step per line" multiline style={[styles.input, styles.area]} />
       <Text style={styles.title}>Nutrition (optional)</Text>
       <SegmentedControl accessibilityLabel="Nutrition amounts" value={nutritionBasis} onChange={setNutritionBasis}
@@ -131,9 +176,11 @@ export function ManualRecipePanel({ initialDraft, onSaved }: { initialDraft?: Ai
       <NutritionFields value={nutrition} onChange={setNutrition} />
       <View style={styles.summary}>
         <Text style={styles.meta}>{ingredientRows.length} ingredient{ingredientRows.length === 1 ? "" : "s"} • {instructionRows.length} step{instructionRows.length === 1 ? "" : "s"}</Text>
-        {!canSave ? <Text style={styles.warning}>Name, at least one ingredient, and at least one instruction are required.</Text> : null}
+        {!hasRequiredFields ? <Text style={styles.warning}>Enter a name and use 1-30 servings.</Text> : null}
       </View>
-      <Button label="Save recipe" icon="save" variant="primary" disabled={!canSave} onPress={() => create.mutate()} />
+      {onCancel ? <Button label="Cancel editing" icon="close" disabled={create.isPending} onPress={onCancel} /> : null}
+      <Button label={create.isPending ? "Saving..." : initialRecipe && !editingOwned ? "Save a copy" : "Save recipe"} icon="save" variant="primary" disabled={!canSave} onPress={() => create.mutate()} />
+      {create.error ? <Text accessibilityRole="alert" style={styles.warning}>{create.error instanceof Error ? create.error.message : "Unable to save recipe."}</Text> : null}
       {status ? <Text style={styles.status}>{status}</Text> : null}
     </View>
   );

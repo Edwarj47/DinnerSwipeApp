@@ -137,10 +137,10 @@ def approve(
     payload.source_type = "ai_assisted"
     payload.source_url = None
     payload.source_title = None
-    if not validate_recipe_payload(payload.model_dump(), payload.accept_placeholder_photo)[
-        "can_approve"
-    ]:
-        raise HTTPException(422, "Check the recipe name, ingredients, instructions and photo.")
+    if not validate_recipe_payload(
+        payload.model_dump(), payload.accept_placeholder_photo, allow_incomplete=True
+    )["can_approve"]:
+        raise HTTPException(422, "Check the recipe name and photo.")
     recipe = create_recipe(db, payload, current_user, commit=False)
     job.status = "saved"
     job.progress = {key: value for key, value in job.progress.items() if key != "draft"} | {

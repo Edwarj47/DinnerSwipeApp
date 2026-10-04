@@ -3,6 +3,7 @@ import * as Linking from "expo-linking";
 import { useMemo, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
@@ -11,7 +12,7 @@ import { CouponResult, PremiumStatus, SubscriptionPlanStatus, SubscriptionTier }
 export function SubscriptionPanel() {
   const queryClient = useQueryClient();
   const [code, setCode] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useTransientMessage();
   const [error, setError] = useState("");
   const [couponTier, setCouponTier] = useState<SubscriptionTier>("basic");
   const subscription = useQuery({

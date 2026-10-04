@@ -8,6 +8,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors } from "@/components/theme";
 import { apiFetch, clearAuthTokens, reconnectOffline } from "@/services/api";
 import { AppAccessContext, useAuthSession } from "@/services/session";
@@ -27,8 +28,8 @@ export function SubscriptionGate({ children }: Props) {
   const session = useAuthSession();
   const hadAccess = useRef(false);
   const [code, setCode] = useState("");
-  const [status, setStatus] = useState("");
   const [statusIsError, setStatusIsError] = useState(false);
+  const [status, setStatus] = useTransientMessage(statusIsError);
   const [selectedTier, setSelectedTier] = useState<SubscriptionTier>("basic");
 
   useEffect(() => {
@@ -36,7 +37,7 @@ export function SubscriptionGate({ children }: Props) {
     setStatus("");
     setSelectedTier("basic");
     hadAccess.current = false;
-  }, [session.email]);
+  }, [session.email, setStatus]);
 
   const shouldCheck = session.authenticated && !PUBLIC_PATHS.has(pathname);
   const subscription = useQuery({

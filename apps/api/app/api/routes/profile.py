@@ -3,9 +3,12 @@ from __future__ import annotations
 from datetime import datetime
 
 from fastapi import APIRouter
+from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbDep
+from app.models.entities import UserProfile
 from app.schemas.common import OnboardingUpdate, ProfileUpdate
+from app.services.recipes import IGNORED_FEEDBACK_KEY
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -38,8 +41,21 @@ def get_profile(current_user: CurrentUser) -> dict[str, object]:
 def update_profile(
     payload: ProfileUpdate, db: DbDep, current_user: CurrentUser
 ) -> dict[str, object]:
-    profile = current_user.profile
+    profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == current_user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    assert profile is not None
     for key, value in payload.model_dump().items():
+        if key == "notification_preferences":
+            value = dict(value)
+            stored = (profile.notification_preferences or {}).get(IGNORED_FEEDBACK_KEY)
+            if stored is not None:
+                value[IGNORED_FEEDBACK_KEY] = stored
+            else:
+                value.pop(IGNORED_FEEDBACK_KEY, None)
         setattr(profile, key, value)
     db.commit()
     return get_profile(current_user)

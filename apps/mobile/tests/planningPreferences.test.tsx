@@ -14,6 +14,7 @@ jest.mock("@/components/Screen", () => ({ Screen: jest.requireActual("react-nati
 jest.mock("@/features/planner/WeekDrag", () => ({
   WeekDrag: jest.requireActual("react-native").View,
   WeekDropDay: jest.requireActual("react-native").View,
+  WeekDropMeal: jest.requireActual("react-native").View,
   WeekDragHandle: () => null
 }));
 jest.mock("@/features/recipes/RecipePicker", () => ({ RecipePicker: () => null }));

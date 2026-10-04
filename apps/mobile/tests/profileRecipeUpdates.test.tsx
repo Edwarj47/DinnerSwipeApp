@@ -53,6 +53,7 @@ test("Account owns subscription and coupon codes; Basic cannot open macro contro
     expect(screen.getByText("Account Settings")).toBeTruthy();
     expect(screen.getByText("Planning")).toBeTruthy();
     expect(screen.getByText("Device security")).toBeTruthy();
+    expect(screen.getByLabelText("App version")).toBeTruthy();
     expect(screen.queryByText("Account tools")).toBeNull();
     fireEvent.press(screen.getByText("Macro Tracker"));
     await screen.findByText("Available with Premium.");

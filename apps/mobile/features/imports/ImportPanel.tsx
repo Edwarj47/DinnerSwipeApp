@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { Platform, StyleSheet, Text, View } from "react-native";
 
 import { Button } from "@/components/Button";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors } from "@/components/theme";
 import { API_URL, getToken } from "@/services/api";
 
@@ -21,7 +22,7 @@ type Preview = {
 export function ImportPanel() {
   const [upload, setUpload] = useState<UploadResult | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useTransientMessage();
 
   async function sendFile(file: File) {
     const token = await getToken();

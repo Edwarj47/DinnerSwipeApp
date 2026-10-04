@@ -18,6 +18,7 @@ jest.mock("@/components/Screen", () => ({ Screen: jest.requireActual("react-nati
 jest.mock("@/features/planner/WeekDrag", () => ({
   WeekDrag: jest.requireActual("react-native").View,
   WeekDropDay: jest.requireActual("react-native").View,
+  WeekDropMeal: jest.requireActual("react-native").View,
   WeekDragHandle: () => null
 }));
 jest.mock("@/features/recipes/RecipePicker", () => ({ RecipePicker: () => null }));
@@ -157,7 +158,7 @@ test("grocery quantity controls have one symbol and respect the zero minimum", a
     expect(screen.queryByText("+")).toBeNull();
     expect(screen.queryByText("-")).toBeNull();
     fireEvent.press(screen.getByLabelText("Decrease Milk quantity"));
-    await screen.findByText("0 - manual");
+    await screen.findByText("Shopping total: 0");
     await waitFor(() => expect(screen.getByLabelText("Increase Milk quantity").props.accessibilityState.disabled).toBe(false));
     await waitFor(() => expect(screen.getByLabelText("Decrease Milk quantity").props.accessibilityState.disabled).toBe(true));
     fireEvent.press(screen.getByLabelText("Increase Milk quantity"));

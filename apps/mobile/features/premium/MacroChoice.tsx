@@ -3,14 +3,14 @@ import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Colors } from "@/components/theme";
 
-export function MacroChoice<T extends string>({ label, value, options, onChange }: {
-  label: string; value: T; options: { value: T; label: string }[]; onChange: (value: T) => void;
+export function MacroChoice<T extends string>({ label, value, options, onChange, disabled = false }: {
+  label: string; value: T; options: { value: T; label: string }[]; onChange: (value: T) => void; disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const selected = options.find(option => option.value === value);
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${selected?.label}`} accessibilityState={{ expanded: open }}
-      onPress={() => setOpen(true)} style={styles.trigger}>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${selected?.label}`} accessibilityState={{ expanded: open, disabled }} disabled={disabled}
+      onPress={() => setOpen(true)} style={[styles.trigger, disabled && { opacity: 0.6 }]}>
       <Text style={styles.label}>{selected?.label}</Text><Ionicons name="chevron-down" size={18} color={Colors.muted} />
     </Pressable>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>

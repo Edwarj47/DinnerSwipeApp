@@ -30,7 +30,7 @@ def validate_photo_url(
 
 
 def validate_recipe_payload(
-    payload: dict[str, Any], accept_placeholder: bool = False
+    payload: dict[str, Any], accept_placeholder: bool = False, *, allow_incomplete: bool = False
 ) -> dict[str, Any]:
     errors: list[str] = []
     warnings: list[str] = []
@@ -40,9 +40,15 @@ def validate_recipe_payload(
     if len(name) < 2:
         errors.append("Missing name")
     if not ingredients:
-        errors.append("Empty ingredients")
+        if allow_incomplete:
+            warnings.append("Ingredients not added")
+        else:
+            errors.append("Empty ingredients")
     if not instructions:
-        errors.append("Empty instructions")
+        if allow_incomplete:
+            warnings.append("Instructions not added")
+        else:
+            errors.append("Empty instructions")
     photo_errors, photo_warnings, image_status = validate_photo_url(
         payload.get("photo_url"), accept_placeholder
     )
@@ -50,7 +56,9 @@ def validate_recipe_payload(
     warnings.extend(photo_warnings)
     if not payload.get("servings"):
         warnings.append("Missing servings")
-    if not payload.get("total_minutes"):
+    if all(
+        payload.get(field) is None for field in ("total_minutes", "prep_minutes", "cook_minutes")
+    ):
         warnings.append("Missing timing information")
     return {
         "errors": errors,

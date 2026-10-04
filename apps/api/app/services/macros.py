@@ -71,7 +71,11 @@ def serialize_targets(target: MacroProfileTarget | None) -> dict[str, Any]:
 
 
 def create_confirmation(
-    db: Session, user: User, payload: MealMacroConfirmationIn, *, commit: bool = True,
+    db: Session,
+    user: User,
+    payload: MealMacroConfirmationIn,
+    *,
+    commit: bool = True,
     entry_id: str | None = None,
 ) -> MealMacroConfirmation:
     require_premium(db, user)
@@ -141,7 +145,8 @@ def update_macro_entry(
 ) -> MealMacroConfirmation:
     require_premium(db, user)
     row = db.scalar(
-        select(MealMacroConfirmation).where(
+        select(MealMacroConfirmation)
+        .where(
             MealMacroConfirmation.id == entry_id,
             MealMacroConfirmation.user_id == user.id,
         )
@@ -195,7 +200,8 @@ def update_macro_entry(
 def delete_macro_entry(db: Session, user: User, entry_id: str, *, commit: bool = True) -> None:
     require_premium(db, user)
     row = db.scalar(
-        select(MealMacroConfirmation).where(
+        select(MealMacroConfirmation)
+        .where(
             MealMacroConfirmation.id == entry_id,
             MealMacroConfirmation.user_id == user.id,
         )
@@ -207,12 +213,14 @@ def delete_macro_entry(db: Session, user: User, entry_id: str, *, commit: bool =
     db.commit() if commit else db.flush()
 
 
-def macro_summary(db: Session, user: User, days: int) -> dict[str, Any]:
+def macro_summary(
+    db: Session, user: User, days: int, end_date: date | None = None
+) -> dict[str, Any]:
     active = is_premium_active(
         db.scalar(select(UserSubscription).where(UserSubscription.user_id == user.id))
     )
-    end_date = date.today()
-    start_date = end_date - timedelta(days=max(1, min(days, 90)) - 1)
+    end_date = end_date or date.today()
+    start_date = end_date - timedelta(days=max(1, min(days, 366)) - 1)
     target = db.scalar(select(MacroProfileTarget).where(MacroProfileTarget.user_id == user.id))
     rows = _rows_for_window(db, user, start_date, end_date)
     totals = {
@@ -223,7 +231,7 @@ def macro_summary(db: Session, user: User, days: int) -> dict[str, Any]:
         "fiber_g": _sum_macro(rows, "fiber_g"),
     }
     return {
-        "days": max(1, min(days, 90)),
+        "days": max(1, min(days, 366)),
         "start_date": start_date,
         "end_date": end_date,
         "active": active,

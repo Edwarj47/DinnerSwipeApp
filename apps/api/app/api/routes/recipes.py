@@ -8,18 +8,34 @@ from sqlalchemy import delete, func, or_, select
 
 from app.api.deps import BasicUser, DbDep
 from app.core.config import settings
-from app.models.entities import Favorite, HiddenRecipe, MealSwipe, Recipe, WeeklyPlanSlot
-from app.schemas.common import RecipeCreate, RecipeNutrition, RecipeOut, SwipeRequest
+from app.models.entities import (
+    Favorite,
+    HiddenRecipe,
+    MealSwipe,
+    Recipe,
+    UserProfile,
+    WeeklyPlanSlot,
+)
+from app.schemas.common import (
+    RecipeCreate,
+    RecipeFeedbackPreference,
+    RecipeNutrition,
+    RecipeOut,
+    SwipeRequest,
+)
 from app.services.media_storage import get_media_storage
 from app.services.recipes import (
+    IGNORED_FEEDBACK_KEY,
     accessible_recipes_query,
     clear_plan_slot,
     create_recipe,
     current_week_start,
     get_or_create_current_plan,
+    recipe_feedback_fingerprint,
     record_swipe,
     save_recipe_nutrition,
     serialize_recipe,
+    update_recipe,
 )
 
 router = APIRouter(prefix="/recipes", tags=["recipes"])
@@ -141,6 +157,52 @@ async def update_recipe_photo(
         if warning != "Photo missing; placeholder accepted"
     ]
     db.commit()
+    return serialize_recipe(recipe, current_user.id, db)
+
+
+@router.put("/{recipe_id}/feedback-preference", response_model=RecipeOut)
+def update_feedback_preference(
+    recipe_id: str, payload: RecipeFeedbackPreference, db: DbDep, current_user: BasicUser
+) -> dict[str, object]:
+    recipe = db.scalar(
+        accessible_recipes_query(current_user, include_archived=True).where(Recipe.id == recipe_id)
+    )
+    if not recipe:
+        raise HTTPException(404, "Recipe not found")
+    profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == current_user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if not profile:
+        raise HTTPException(404, "Profile not found")
+    preferences = dict(profile.notification_preferences or {})
+    stored = preferences.get(IGNORED_FEEDBACK_KEY, {})
+    ignored = dict(stored) if isinstance(stored, dict) else {}
+    if payload.ignored:
+        if recipe_id not in ignored and len(ignored) >= 2000:
+            raise HTTPException(422, "Restore some ignored feedback before ignoring more recipes.")
+        ignored[recipe_id] = recipe_feedback_fingerprint(recipe)
+    else:
+        ignored.pop(recipe_id, None)
+    profile.notification_preferences = preferences | {IGNORED_FEEDBACK_KEY: ignored}
+    db.commit()
+    return serialize_recipe(recipe, current_user.id, db)
+
+
+@router.put("/{recipe_id}", response_model=RecipeOut)
+def update_recipe_route(
+    recipe_id: str, payload: RecipeCreate, db: DbDep, current_user: BasicUser
+) -> dict[str, object]:
+    recipe = db.scalar(
+        select(Recipe)
+        .where(Recipe.id == recipe_id, Recipe.owner_user_id == current_user.id)
+        .with_for_update()
+    )
+    if not recipe:
+        raise HTTPException(404, "Recipe not found")
+    recipe = update_recipe(db, recipe, payload)
     return serialize_recipe(recipe, current_user.id, db)
 
 

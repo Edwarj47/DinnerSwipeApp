@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { AiRecipeJob } from "./aiRecipeTypes";
@@ -19,7 +20,7 @@ export function AiRecipePanel() {
   const [image, setImage] = useState<RecipeImage | null>(null);
   const [preview, setPreview] = useState("");
   const [selected, setSelected] = useState<AiRecipeJob | null>(null);
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useTransientMessage();
   const requestId = useRef("");
   const usage = useQuery({ queryKey: ["ai-recipe-usage"], queryFn: () => apiFetch<Usage>("/api/v1/ai-recipes/usage"), retry: false, refetchInterval: 60_000 });
   const drafts = useQuery({ queryKey: ["ai-recipe-drafts"], queryFn: () => apiFetch<AiRecipeJob[]>("/api/v1/ai-recipes"), retry: false });

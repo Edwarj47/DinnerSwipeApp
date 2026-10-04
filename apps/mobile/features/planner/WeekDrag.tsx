@@ -5,7 +5,7 @@ import { revealTourTarget, TourScrollContext } from "@/features/onboarding/TourC
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
 import { Colors } from "@/components/theme";
-import { dragScrollOffset, findDropDay, Rect } from "./weekDrop";
+import { dragScrollOffset, findDropPosition, MealRect, Rect } from "./weekDrop";
 
 type Drag = { id: string; label: string; x: number; y: number };
 type Controls = {
@@ -15,14 +15,17 @@ type Controls = {
   cancel: () => void;
   select: (id: string, label: string) => void;
   register: (day: string, node: View | null) => void;
+  registerMeal: (id: string, day: string, node: View | null) => void;
 };
 const DragControls = createContext<Controls | null>(null);
 const HoverDay = createContext<string | null>(null);
+const HoverMeal = createContext<{ beforeId: string | null; activeId: string } | null>(null);
 
-export function WeekDrag({ days, disabled, onAssign, children }: {
+export function WeekDrag({ days, disabled, onAssign, onReorder, children }: {
   days: { iso: string; label: string; short: string }[];
   disabled: boolean;
   onAssign: (slotId: string, date: string | null) => void;
+  onReorder?: (slotId: string, beforeId: string | null) => void;
   children: ReactNode;
 }) {
   const root = useRef<View>(null);
@@ -34,21 +37,37 @@ export function WeekDrag({ days, disabled, onAssign, children }: {
   const contentHeight = useRef(0);
   const targets = useRef(new Map<string, View>());
   const rects = useRef(new Map<string, Rect>());
+  const mealTargets = useRef(new Map<string, { day: string; node: View }>());
+  const mealRects = useRef(new Map<string, MealRect>());
   const active = useRef<Drag | null>(null);
+  const lastDrag = useRef<{ id: string; until: number } | null>(null);
   const assignment = useRef(onAssign);
+  const reorder = useRef(onReorder);
+  reorder.current = onReorder;
   const isDisabled = useRef(disabled);
   assignment.current = onAssign;
   isDisabled.current = disabled;
   const [drag, setDrag] = useState<Drag | null>(null);
   const [hover, setHover] = useState<string | null>(null);
+  const [beforeId, setBeforeId] = useState<string | null>(null);
   const [selected, setSelected] = useState<{ id: string; label: string } | null>(null);
   const measure = useCallback(() => {
     root.current?.measureInWindow((x, y, width, height) => { viewport.current = { x, y, width, height }; });
     targets.current.forEach((node, key) => node.measureInWindow((x, y, width, height) => {
       if (targets.current.get(key) === node) rects.current.set(key, { x, y, width, height });
     }));
+    mealTargets.current.forEach(({ node, day }, id) => node.measureInWindow((x, y, width, height) => {
+      if (mealTargets.current.get(id)?.node === node) mealRects.current.set(id, { x, y, width, height, day });
+    }));
   }, []);
-  const cancel = useCallback(() => { active.current = null; setDrag(null); setHover(null); }, []);
+  const cancel = useCallback(() => {
+    if (active.current) lastDrag.current = { id: active.current.id, until: Date.now() + 400 };
+    active.current = null; setDrag(null); setHover(null); setBeforeId(null);
+  }, []);
+  const updateHover = useCallback((id: string, x: number, y: number) => {
+    const target = findDropPosition(rects.current, mealRects.current, viewport.current, x, y, id);
+    setHover(target?.day ?? null); setBeforeId(target?.beforeId ?? null);
+  }, []);
   const controls = useMemo<Controls>(() => ({
     begin(id, label, x, y) {
       if (isDisabled.current) return;
@@ -61,20 +80,32 @@ export function WeekDrag({ days, disabled, onAssign, children }: {
       if (!active.current) return;
       active.current = { ...active.current, x, y };
       setDrag(active.current);
-      setHover(findDropDay(rects.current, viewport.current, x, y));
+      updateHover(active.current.id, x, y);
     },
     finish(x, y) {
-      const day = findDropDay(rects.current, viewport.current, x, y);
-      if (active.current && day !== null && !isDisabled.current) assignment.current(active.current.id, day || null);
+      const item = active.current;
+      const target = item ? findDropPosition(rects.current, mealRects.current, viewport.current, x, y, item.id) : null;
+      if (item && target && !isDisabled.current) {
+        if (mealTargets.current.get(item.id)?.day === target.day && reorder.current) reorder.current(item.id, target.beforeId);
+        else assignment.current(item.id, target.day || null);
+      }
       cancel();
     },
     cancel,
-    select(id, label) { if (!isDisabled.current) setSelected({ id, label }); },
+    select(id, label) {
+      // A pan release can also reach Pressable; it is not a separate tap.
+      if (active.current || (lastDrag.current?.id === id && lastDrag.current.until > Date.now())) return;
+      if (!isDisabled.current) setSelected({ id, label });
+    },
     register(day, node) {
       if (node) targets.current.set(day, node);
       else { targets.current.delete(day); rects.current.delete(day); }
+    },
+    registerMeal(id, day, node) {
+      if (node) mealTargets.current.set(id, { day, node });
+      else { mealTargets.current.delete(id); mealRects.current.delete(id); }
     }
-  }), [cancel, measure]);
+  }), [cancel, measure, updateHover]);
   const dragging = !!drag;
   useEffect(() => {
     if (!dragging) return;
@@ -85,15 +116,16 @@ export function WeekDrag({ days, disabled, onAssign, children }: {
       const next = dragScrollOffset(offset.current, item.y, viewport.current, contentHeight.current);
       if (next !== offset.current) scroll.current?.scrollTo({ y: next, animated: false });
       measure();
-      setHover(findDropDay(rects.current, viewport.current, item.x, item.y));
+      updateHover(item.id, item.x, item.y);
     }, 40);
     return () => clearInterval(timer);
-  }, [dragging, measure]);
+  }, [dragging, measure, updateHover]);
   useEffect(() => { if (disabled) { cancel(); setSelected(null); } }, [disabled, cancel]);
 
   return (
     <DragControls.Provider value={controls}>
       <HoverDay.Provider value={hover}>
+      <HoverMeal.Provider value={drag ? { beforeId, activeId: drag.id } : null}>
         <View ref={root} style={styles.root} onLayout={measure}>
           <ScrollView ref={scroll} scrollEnabled={!dragging} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled"
             onContentSizeChange={(_, height) => { contentHeight.current = height; measure(); }}
@@ -122,6 +154,7 @@ export function WeekDrag({ days, disabled, onAssign, children }: {
             </ScrollView>
           </View></View>
         </Modal>
+      </HoverMeal.Provider>
       </HoverDay.Provider>
     </DragControls.Provider>
   );
@@ -130,8 +163,12 @@ export function WeekDrag({ days, disabled, onAssign, children }: {
 export function WeekDropDay({ day, children }: { day: string; children: ReactNode }) {
   const controls = useContext(DragControls)!;
   const hover = useContext(HoverDay);
+  const mealHover = useContext(HoverMeal);
   const register = useCallback((node: View | null) => controls.register(day, node), [controls, day]);
-  return <View testID={`week-day-${day || "unscheduled"}`} ref={register} collapsable={false} style={[styles.day, hover === day && styles.over]}>{children}</View>;
+  return <View testID={`week-day-${day || "unscheduled"}`} ref={register} collapsable={false} style={[styles.day, hover === day && styles.over]}>
+    {children}
+    {hover === day && mealHover && mealHover.beforeId === null ? <View pointerEvents="none" style={styles.endInsertion} /> : null}
+  </View>;
 }
 
 export function WeekDragHandle({ id, label, disabled }: { id: string; label: string; disabled: boolean }) {
@@ -150,8 +187,20 @@ export function WeekDragHandle({ id, label, disabled }: { id: string; label: str
   );
 }
 
+export function WeekDropMeal({ id, day, children }: { id: string; day: string; children: ReactNode }) {
+  const controls = useContext(DragControls)!;
+  const hover = useContext(HoverMeal);
+  const register = useCallback((node: View | null) => controls.registerMeal(id, day, node), [controls, id, day]);
+  return <View ref={register} collapsable={false} testID={`week-meal-${id}`} style={{ position: "relative", opacity: hover?.activeId === id ? 0.45 : 1 }}>
+    {hover?.beforeId === id ? <View pointerEvents="none" style={styles.insertion} /> : null}
+    {children}
+  </View>;
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0 },
+  insertion: { position: "absolute", top: -5, left: 0, right: 0, height: 3, backgroundColor: Colors.basil },
+  endInsertion: { position: "absolute", bottom: 0, left: 4, right: 4, height: 3, backgroundColor: Colors.basil },
   list: { gap: 18, paddingBottom: 24 },
   day: { gap: 8, padding: 4, borderWidth: 1, borderColor: "transparent", borderBottomColor: Colors.border, minHeight: 112 },
   over: { borderColor: Colors.basil, backgroundColor: "#edf6ef" },

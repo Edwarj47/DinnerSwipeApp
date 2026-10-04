@@ -5,16 +5,20 @@ import { useLocalSearchParams } from "expo-router";
 import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { Screen } from "@/components/Screen";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { TourTarget } from "@/features/onboarding/TourTarget";
+import { PantryCoverageEditor, PantrySelection } from "@/features/grocery/PantryCoverageEditor";
 
 type GroceryItem = {
   id: string;
+  normalized_name?: string;
   display_name: string;
   quantity: number | null;
+  required_quantity?: number | null;
   unit: string | null;
   category: string;
   is_checked: boolean;
@@ -23,28 +27,47 @@ type GroceryItem = {
   retailer_search_url?: string;
   match_status: string;
   notes?: string | null;
+  recipe_quantity?: number | null;
+  recipe_count?: number;
 };
-type PantryItem = { id: string; normalized_name: string; category: string };
-type GroceryListResponse = { items: GroceryItem[]; retailer_display_name?: string };
+type PantryItem = { id: string; normalized_name: string; category: string; coverage_mode?: string; quantity?: number | null; unit?: string | null; week_start?: string | null; needs_confirmation?: boolean };
+type RecipeGroup = { recipe_id: string | null; recipe_name: string; items: GroceryItem[] };
+type GroceryListResponse = { items: GroceryItem[]; recipe_groups?: RecipeGroup[]; retailer_display_name?: string; pantry_coverage_version?: number };
 type GroceryMode = "list" | "add" | "pantry";
 
 export default function GroceryScreen() {
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useTransientMessage();
   const [mode, setMode] = useState<GroceryMode>("list");
   const params = useLocalSearchParams<{ mode?: string; tour?: string }>();
   useEffect(() => {
     if (params.mode === "list" || params.mode === "add" || params.mode === "pantry") setMode(params.mode);
   }, [params.mode, params.tour]);
   const [expandedItemId, setExpandedItemId] = useState<string | null>(null);
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
   const [manualName, setManualName] = useState("");
   const [manualQty, setManualQty] = useState("");
   const [manualUnit, setManualUnit] = useState("");
   const [pantryName, setPantryName] = useState("");
+  const [pantrySelection, setPantrySelection] = useState<PantrySelection | null>(null);
   const { data, error: loadError } = useQuery<GroceryListResponse>({ queryKey: ["grocery"], queryFn: () => apiFetch<GroceryListResponse>("/api/v1/grocery-lists/current") });
   const { data: pantry } = useQuery<PantryItem[]>({ queryKey: ["pantry"], queryFn: () => apiFetch<PantryItem[]>("/api/v1/grocery-lists/pantry") });
-  const grouped = useMemo(() => groupItems(data?.items ?? []), [data?.items]);
-  const itemsLeft = data?.items.filter((item: GroceryItem) => !item.is_checked).length ?? 0;
+  const list = data as GroceryListResponse | undefined;
+  const pantryReady = list?.pantry_coverage_version === 1;
+  const grouped = useMemo<RecipeGroup[]>(() => {
+    if (!list) return [];
+    if (!list.recipe_groups) return list.items.length ? [{ recipe_id: null, recipe_name: "Shopping items", items: list.items }] : [];
+    const shopping = new Map(list.items.map(item => [item.id, item]));
+    // The canonical rows also contain queued offline edits shared by all recipe groups.
+    return list.recipe_groups.map(group => ({ ...group, items: group.items.filter(item => shopping.has(item.id)).map(item => ({ ...item, ...shopping.get(item.id) })) }));
+  }, [list]);
+  const refreshPantry = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["pantry"] }),
+      queryClient.invalidateQueries({ queryKey: ["grocery"] })
+    ]);
+  };
+  const itemsLeft = data?.items.filter((item: GroceryItem) => !item.is_checked && item.quantity !== 0).length ?? 0;
   const regen = useMutation({
     mutationFn: () => apiFetch("/api/v1/grocery-lists/current/regenerate", { method: "POST" }),
     onSuccess: async () => {
@@ -85,22 +108,14 @@ export default function GroceryScreen() {
       await queryClient.invalidateQueries({ queryKey: ["grocery"] });
     }
   });
-  const addPantry = useMutation({
-    mutationFn: () => apiFetch("/api/v1/grocery-lists/pantry", { method: "POST", body: JSON.stringify({ normalized_name: pantryName, category: "pantry" }) }),
-    onSuccess: async () => {
-      setPantryName("");
-      setStatus("Pantry exclusion saved. Regenerate to apply it.");
-      await queryClient.invalidateQueries({ queryKey: ["pantry"] });
-    }
-  });
   const deletePantry = useMutation({
     mutationFn: (item: PantryItem) => apiFetch(`/api/v1/grocery-lists/pantry/${item.id}`, { method: "DELETE" }),
     onSuccess: async () => {
-      setStatus("Pantry exclusion removed.");
-      await queryClient.invalidateQueries({ queryKey: ["pantry"] });
+      setStatus("Removed from pantry. Shopping list updated.");
+      await refreshPantry();
     }
   });
-  const error = [loadError, regen.error, patchItem.error, deleteItem.error, addManual.error, addPantry.error, deletePantry.error].find(Boolean);
+  const error = [loadError, regen.error, patchItem.error, deleteItem.error, addManual.error, deletePantry.error].find(Boolean);
   return (
     <Screen>
       <View style={styles.header}>
@@ -135,38 +150,68 @@ export default function GroceryScreen() {
       ) : null}
       {mode === "pantry" ? (
       <TourTarget id="grocery-pantry"><View style={styles.panel}>
-        <Text style={styles.sectionTitle}>Pantry exclusions</Text>
+        <Text style={styles.sectionTitle}>In pantry</Text>
+        {!pantryReady ? <Text style={styles.meta}>Pantry updates are temporarily unavailable.</Text> : null}
         <View style={styles.inputRow}>
           <TextInput accessibilityLabel="Pantry item" value={pantryName} onChangeText={setPantryName} placeholder="Salt, olive oil, rice" style={styles.input} />
-          <Button label="Save" icon="bookmark" onPress={() => addPantry.mutate()} />
+          <Button label="Add" icon="add" disabled={!pantryReady || !pantryName.trim()} onPress={() => setPantrySelection({ name: pantryName.trim(), normalizedName: pantryName.trim(), category: "pantry" })} />
         </View>
         <View style={styles.chips}>
           {(pantry ?? []).map((item: PantryItem) => (
-            <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Remove ${item.normalized_name} from pantry`} onPress={() => deletePantry.mutate(item)} style={styles.pantryChip}>
-              <Text style={styles.pantryText}>{item.normalized_name}</Text>
-              <Text style={styles.pantryRemove}>x</Text>
-            </Pressable>
+            <View key={item.id} style={styles.pantryRow}>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Update ${item.normalized_name} pantry`} disabled={!pantryReady} style={{ flex: 1, gap: 3 }} onPress={() => setPantrySelection({ name: item.normalized_name, normalizedName: item.normalized_name, category: item.category, stockQuantity: item.quantity, stockUnit: item.unit })}>
+                <Text style={styles.pantryText}>{item.normalized_name}</Text>
+                <Text style={styles.meta}>{item.coverage_mode === "quantity" ? `${item.quantity} ${item.unit ?? "each"} on hand` : item.needs_confirmation ? "Confirm this week's coverage" : item.coverage_mode === "enough" ? "Enough for this week's meals" : "Confirm stock amount"}</Text>
+              </Pressable>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${item.normalized_name} from pantry`} disabled={deletePantry.isPending} onPress={() => deletePantry.mutate(item)} style={styles.removePantry}>
+                <Ionicons name="trash-outline" size={20} color={Colors.muted} />
+              </Pressable>
+            </View>
           ))}
         </View>
       </View></TourTarget>
       ) : null}
-      {mode === "list" ? grouped.map(([category, items]) => (
-        <View key={category} style={styles.group}>
-          <Text style={styles.category}>{category}</Text>
-          {items.map((item) => {
+      {mode === "list" ? grouped.map((group) => {
+        const key = group.recipe_id ?? "additional";
+        const collapsed = collapsedGroups.has(key);
+        return (
+        <View key={key} style={styles.group}>
+          <Pressable accessibilityRole="button" accessibilityLabel={`${collapsed ? "Expand" : "Collapse"} ${group.recipe_name}`} accessibilityState={{ expanded: !collapsed }} style={styles.groupHeader} onPress={() => setCollapsedGroups(previous => {
+            const next = new Set(previous);
+            if (next.has(key)) next.delete(key); else next.add(key);
+            return next;
+          })}>
+            <Ionicons name={collapsed ? "chevron-forward" : "chevron-down"} size={20} color={Colors.basil} />
+            <Text style={styles.groupName}>{group.recipe_name}</Text>
+            <Text style={styles.meta}>{group.items.filter(item => !item.is_checked && item.quantity !== 0).length} left</Text>
+          </Pressable>
+          {!collapsed ? group.items.map((item) => {
             const isExpanded = expandedItemId === item.id;
             return (
             <View key={item.id} style={[styles.item, isExpanded ? styles.itemExpanded : null]}>
+              <View style={styles.itemTop}>
               <Pressable accessibilityRole="checkbox" accessibilityLabel={item.display_name} aria-checked={item.is_checked} accessibilityState={{ checked: item.is_checked }} onPress={() => patchItem.mutate({ item, patch: { is_checked: !item.is_checked } })} style={[styles.checkbox, item.is_checked && styles.checkboxChecked]}>
                 {item.is_checked ? <Ionicons name="checkmark" size={19} color="#fff" /> : null}
               </Pressable>
               <View style={styles.itemBody}>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${item.display_name}`} onPress={() => setExpandedItemId(isExpanded ? null : item.id)} style={styles.itemSummary}>
                   <Text style={[styles.name, item.is_checked && styles.checked]}>{item.display_name}</Text>
-                  <Text style={styles.meta}>{formatQuantity(item)} - {item.match_status}</Text>
+                  <Text style={styles.meta}>{item.recipe_quantity !== undefined ? `For recipe: ${formatQuantity({ ...item, quantity: item.recipe_quantity })}` : formatQuantity(item)}</Text>
+                  {(item.recipe_count ?? 0) > 1 ? <Text style={styles.meta}>Shopping total: {formatQuantity(item)}</Text> : null}
                   {item.notes ? <Text style={styles.meta}>{item.notes}</Text> : null}
                 </Pressable>
+              </View>
+              <Pressable accessibilityRole="button" accessibilityLabel={`Put ${item.display_name} in pantry`} accessibilityState={{ disabled: !pantryReady }} disabled={!pantryReady} style={[styles.pantryAction, !pantryReady && { opacity: 0.45 }]} onPress={() => {
+                const stored = (pantry as PantryItem[] | undefined)?.find(row => row.normalized_name === item.normalized_name);
+                setPantrySelection({ itemId: item.id, name: item.display_name, normalizedName: item.normalized_name ?? item.display_name, category: item.category, requiredQuantity: item.required_quantity !== undefined ? item.required_quantity : item.quantity, unit: item.unit, stockQuantity: stored?.quantity, stockUnit: stored?.unit });
+              }}>
+                <Ionicons name="file-tray-outline" color={Colors.basil} size={20} />
+                <Text style={styles.pantryActionText}>In Pantry</Text>
+              </Pressable>
+              </View>
                 {isExpanded ? (
+                  <>
+                  <Text style={styles.meta}>Shopping total: {formatQuantity(item)}</Text>
                   <View style={styles.itemControls}>
                   <Button label="" icon="remove" accessibilityLabel={`Decrease ${item.display_name} quantity`} disabled={patchItem.isPending || item.quantity === 0} onPress={() => patchItem.mutate({ item, patch: { quantity: Math.max(0, (item.quantity ?? 1) - 1) } })} />
                   <Button label="" icon="add" accessibilityLabel={`Increase ${item.display_name} quantity`} disabled={patchItem.isPending} onPress={() => patchItem.mutate({ item, patch: { quantity: (item.quantity ?? 0) + 1 } })} />
@@ -179,35 +224,30 @@ export default function GroceryScreen() {
                   ) : null}
                   <Button label="Delete" icon="trash" variant="danger" onPress={() => deleteItem.mutate(item)} />
                   </View>
+                  </>
                 ) : null}
-              </View>
             </View>
             );
-          })}
+          }) : null}
         </View>
-      )) : null}
+      ); }) : null}
       {mode === "list" && data && !data.items?.length ? (
         <View style={styles.emptyPanel}>
           <Text style={styles.emptyTitle}>No grocery items yet</Text>
           <Text style={styles.empty}>Choose meals or add a household item, then regenerate the list.</Text>
           </View>
       ) : null}
+      {pantrySelection ? <PantryCoverageEditor selection={pantrySelection} onClose={() => setPantrySelection(null)} onSaved={coverage => {
+        setPantrySelection(null); setPantryName(""); setExpandedItemId(null);
+        setStatus(coverage === "enough" ? "Covered for this week's meals." : "Pantry updated. Shopping amounts recalculated.");
+      }} /> : null}
     </Screen>
   );
 }
 
-function groupItems(items: GroceryItem[]) {
-  const groups = new Map<string, GroceryItem[]>();
-  for (const item of items) {
-    const key = item.category || "uncategorized";
-    groups.set(key, [...(groups.get(key) ?? []), item]);
-  }
-  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
-}
-
 function formatQuantity(item: GroceryItem) {
   if (item.quantity === null) return item.unit ? item.unit : "Quantity needs review";
-  return `${item.quantity} ${item.unit ?? ""}`.trim();
+  return `${Number(item.quantity.toFixed(2))} ${item.unit ?? ""}`.trim();
 }
 
 function retailerUrl(item: GroceryItem) {
@@ -224,13 +264,19 @@ const styles = StyleSheet.create({
   inputRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
   input: { minHeight: 46, flex: 1, minWidth: 130, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, backgroundColor: Colors.surface },
   smallInput: { minWidth: 74, flex: 0.5 },
-  chips: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  chips: { gap: 8 },
+  pantryRow: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 56, borderBottomWidth: 1, borderColor: Colors.border, paddingVertical: 8 },
+  removePantry: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   pantryChip: { flexDirection: "row", gap: 7, alignItems: "center", borderRadius: 999, backgroundColor: Colors.softRed, paddingHorizontal: 10, minHeight: 34 },
   pantryText: { color: Colors.tomatoDark, fontWeight: "800", textTransform: "capitalize" },
   pantryRemove: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 16 },
   group: { marginTop: 12, marginBottom: 2, gap: 8 },
-  category: { color: Colors.basil, fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
-  item: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, flexDirection: "row", gap: 10 },
+  groupHeader: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 52, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  groupName: { flex: 1, fontSize: 18, fontWeight: "900", color: Colors.ink },
+  item: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 8 },
+  itemTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  pantryAction: { minHeight: 44, width: 68, alignItems: "center", justifyContent: "center", gap: 3 },
+  pantryActionText: { fontSize: 12, fontWeight: "800", color: Colors.basil },
   itemExpanded: { borderColor: "#f0b6b2" },
   checkbox: { width: 30, height: 30, borderRadius: 8, borderWidth: 2, borderColor: Colors.border, alignItems: "center", justifyContent: "center", marginTop: 2 },
   checkboxChecked: { backgroundColor: Colors.basil, borderColor: Colors.basil },

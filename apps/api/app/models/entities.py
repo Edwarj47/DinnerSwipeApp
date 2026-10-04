@@ -389,6 +389,11 @@ class PantryItem(Base, TimestampMixin):
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     normalized_name: Mapped[str] = mapped_column(String(180), nullable=False)
     category: Mapped[str] = mapped_column(String(80), default="pantry")
+    coverage_mode: Mapped[str] = mapped_column(String(16), default="legacy")
+    quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    week_start: Mapped[date | None] = mapped_column(Date, nullable=True)
+    requirements_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
     __table_args__ = (UniqueConstraint("user_id", "normalized_name"),)
 
 
@@ -406,6 +411,7 @@ class GroceryListItem(Base, TimestampMixin):
     normalized_name: Mapped[str] = mapped_column(String(180), nullable=False)
     display_name: Mapped[str] = mapped_column(String(180), nullable=False)
     quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
+    required_quantity: Mapped[float | None] = mapped_column(Float, nullable=True)
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
     category: Mapped[str] = mapped_column(String(80), default="uncategorized")
     is_checked: Mapped[bool] = mapped_column(Boolean, default=False)

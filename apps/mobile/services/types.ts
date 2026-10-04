@@ -36,6 +36,7 @@ export type Recipe = {
   cook_minutes?: number | null;
   total_minutes?: number | null;
   difficulty: string;
+  cuisine?: string | null;
   meal_type: string;
   source_type: string;
   source_url?: string | null;
@@ -53,6 +54,7 @@ export type Recipe = {
   can_edit?: boolean;
   nutrition?: RecipeNutrition | null;
   last_selected_date?: string | null;
+  feedback_ignored?: boolean;
 };
 
 export type Household = {

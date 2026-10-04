@@ -4,6 +4,8 @@ import { useCallback, useEffect, useState } from "react";
 import { Platform, Pressable, Share, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
+import { AppVersion } from "@/components/AppVersion";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { Screen } from "@/components/Screen";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
@@ -43,7 +45,7 @@ export default function ProfileScreen() {
   const [allergens, setAllergens] = useState<string[]>([]);
   const [dislikes, setDislikes] = useState<string[]>([]);
   const [preferredRetailer, setPreferredRetailer] = useState<GroceryRetailer>("walmart");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useTransientMessage();
   const [deletePassword, setDeletePassword] = useState("");
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [biometricSettings, setBiometricSettings] = useState<BiometricSettings | null>(null);
@@ -66,7 +68,7 @@ export default function ProfileScreen() {
   }, []);
   useEffect(() => {
     void refreshBiometricSettings().catch(() => setStatus("Unable to read device security settings."));
-  }, [refreshBiometricSettings]);
+  }, [refreshBiometricSettings, setStatus]);
   const authStatus = useQuery({
     queryKey: ["auth-status"],
     queryFn: () => apiFetch<{ email: string; email_verified: boolean; smtp_configured: boolean }>("/api/v1/auth/status"),
@@ -367,6 +369,7 @@ export default function ProfileScreen() {
               </View>
             ) : null}
           </View></TourTarget>
+          <AppVersion />
         </>
       ) : null}
       {section === "meals" ? (

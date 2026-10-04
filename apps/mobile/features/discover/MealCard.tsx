@@ -7,6 +7,7 @@ import Animated, {
   interpolate,
   runOnJS,
   useAnimatedStyle,
+  useDerivedValue,
   useSharedValue,
   withSpring,
   withTiming
@@ -15,8 +16,7 @@ import Animated, {
 import { Colors, shadow } from "@/components/theme";
 import { formatDifficulty, formatMealType, formatSourceType } from "@/features/recipes/recipeDisplay";
 import { Recipe } from "@/services/types";
-
-type MealAction = "add" | "skip" | "favorite" | "hide";
+import { MealAction, swipeActionForOffset } from "./mealSwipe";
 
 export type MealCardHandle = {
   choose: (action: MealAction) => void;
@@ -41,6 +41,7 @@ export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ re
   const [isLeaving, setIsLeaving] = useState(false);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
+  const preview = useDerivedValue(() => swipeActionForOffset(translateX.value, translateY.value));
 
   useEffect(() => {
     translateX.value = 0;
@@ -66,46 +67,37 @@ export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ re
       translateY.value = event.translationY;
     })
     .onEnd(() => {
-      const x = translateX.value;
-      const y = translateY.value;
-      const absX = Math.abs(x);
-      const absY = Math.abs(y);
-      if (absX < 90 && absY < 90) {
+      const action = swipeActionForOffset(translateX.value, translateY.value, 90);
+      if (!action) {
         translateX.value = withSpring(0);
         translateY.value = withSpring(0);
         return;
       }
-      if (absX >= absY) {
-        if (x > 90) runOnJS(choose)("add");
-        if (x < -90) runOnJS(choose)("skip");
-        return;
-      }
-      if (y < -90) runOnJS(choose)("favorite");
-      if (y > 90) runOnJS(choose)("hide");
+      runOnJS(choose)(action);
     });
   const animated = useAnimatedStyle(() => ({
     transform: [{ translateX: translateX.value }, { translateY: translateY.value }, { rotate: `${translateX.value / 24}deg` }]
   }));
   const planIndicator = useAnimatedStyle(() => ({
-    opacity: interpolate(translateX.value, [22, 95], [0, 1], Extrapolation.CLAMP),
+    opacity: preview.value === "add" ? interpolate(translateX.value, [22, 95], [0, 1], Extrapolation.CLAMP) : 0,
     transform: [
       { rotate: "-8deg" },
       { scale: interpolate(translateX.value, [22, 95], [0.92, 1], Extrapolation.CLAMP) }
     ]
   }));
   const skipIndicator = useAnimatedStyle(() => ({
-    opacity: interpolate(translateX.value, [-95, -22], [1, 0], Extrapolation.CLAMP),
+    opacity: preview.value === "skip" ? interpolate(translateX.value, [-95, -22], [1, 0], Extrapolation.CLAMP) : 0,
     transform: [
       { rotate: "8deg" },
       { scale: interpolate(translateX.value, [-95, -22], [1, 0.92], Extrapolation.CLAMP) }
     ]
   }));
   const favoriteIndicator = useAnimatedStyle(() => ({
-    opacity: interpolate(translateY.value, [-105, -26], [1, 0], Extrapolation.CLAMP),
+    opacity: preview.value === "favorite" ? interpolate(translateY.value, [-105, -26], [1, 0], Extrapolation.CLAMP) : 0,
     transform: [{ scale: interpolate(translateY.value, [-105, -26], [1, 0.92], Extrapolation.CLAMP) }]
   }));
   const hideIndicator = useAnimatedStyle(() => ({
-    opacity: interpolate(translateY.value, [26, 105], [0, 1], Extrapolation.CLAMP),
+    opacity: preview.value === "hide" ? interpolate(translateY.value, [26, 105], [0, 1], Extrapolation.CLAMP) : 0,
     transform: [{ scale: interpolate(translateY.value, [26, 105], [0.92, 1], Extrapolation.CLAMP) }]
   }));
   return (

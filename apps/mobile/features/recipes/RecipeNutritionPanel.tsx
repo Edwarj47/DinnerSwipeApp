@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Button } from "@/components/Button";
 import { Colors } from "@/components/theme";
@@ -9,16 +9,17 @@ import { NutritionFields } from "./NutritionFields";
 import { RecipeMacroLogger } from "./RecipeMacroLogger";
 import { NUTRIENTS, nutritionInputs, parseNutrition } from "./recipeNutrition";
 
-export function RecipeNutritionPanel({ recipe }: { recipe: Recipe }) {
+export function RecipeNutritionPanel({ recipe, onUpdated }: { recipe: Recipe; onUpdated?: (recipe: Recipe) => void }) {
   const client = useQueryClient();
   const [current, setCurrent] = useState(recipe);
   const [editing, setEditing] = useState(false);
   const [logging, setLogging] = useState(false);
   const [fields, setFields] = useState(nutritionInputs(recipe.nutrition));
+  useEffect(() => { setCurrent(recipe); setFields(nutritionInputs(recipe.nutrition)); }, [recipe]);
   const subscription = useQuery({ queryKey: ["subscription-status"], queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status") });
   const save = useMutation({
     mutationFn: () => apiFetch<Recipe>(`/api/v1/recipes/${recipe.id}/nutrition`, { method: "PUT", body: JSON.stringify(parseNutrition(fields)) }),
-    onSuccess: async updated => { setCurrent(updated); setEditing(false); await client.invalidateQueries({ queryKey: ["recipes"] }); }
+    onSuccess: async updated => { setCurrent(updated); setEditing(false); onUpdated?.(updated); await client.invalidateQueries({ queryKey: ["recipes"] }); }
   });
   return <View style={styles.panel}>
     <Text style={styles.heading}>Nutrition per serving</Text>

@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { Share } from "react-native";
 import { PremiumMacroPanel } from "@/features/premium/PremiumMacroPanel";
-import { todayISO } from "@/features/premium/macroDates";
+import { shiftISODate, todayISO } from "@/features/premium/macroDates";
 import { apiFetch } from "@/services/api";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
@@ -51,7 +51,7 @@ test("macro success is transient, invalid dates do not query, and errors stay vi
     fireEvent.changeText(screen.getByLabelText("Calories"), "250");
     fireEvent.press(screen.getByLabelText("Add"));
     await screen.findByText("Macro entry added.");
-    await act(async () => { jest.advanceTimersByTime(3600); });
+    await act(async () => { jest.advanceTimersByTime(5000); });
     expect(screen.queryByText("Macro entry added.")).toBeNull();
     fireEvent.changeText(screen.getByLabelText("Macro date"), "2026-09-");
     expect(screen.getByText("Enter a date as YYYY-MM-DD.")).toBeTruthy();
@@ -101,4 +101,29 @@ test("all-time Trends and its export use the same selected period", async () => 
     await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/macros/export?all_time=true"));
     await waitFor(() => expect(share).toHaveBeenCalled());
   } finally { screen.close(); }
+});
+
+test("summary period persists across mounts without overwriting other preferences", async () => {
+  let profile = { notification_preferences: { macro_summary_days: 14, confirm_plan_reset: false }, household_size: 2 };
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init) => {
+    if (path === "/api/v1/profile") {
+      if (init?.method === "PUT") profile = JSON.parse(String(init.body));
+      return { ...profile };
+    }
+    return original(path, init);
+  });
+  const screen = mount();
+  try {
+    await screen.findByLabelText("Summary period: Last 14 days");
+    await waitFor(() => expect(request).toHaveBeenCalledWith(`/api/v1/macros/analytics?start_date=${shiftISODate(todayISO(), -13)}&end_date=${todayISO()}`));
+    fireEvent.press(screen.getByLabelText("Summary period: Last 14 days"));
+    fireEvent.press(screen.getByLabelText("Last 365 days"));
+    await waitFor(() => expect(profile.notification_preferences.macro_summary_days).toBe(365));
+    expect(profile.notification_preferences.confirm_plan_reset).toBe(false);
+    await waitFor(() => expect(request).toHaveBeenCalledWith(`/api/v1/macros/analytics?start_date=${shiftISODate(todayISO(), -364)}&end_date=${todayISO()}`));
+  } finally { screen.close(); }
+  const again = mount();
+  try { await again.findByLabelText("Summary period: Last 365 days"); }
+  finally { again.close(); }
 });

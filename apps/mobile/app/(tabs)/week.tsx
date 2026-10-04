@@ -7,12 +7,14 @@ import { useMemo, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Button } from "@/components/Button";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { PremiumStatus, UserProfile, WeeklyPlan } from "@/services/types";
 import { shouldConfirmPlanReset } from "@/services/profilePreferences";
-import { WeekDrag, WeekDragHandle, WeekDropDay } from "@/features/planner/WeekDrag";
+import { WeekDrag, WeekDragHandle, WeekDropDay, WeekDropMeal } from "@/features/planner/WeekDrag";
+import { reorderDaySlots } from "@/features/planner/weekDrop";
 import { DaySelection } from "@/features/planner/DaySelection";
 import { RecipePicker } from "@/features/recipes/RecipePicker";
 import { usePlannerStore } from "@/stores/plannerStore";
@@ -32,10 +34,10 @@ const SLOT_TYPES: { label: string; value: WeeklySlot["slot_type"] }[] = [
 export default function WeekScreen() {
   const router = useRouter();
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState("");
+  const [statusIsError, setStatusIsError] = useState(false);
+  const [status, setStatus] = useTransientMessage(statusIsError);
   const [expandedSlotId, setExpandedSlotId] = useState<string | null>(null);
   const [resetScope, setResetScope] = useState<{ date: string | null; label: string } | null>(null);
-  const [statusIsError, setStatusIsError] = useState(false);
   const [addDay, setAddDay] = useState<{ iso: string; label: string } | null>(null);
   const { data, isLoading, error, refetch } = useCurrentWeek();
   const profile = useQuery({ queryKey: ["profile"], queryFn: () => apiFetch<UserProfile>("/api/v1/profile"), retry: false });
@@ -113,6 +115,7 @@ export default function WeekScreen() {
         })
       }),
     onSuccess: async () => {
+      setStatusIsError(false);
       setStatus("Meal logged.");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["macro-summary"] }),
@@ -120,7 +123,7 @@ export default function WeekScreen() {
         queryClient.invalidateQueries({ queryKey: ["macro-analytics"] })
       ]);
     },
-    onError: (error) => setStatus(String(error))
+    onError: showError
   });
   const startPremiumCheckout = useMutation({
     mutationFn: () =>
@@ -129,15 +132,27 @@ export default function WeekScreen() {
         body: JSON.stringify({ tier: "premium" })
       }),
     onSuccess: async (data) => {
+      setStatusIsError(false);
       setStatus("Opening Premium checkout.");
       await Linking.openURL(data.checkout_url);
     },
-    onError: (error) => setStatus(error instanceof Error ? error.message : String(error))
+    onError: showError
   });
   const plannedCount = sortedSlots.filter((slot) => slot.slot_type === "meal" && slot.recipe_id).length;
   const premiumActive = Boolean(subscription.data?.premium_active ?? subscription.data?.active);
   const premiumCheckoutReady = Boolean(subscription.data?.premium_stripe_configured);
-  const busy = reset.isPending || update.isPending || remove.isPending || addMeal.isPending;
+  const reorder = useMutation({
+    mutationFn: (ids: string[]) => apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current/reorder", {
+      method: "POST", body: JSON.stringify({ ordered_slot_ids: ids })
+    }),
+    onSuccess: async plan => {
+      queryClient.setQueryData(["weekly-plan"], plan);
+      setStatusIsError(false); setStatus("Meal order updated.");
+      await invalidatePlan(queryClient);
+    },
+    onError: async error => { showError(error); await refetch(); }
+  });
+  const busy = reset.isPending || update.isPending || remove.isPending || addMeal.isPending || reorder.isPending;
 
   function requestReset(scope: { date: string | null; label: string }) {
     if (busy) return;
@@ -182,6 +197,9 @@ export default function WeekScreen() {
       <WeekDrag days={dayOptions} disabled={busy} onAssign={(slotId, date) => {
         const slot = sortedSlots.find(item => item.id === slotId);
         if (slot && slot.slot_date !== date) update.mutate({ slot, patch: { slot_date: date } });
+      }} onReorder={(id, beforeId) => {
+        const ids = reorderDaySlots(sortedSlots, id, beforeId);
+        if (ids) reorder.mutate(ids);
       }}>
         {groups.map(group => (
           <WeekDropDay key={group.iso} day={group.iso}>
@@ -202,7 +220,8 @@ export default function WeekScreen() {
         {group.slots.map((slot) => {
           const isExpanded = expandedSlotId === slot.id;
           return (
-            <View key={slot.id} style={[styles.row, isExpanded ? styles.rowExpanded : null]}>
+            <WeekDropMeal key={slot.id} id={slot.id} day={group.iso}>
+            <View style={[styles.row, isExpanded ? styles.rowExpanded : null]}>
               <View style={styles.cardTop}>
                 <WeekDragHandle id={slot.id} label={slot.recipe_name ?? slotLabel(slot.slot_type)} disabled={busy} />
                 {slot.recipe_photo_url ? <Image source={{ uri: slot.recipe_photo_url }} style={styles.thumb} contentFit="cover" /> : null}
@@ -258,6 +277,7 @@ export default function WeekScreen() {
                 </>
               ) : null}
             </View>
+            </WeekDropMeal>
           );
         })}
           </WeekDropDay>

@@ -5,6 +5,7 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { MealCard, MealCardHandle } from "@/features/discover/MealCard";
@@ -25,7 +26,7 @@ export default function DiscoverScreen() {
   const cardRef = useRef<MealCardHandle>(null);
   const { sessionId, addSwipe, history, shuffleVersion, restartDiscover, removeChoice } = usePlannerStore();
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useTransientMessage();
   const { data, isLoading, isFetching, error, refetch } = useQuery<Recipe[]>({ queryKey: ["recipes", "discover"], queryFn: async () => {
     const all: Recipe[] = [];
     for (let offset = 0; ; offset += 100) {
@@ -95,7 +96,7 @@ export default function DiscoverScreen() {
 
   useEffect(() => {
     setStatus("");
-  }, [replaceSlotId]);
+  }, [replaceSlotId, setStatus]);
 
   function act(action: "add" | "skip" | "favorite" | "hide") {
     if (!current) return;

@@ -7,7 +7,12 @@ from sqlalchemy import select
 
 from app.api.deps import BasicUser, DbDep
 from app.models.entities import MealMacroConfirmation, Recipe, WeeklyPlanSlot
-from app.schemas.common import WeeklyPlanReset, WeeklySlotCreate, WeeklySlotUpdate
+from app.schemas.common import (
+    WeeklyPlanReorder,
+    WeeklyPlanReset,
+    WeeklySlotCreate,
+    WeeklySlotUpdate,
+)
 from app.services.recipes import (
     accessible_recipes_query,
     clear_plan_slot,
@@ -28,7 +33,7 @@ def current_plan(db: DbDep, current_user: BasicUser) -> dict[str, object]:
 
 @router.post("/current/reset")
 def reset_plan(payload: WeeklyPlanReset, db: DbDep, current_user: BasicUser) -> dict[str, object]:
-    plan = get_or_create_current_plan(db, current_user)
+    plan = get_or_create_current_plan(db, current_user, lock=True)
     if payload.slot_date and not plan.week_start <= payload.slot_date < plan.week_start + timedelta(
         days=7
     ):
@@ -80,11 +85,32 @@ def reset_plan(payload: WeeklyPlanReset, db: DbDep, current_user: BasicUser) -> 
     return serialize_plan(db, plan)
 
 
+@router.post("/current/reorder")
+def reorder_plan(
+    payload: WeeklyPlanReorder, db: DbDep, current_user: BasicUser
+) -> dict[str, object]:
+    # Use the same user lock as swipe planning to serialize competing additions.
+    plan = get_or_create_current_plan(db, current_user, lock=True)
+    slots = list(
+        db.scalars(
+            select(WeeklyPlanSlot).where(WeeklyPlanSlot.weekly_plan_id == plan.id).with_for_update()
+        ).all()
+    )
+    ids = payload.ordered_slot_ids
+    if len(ids) != len(set(ids)) or set(ids) != {slot.id for slot in slots}:
+        raise HTTPException(409, "This plan changed. Refresh and try again.")
+    positions = {slot_id: index for index, slot_id in enumerate(ids)}
+    for slot in slots:
+        slot.sort_order = positions[slot.id]
+    db.commit()
+    return serialize_plan(db, plan)
+
+
 @router.put("/current/slots/{slot_id}")
 def update_slot(
     slot_id: str, payload: WeeklySlotUpdate, db: DbDep, current_user: BasicUser
 ) -> dict[str, object]:
-    plan = get_or_create_current_plan(db, current_user)
+    plan = get_or_create_current_plan(db, current_user, lock=True)
     slot = db.scalar(
         select(WeeklyPlanSlot).where(
             WeeklyPlanSlot.id == slot_id, WeeklyPlanSlot.weekly_plan_id == plan.id
@@ -118,7 +144,7 @@ def update_slot(
 
 @router.delete("/current/slots/{slot_id}")
 def remove_slot(slot_id: str, db: DbDep, current_user: BasicUser) -> dict[str, object]:
-    plan = get_or_create_current_plan(db, current_user)
+    plan = get_or_create_current_plan(db, current_user, lock=True)
     slot = db.scalar(
         select(WeeklyPlanSlot).where(
             WeeklyPlanSlot.id == slot_id, WeeklyPlanSlot.weekly_plan_id == plan.id
@@ -132,7 +158,7 @@ def remove_slot(slot_id: str, db: DbDep, current_user: BasicUser) -> dict[str, o
 
 @router.post("/current/slots")
 def add_slot(payload: WeeklySlotCreate, db: DbDep, current_user: BasicUser) -> dict[str, object]:
-    plan = get_or_create_current_plan(db, current_user)
+    plan = get_or_create_current_plan(db, current_user, lock=True)
     if payload.slot_date and not plan.week_start <= payload.slot_date < plan.week_start + timedelta(
         days=7
     ):

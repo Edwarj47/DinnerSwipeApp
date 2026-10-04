@@ -3,12 +3,13 @@ import { Image } from "expo-image";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Button } from "@/components/Button";
+import { SUCCESS_MESSAGE_MS } from "@/components/useTransientMessage";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { appendRecipeImage, RecipeImage, RecipePhotoPicker } from "./RecipePhotoPicker";
 
-export function RecipePhotoEditor({ recipe }: { recipe: Recipe }) {
+export function RecipePhotoEditor({ recipe, onUpdated }: { recipe: Recipe; onUpdated?: (recipe: Recipe) => void }) {
   const client = useQueryClient();
   const [photo, setPhoto] = useState(recipe.photo_url);
   const [editing, setEditing] = useState(false);
@@ -16,7 +17,7 @@ export function RecipePhotoEditor({ recipe }: { recipe: Recipe }) {
   useEffect(() => { setPhoto(recipe.photo_url); }, [recipe.photo_url]);
   useEffect(() => {
     if (!saved) return;
-    const timer = setTimeout(() => setSaved(false), 3500);
+    const timer = setTimeout(() => setSaved(false), SUCCESS_MESSAGE_MS);
     return () => clearTimeout(timer);
   }, [saved]);
   const upload = useMutation({
@@ -29,6 +30,7 @@ export function RecipePhotoEditor({ recipe }: { recipe: Recipe }) {
       setPhoto(updated.photo_url);
       setEditing(false);
       setSaved(true);
+      onUpdated?.(updated);
       await Promise.all([
         client.invalidateQueries({ queryKey: ["recipes"] }),
         client.invalidateQueries({ queryKey: ["weekly-plan"] })

@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Household, SafetyFilterMode, VoteOption, VoteResult, VoteSummary } from "@/services/types";
@@ -18,7 +19,7 @@ const safetyLabels: Record<SafetyFilterMode, string> = {
 
 export function HouseholdPanel() {
   const queryClient = useQueryClient();
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useTransientMessage();
   const [ownerTools, setOwnerTools] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState<{ id: string; email: string } | null>(null);
@@ -30,7 +31,7 @@ export function HouseholdPanel() {
     enabled: !!household && !household.is_personal
   });
   const { data: votes, error: votesError, refetch: reloadVotes } = useQuery<VoteSummary>({ queryKey: ["votes", household?.id], queryFn: () => apiFetch<VoteSummary>(`/api/v1/households/${household?.id}/votes`), enabled: !!household && !household.is_personal });
-  useEffect(() => { setTransferTarget(null); setOwnerTools(false); setShareOpen(false); setStatus(""); }, [household?.id]);
+  useEffect(() => { setTransferTarget(null); setOwnerTools(false); setShareOpen(false); setStatus(""); }, [household?.id, setStatus]);
   const shareRecipe = useMutation({
     mutationFn: (id: string) => apiFetch(`/api/v1/households/${household?.id}/recipes`, { method: "POST", body: JSON.stringify({ recipe_id: id }) }),
     onSuccess: async () => { setShareOpen(false); setStatus("Recipe shared with this group."); await queryClient.invalidateQueries({ queryKey: ["vote-options"] }); }

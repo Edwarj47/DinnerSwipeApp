@@ -29,7 +29,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#d71920"
       },
-      "versionCode": 15
+      "versionCode": 16
     },
     "web": {
       "bundler": "metro",

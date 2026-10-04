@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Linking,
   Modal,
@@ -13,6 +13,7 @@ import {
 } from "react-native";
 
 import { Button } from "@/components/Button";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors, shadow } from "@/components/theme";
 import { formatDifficulty, formatMealType, formatSourceType } from "@/features/recipes/recipeDisplay";
 import { apiFetch } from "@/services/api";
@@ -20,6 +21,7 @@ import { Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { RecipeNutritionPanel } from "./RecipeNutritionPanel";
 import { RecipePhotoEditor } from "./RecipePhotoEditor";
+import { ManualRecipePanel } from "./ManualRecipePanel";
 
 type RecipeAction = "add" | "skip" | "favorite" | "hide";
 
@@ -28,10 +30,25 @@ type Props = {
   visible: boolean;
   onClose: () => void;
   onAction?: (action: RecipeAction) => void;
+  onUpdated?: (recipe: Recipe) => void;
 };
 
-export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props) {
+export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, onAction, onUpdated }: Props) {
   const queryClient = useQueryClient();
+  const [savedRecipe, setSavedRecipe] = useState<{ sourceId: string; recipe: Recipe } | null>(null);
+  const recipe = savedRecipe && savedRecipe.sourceId === originalRecipe?.id ? savedRecipe.recipe : originalRecipe;
+  const [editing, setEditing] = useState(false);
+  const [status, setStatus] = useTransientMessage();
+  const current = useRef({ visible, id: originalRecipe?.id });
+  current.current = { visible, id: originalRecipe?.id };
+  useEffect(() => { setEditing(false); setSavedRecipe(null); }, [originalRecipe?.id, visible]);
+  useEffect(() => { if (!visible) setStatus(""); }, [visible, setStatus]);
+  function applyUpdated(updated: Recipe) {
+    if (!current.current.visible || current.current.id !== originalRecipe?.id) return false;
+    if (originalRecipe) setSavedRecipe({ sourceId: originalRecipe.id, recipe: updated });
+    onUpdated?.(updated);
+    return true;
+  }
   const { sessionId, addSwipe, removeChoice } = usePlannerStore();
   const dragToClose = useMemo(
     () =>
@@ -50,16 +67,20 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
     mutationFn: (payload: { recipe_id: string; action: "add" | "favorite" | "hide"; request_id: string }) =>
       apiFetch("/api/v1/recipes/swipes", { method: "POST", body: JSON.stringify({ ...payload, session_id: sessionId }) }),
     onSuccess: async (_result, variables) => {
+      if (current.current.visible && current.current.id === variables.recipe_id) {
+        setStatus(variables.action === "add" ? "Added to This Week." : variables.action === "favorite" ? "Saved to favorites." : "Recipe hidden.");
+      }
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["weekly-plan"] }),
         queryClient.invalidateQueries({ queryKey: ["recipes"] }),
         queryClient.invalidateQueries({ queryKey: ["grocery"] })
       ]);
-      if (variables.action === "hide") {
+      if (variables.action === "hide" && current.current.visible && current.current.id === variables.recipe_id) {
         onClose();
       }
     },
-    onError: (_error, payload) => removeChoice(payload.request_id)
+    onMutate: () => setStatus(""),
+    onError: (_error, payload) => { setStatus(""); removeChoice(payload.request_id); }
   });
   const vote = useMutation({
     mutationFn: (payload: { recipe_id: string; vote: "yes" | "maybe" | "no" }) =>
@@ -99,8 +120,14 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
           <Pressable accessibilityRole="button" accessibilityLabel="Close recipe details" onPress={onClose} style={styles.close}>
             <Ionicons name="close" size={24} color={Colors.ink} />
           </Pressable>
+          {status ? <Text accessibilityLiveRegion="polite" style={[styles.status, styles.notice]}>{status}</Text> : null}
           <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-            <RecipePhotoEditor key={recipe.id} recipe={recipe} />
+            {editing ? <>
+              <ManualRecipePanel key={recipe.id} initialRecipe={recipe} onCancel={() => setEditing(false)} onSaved={updated => {
+                if (applyUpdated(updated)) { setEditing(false); setStatus(recipe.can_edit ? "Recipe updated." : "Recipe copy saved."); }
+              }} />
+            </> : <>
+            <RecipePhotoEditor key={`photo-${recipe.id}`} recipe={recipe} onUpdated={applyUpdated} />
             <View style={styles.titleRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.kicker}>{formatMealType(recipe.meal_type)} • {formatSourceType(recipe.source_type)}</Text>
@@ -113,6 +140,7 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
                 </View>
               ) : null}
             </View>
+            <Button label={recipe.can_edit ? "Edit recipe" : "Customize recipe"} icon="create-outline" onPress={() => { setStatus(""); setEditing(true); }} />
             {recipe.description ? <Text style={styles.description}>{recipe.description}</Text> : null}
             <View style={styles.stats}>
               <Stat label="Total" value={`${recipe.total_minutes ?? "?"} min`} />
@@ -120,7 +148,7 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
               <Stat label="Serves" value={String(recipe.servings)} />
               <Stat label="Level" value={formatDifficulty(recipe.difficulty)} />
             </View>
-            <RecipeNutritionPanel key={recipe.id} recipe={recipe} />
+            <RecipeNutritionPanel key={`nutrition-${recipe.id}`} recipe={recipe} onUpdated={applyUpdated} />
             {!recipe.is_archived && !recipe.is_hidden ? <><View style={styles.actionPanel}>
               <Text style={styles.actionTitle}>Choose</Text>
               <View style={styles.actionGrid}>
@@ -130,6 +158,7 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
                   icon="add-circle"
                   tone="primary"
                   onPress={() => doAction("add")}
+                  disabled={actionMutation.isPending}
                 />
                 {onAction ? (
                   <ActionTile
@@ -145,6 +174,7 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
                   icon="heart"
                   tone="soft"
                   onPress={() => doAction("favorite")}
+                  disabled={actionMutation.isPending}
                 />
                 <ActionTile
                   title="Never show"
@@ -152,8 +182,11 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
                   icon="eye-off"
                   tone="danger"
                   onPress={() => doAction("hide")}
+                  disabled={actionMutation.isPending}
                 />
               </View>
+              {actionMutation.isPending ? <Text accessibilityLiveRegion="polite" style={styles.status}>Saving choice...</Text> : null}
+              {actionMutation.error && actionMutation.variables?.recipe_id === recipe.id ? <Text accessibilityRole="alert" style={styles.error}>{actionMutation.error instanceof Error ? actionMutation.error.message : "Unable to save choice."}</Text> : null}
             </View>
             <View style={styles.votePanel}>
               <Text style={styles.sectionTitle}>Group vote</Text>
@@ -190,6 +223,7 @@ export function RecipeDetailSheet({ recipe, visible, onClose, onAction }: Props)
                 <Text style={styles.sourceText}>Open original recipe</Text>
               </Pressable>
             ) : null}
+            </>}
           </ScrollView>
         </View>
       </View>
@@ -213,6 +247,7 @@ function ActionTile({
   subtitle,
   icon,
   tone = "default",
+  disabled = false,
   onPress
 }: {
   title: string;
@@ -220,6 +255,7 @@ function ActionTile({
   icon: keyof typeof Ionicons.glyphMap;
   tone?: "default" | "primary" | "soft" | "danger";
   onPress: () => void;
+  disabled?: boolean;
 }) {
   const isPrimary = tone === "primary" || tone === "danger";
   return (
@@ -227,12 +263,15 @@ function ActionTile({
       accessibilityRole="button"
       accessibilityLabel={title}
       accessibilityHint={subtitle}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       onPress={onPress}
       style={[
         styles.actionTile,
         tone === "primary" ? styles.actionTilePrimary : null,
         tone === "soft" ? styles.actionTileSoft : null,
-        tone === "danger" ? styles.actionTileDanger : null
+        tone === "danger" ? styles.actionTileDanger : null,
+        disabled ? { opacity: 0.45 } : null
       ]}
     >
       <Ionicons name={icon} size={19} color={isPrimary ? "#fff" : Colors.ink} />
@@ -297,5 +336,8 @@ const styles = StyleSheet.create({
   tags: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tag: { backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, color: Colors.muted, fontWeight: "800" },
   sourceLink: { flexDirection: "row", alignItems: "center", gap: 7, minHeight: 44 },
-  sourceText: { color: Colors.blue, fontWeight: "900" }
+  sourceText: { color: Colors.blue, fontWeight: "900" },
+  status: { color: Colors.basil, fontWeight: "700" },
+  notice: { paddingHorizontal: 16, paddingRight: 64, paddingBottom: 8 },
+  error: { color: Colors.danger }
 });

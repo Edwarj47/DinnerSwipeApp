@@ -7,6 +7,7 @@ import { useMemo, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Household, PremiumStatus } from "@/services/types";
@@ -18,7 +19,7 @@ export function GroupManager({ current }: { current?: Household }) {
   const router = useRouter();
   const [action, setAction] = useState<"create" | "join" | "invite" | "leave" | null>(null);
   const [name, setName] = useState("");
-  const [status, setStatus] = useState("");
+  const [status, setStatus] = useTransientMessage();
   const [confirmReset, setConfirmReset] = useState(false);
   const groups = useQuery<Household[]>({ queryKey: ["households"], queryFn: () => apiFetch<Household[]>("/api/v1/households") });
   const groupList: Household[] = groups.data ?? [];

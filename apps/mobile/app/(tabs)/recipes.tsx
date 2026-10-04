@@ -1,5 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Image } from "expo-image";
+import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
@@ -15,7 +14,8 @@ import { UrlRecycleBinPanel } from "@/features/ingestion/UrlRecycleBinPanel";
 import { ManualRecipePanel } from "@/features/recipes/ManualRecipePanel";
 import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
 import { RecipeLibrarySection } from "@/features/recipes/RecipeLibrarySection";
-import { formatDifficulty, formatMealType } from "@/features/recipes/recipeDisplay";
+import { RecipeFeedbackSection } from "@/features/recipes/RecipeFeedbackSection";
+import { useTransientMessage } from "@/components/useTransientMessage";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { TourTarget } from "@/features/onboarding/TourTarget";
@@ -32,6 +32,7 @@ export default function RecipesScreen() {
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [quickActionRecipe, setQuickActionRecipe] = useState<Recipe | null>(null);
   const [actionStatus, setActionStatus] = useState("");
+  const [feedbackStatus, setFeedbackStatus] = useTransientMessage();
   useEffect(() => {
     if (params.mode === "add") {
       setPageMode("add");
@@ -39,10 +40,19 @@ export default function RecipesScreen() {
     }
     if (params.mode === "library" || params.mode === "review") setPageMode(params.mode);
   }, [params.mode, params.method, params.tour]);
-  const { data } = useQuery<Recipe[]>({
+  const review = useInfiniteQuery({
     queryKey: ["recipes", "review", q],
-    queryFn: () => apiFetch<Recipe[]>(`/api/v1/recipes?collection=library&q=${encodeURIComponent(q)}`),
+    initialPageParam: 0,
+    queryFn: ({ pageParam }) => apiFetch<Recipe[]>(`/api/v1/recipes?collection=library&limit=100&offset=${pageParam}&q=${encodeURIComponent(q)}`),
+    getNextPageParam: (last, pages) => last.length === 100 ? pages.length * 100 : undefined,
     enabled: pageMode === "review"
+  });
+  const feedback = useMutation({
+    mutationFn: (recipe: Recipe) => apiFetch<Recipe>(`/api/v1/recipes/${recipe.id}/feedback-preference`, { method: "PUT", body: JSON.stringify({ ignored: !recipe.feedback_ignored }) }),
+    onSuccess: async (_, recipe) => {
+      setFeedbackStatus(recipe.feedback_ignored ? "Feedback returned for review." : "Feedback ignored. Recipe stays in your library.");
+      await queryClient.invalidateQueries({ queryKey: ["recipes"] });
+    }
   });
   const refreshRecipes = async () => {
     await Promise.all([
@@ -85,14 +95,13 @@ export default function RecipesScreen() {
       );
     }
   });
-  const recipes: Recipe[] = data ?? [];
+  const recipes = review.data?.pages.flat() ?? [];
   const reviewRecipes = recipes.filter((recipe) =>
     recipe.validation_status !== "approved" ||
     recipe.validation_warnings.length > 0 ||
     recipe.duplicate_status !== "new" ||
     ["requires_review", "missing", "rejected"].includes(recipe.image_status)
   );
-  const visibleRecipes = pageMode === "review" ? reviewRecipes : recipes;
 
   return (
     <Screen>
@@ -137,43 +146,19 @@ export default function RecipesScreen() {
       {pageMode !== "add" ? (
         <>
           <TextInput accessibilityLabel="Search recipes" value={q} onChangeText={setQ} placeholder="Search saved recipes" style={styles.search} />
-          {pageMode === "review" ? <View style={styles.listHeader}>
-            <Text style={styles.sectionTitle}>{pageMode === "review" ? "Recipes needing attention" : "Recipe library"}</Text>
-            <Text style={styles.count}>{visibleRecipes.length}</Text>
-          </View> : null}
         </>
       ) : null}
       {pageMode === "library" ? (["library", "hidden", "archived"] as const).map(collection => <RecipeLibrarySection
         key={collection} collection={collection} q={q} onOpen={setSelectedRecipe} onActions={recipe => { setActionStatus(""); setQuickActionRecipe(recipe); }} />) : null}
-      {pageMode === "review" && !visibleRecipes.length ? (
-        <View style={styles.emptyPanel}>
-          <Text style={styles.emptyTitle}>{pageMode === "review" ? "Nothing needs review" : "No recipes found"}</Text>
-          <Text style={styles.empty}>{pageMode === "review" ? "Recipes already in your library that still have warnings will appear here." : "Try another search or add a recipe."}</Text>
-        </View>
-      ) : null}
-      {pageMode === "review" ? visibleRecipes.map((recipe: Recipe) => (
-        <Pressable
-          key={recipe.id}
-          accessibilityRole="button"
-          accessibilityLabel={`Open ${recipe.name}`}
-          accessibilityHint="Long press for recipe actions"
-          delayLongPress={420}
-          onLongPress={() => {
-            setActionStatus("");
-            setQuickActionRecipe(recipe);
-          }}
-          onPress={() => setSelectedRecipe(recipe)}
-          style={[styles.row, quickActionRecipe?.id === recipe.id ? styles.rowSelected : null]}
-        >
-          <Image source={{ uri: recipe.photo_url ?? undefined }} style={styles.thumb} contentFit="cover" />
-          <View style={styles.body}>
-            <Text style={styles.name}>{recipe.name}</Text>
-            <Text style={styles.meta}>{recipe.total_minutes ?? "?"} min • {formatDifficulty(recipe.difficulty)} • {formatMealType(recipe.meal_type)}</Text>
-            {recipe.validation_warnings.length ? <Text style={styles.warning}>{recipe.validation_warnings[0]}</Text> : null}
-          </View>
-        </Pressable>
-      )) : null}
-      <RecipeDetailSheet recipe={selectedRecipe} visible={!!selectedRecipe} onClose={() => setSelectedRecipe(null)} />
+      {pageMode === "review" ? <>
+        {review.isLoading ? <Text style={styles.subtitle}>Loading feedback...</Text> : null}
+        {review.isError ? <Button label="Retry feedback" icon="refresh" onPress={() => { void review.refetch(); }} /> : null}
+        {feedbackStatus ? <Text style={{ color: Colors.basil, marginBottom: 10 }}>{feedbackStatus}</Text> : null}
+        {feedback.isError ? <Text accessibilityRole="alert" style={styles.warning}>{feedback.error.message}</Text> : null}
+        {[false, true].map(ignored => <RecipeFeedbackSection key={String(ignored)} ignored={ignored} recipes={reviewRecipes.filter(recipe => Boolean(recipe.feedback_ignored) === ignored)} pending={feedback.isPending} onOpen={setSelectedRecipe} onToggle={recipe => feedback.mutate(recipe)} />)}
+        {review.hasNextPage ? <Button label="More feedback" icon="chevron-down" disabled={review.isFetchingNextPage} onPress={() => { void review.fetchNextPage(); }} /> : null}
+      </> : null}
+      <RecipeDetailSheet recipe={selectedRecipe} visible={!!selectedRecipe} onClose={() => setSelectedRecipe(null)} onUpdated={setSelectedRecipe} />
       <Modal
         visible={!!quickActionRecipe}
         transparent

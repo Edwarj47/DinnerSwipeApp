@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import * as ImagePicker from "expo-image-picker";
 import { AiRecipePanel } from "@/features/recipes/AiRecipePanel";
 import { AiRecipeJob } from "@/features/recipes/aiRecipeTypes";
@@ -92,8 +92,14 @@ test("owners can attach a photo after creation and refresh recipe and week views
     expect(screen.getByLabelText("Change photo")).toBeTruthy();
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["recipes"] });
     expect(invalidate).toHaveBeenCalledWith({ queryKey: ["weekly-plan"] });
-    await waitFor(() => expect(screen.queryByText("Photo updated.")).toBeNull(), { timeout: 4500 });
-  } finally { screen.close(); }
+    jest.useFakeTimers();
+    // Restart the notice timer under the fake clock.
+    fireEvent.press(screen.getByLabelText("Change photo"));
+    fireEvent.press(screen.getByLabelText("Take photo"));
+    await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+    await act(async () => { await jest.advanceTimersByTimeAsync(5000); });
+    expect(screen.queryByText("Photo updated.")).toBeNull();
+  } finally { screen.close(); jest.useRealTimers(); }
 });
 
 test("cancel and upload failure leave the old photo; other users cannot edit", async () => {

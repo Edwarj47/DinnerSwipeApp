@@ -1,5 +1,5 @@
 import { ReactNode, useCallback, useRef } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import { Platform, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Colors } from "@/components/theme";
@@ -15,19 +15,21 @@ export function Screen({ children, scroll = true }: Props) {
   const tour = useGuidedTour();
   const contentRef = useRef<View>(null);
   const scrollRef = useRef<ScrollView>(null);
+  const canScroll = scroll || Platform.OS === "web";
   const reveal = useCallback((node: View) => revealTourTarget(node, contentRef.current, scrollRef.current), []);
-  const content = <View ref={contentRef} collapsable={false} style={[styles.content, !scroll && tour && { flex: 1, minHeight: 0, paddingBottom: 12 }]}>{children}</View>;
+  const content = <View ref={contentRef} collapsable={false} style={[styles.content, !canScroll && tour && { flex: 1, minHeight: 0, paddingBottom: 12 }]}>{children}</View>;
   return (
     <TourScrollContext.Provider value={reveal}>
       <SafeAreaView style={styles.root} edges={tour ? ["left", "right", "bottom"] : undefined}>
         <OfflineStatusBar />
-        {scroll ? <ScrollView ref={scrollRef} keyboardShouldPersistTaps="handled">{content}</ScrollView> : content}
+        {canScroll ? <ScrollView ref={scrollRef} testID="screen-scroll" style={styles.scroll} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={Platform.OS === "web"} keyboardShouldPersistTaps="handled">{content}</ScrollView> : content}
       </SafeAreaView>
     </TourScrollContext.Provider>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: Colors.background },
+  root: { flex: 1, minHeight: 0, backgroundColor: Colors.background },
+  scroll: { flex: 1, minHeight: 0 },
   content: { flexGrow: 1, paddingHorizontal: 18, paddingTop: 14, paddingBottom: 96 }
 });

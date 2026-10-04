@@ -1,10 +1,12 @@
 from __future__ import annotations
 
+import json
 from datetime import UTC, date, datetime, timedelta
+from hashlib import sha256
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import Select, and_, func, or_, select, true
+from sqlalchemy import Select, func, or_, select, true
 from sqlalchemy.orm import Session, selectinload
 
 from app.models.entities import (
@@ -15,7 +17,6 @@ from app.models.entities import (
     HouseholdRecipe,
     MealMacroConfirmation,
     MealSwipe,
-    PantryItem,
     Recipe,
     RecipeIngredient,
     RecipeInstructionStep,
@@ -26,9 +27,26 @@ from app.models.entities import (
     WeeklyPlanSlot,
 )
 from app.schemas.common import RecipeCreate, RecipeNutrition
+from app.services.pantry import (
+    grocery_requirements,
+    pantry_adjusted_requirements,
+    update_manual_pantry,
+)
 from app.services.parsing import normalize_name, parse_ingredients, recipe_hash
 from app.services.retailers import WalmartSearchLinkAdapter
 from app.services.validation import validate_recipe_payload
+
+IGNORED_FEEDBACK_KEY = "ignored_recipe_feedback"
+
+
+def recipe_feedback_fingerprint(recipe: Recipe) -> str:
+    value = [
+        recipe.validation_status,
+        recipe.validation_warnings or [],
+        recipe.duplicate_status,
+        recipe.image_status,
+    ]
+    return sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
 def serialize_recipe(
@@ -36,6 +54,7 @@ def serialize_recipe(
 ) -> dict[str, Any]:
     favorite = False
     hidden = False
+    feedback_ignored = False
     nutrition = None
     if db:
         profile = db.scalar(
@@ -47,6 +66,15 @@ def serialize_recipe(
                 for field in RecipeNutrition.model_fields
             }
     if user_id and db:
+        user = db.get(User, user_id)
+        ignored = (
+            (user.profile.notification_preferences or {}).get(IGNORED_FEEDBACK_KEY, {})
+            if user and user.profile
+            else {}
+        )
+        feedback_ignored = isinstance(ignored, dict) and ignored.get(
+            recipe.id
+        ) == recipe_feedback_fingerprint(recipe)
         favorite_count = db.scalar(
             select(func.count())
             .select_from(Favorite)
@@ -109,12 +137,11 @@ def serialize_recipe(
         "can_edit": bool(user_id and recipe.owner_user_id == user_id),
         "nutrition": nutrition,
         "last_selected_date": None,
+        "feedback_ignored": feedback_ignored,
     }
 
 
-def create_recipe(
-    db: Session, payload: RecipeCreate, user: User | None = None, *, commit: bool = True
-) -> Recipe:
+def recipe_children(payload: RecipeCreate) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
     ingredients = []
     for i in payload.ingredients:
         item = i.model_dump()
@@ -132,10 +159,87 @@ def create_recipe(
                 item["normalized_name"] = normalize_name(i.original_text)
         ingredients.append(item)
     instructions = [s.model_dump() for s in payload.instructions]
+    return ingredients, instructions
+
+
+def update_recipe(db: Session, recipe: Recipe, payload: RecipeCreate) -> Recipe:
+    ingredients, instructions = recipe_children(payload)
+    validation = validate_recipe_payload(
+        payload.model_dump() | {"ingredients": ingredients, "instructions": instructions},
+        payload.accept_placeholder_photo,
+        allow_incomplete=True,
+    )
+    if not validation["can_approve"]:
+        raise HTTPException(422, "; ".join(validation["errors"]))
+    content_hash = recipe_hash(payload.name, ingredients, instructions)
+    duplicate = db.scalar(
+        select(Recipe.id).where(Recipe.content_hash == content_hash, Recipe.id != recipe.id)
+    )
+    # Keep ownership, provenance and historical meal confirmations unchanged.
+    for field in (
+        "description",
+        "photo_url",
+        "servings",
+        "prep_minutes",
+        "cook_minutes",
+        "difficulty",
+        "cuisine",
+        "meal_type",
+        "source_url",
+        "source_title",
+    ):
+        setattr(recipe, field, getattr(payload, field))
+    recipe.name = payload.name.strip()
+    recipe.total_minutes = (
+        payload.total_minutes
+        if payload.total_minutes is not None
+        else (
+            (payload.prep_minutes or 0) + (payload.cook_minutes or 0)
+            if payload.prep_minutes is not None or payload.cook_minutes is not None
+            else None
+        )
+    )
+    recipe.photo_source_url = payload.photo_url
+    recipe.ingredients = [RecipeIngredient(**item) for item in ingredients]
+    recipe.instructions = [RecipeInstructionStep(**step) for step in instructions]
+    tags = dict.fromkeys(normalize_name(value) for value in payload.tags)
+    existing_tags = {item.tag: item for item in recipe.tags}
+    recipe.tags = [existing_tags.get(tag) or RecipeTag(tag=tag) for tag in tags if tag]
+    recipe.content_hash = content_hash
+    recipe.duplicate_status = "exact_duplicate" if duplicate else "new"
+    recipe.validation_status = "approved"
+    recipe.validation_warnings = validation["warnings"]
+    recipe.image_status = validation["image_status"]
+    if "nutrition" in payload.model_fields_set:
+        save_recipe_nutrition(db, recipe, payload.nutrition or RecipeNutrition())
+    db.flush()
+    # Refresh materialized grocery lists only for plans using this recipe this week.
+    plans = db.scalars(
+        select(WeeklyPlan).where(
+            WeeklyPlan.week_start == current_week_start(),
+            WeeklyPlan.id.in_(
+                select(WeeklyPlanSlot.weekly_plan_id).where(WeeklyPlanSlot.recipe_id == recipe.id)
+            ),
+        )
+    ).all()
+    for plan in plans:
+        user = db.get(User, plan.user_id)
+        if user:
+            regenerate_grocery_list(db, user, plan, preserve_edits=True, commit=False)
+    db.commit()
+    db.refresh(recipe)
+    return recipe
+
+
+def create_recipe(
+    db: Session, payload: RecipeCreate, user: User | None = None, *, commit: bool = True
+) -> Recipe:
+    ingredients, instructions = recipe_children(payload)
     content_hash = recipe_hash(payload.name, ingredients, instructions)
     validation = validate_recipe_payload(
         payload.model_dump() | {"ingredients": ingredients, "instructions": instructions},
         payload.accept_placeholder_photo,
+        allow_incomplete=True,
     )
     duplicate = db.scalar(select(Recipe).where(Recipe.content_hash == content_hash))
     recipe = Recipe(
@@ -149,7 +253,12 @@ def create_recipe(
         prep_minutes=payload.prep_minutes,
         cook_minutes=payload.cook_minutes,
         total_minutes=payload.total_minutes
-        or ((payload.prep_minutes or 0) + (payload.cook_minutes or 0) or None),
+        if payload.total_minutes is not None
+        else (
+            (payload.prep_minutes or 0) + (payload.cook_minutes or 0)
+            if payload.prep_minutes is not None or payload.cook_minutes is not None
+            else None
+        ),
         difficulty=payload.difficulty,
         cuisine=payload.cuisine,
         meal_type=payload.meal_type,
@@ -228,7 +337,9 @@ def current_week_start() -> date:
     return today - timedelta(days=today.weekday())
 
 
-def get_or_create_current_plan(db: Session, user: User) -> WeeklyPlan:
+def get_or_create_current_plan(db: Session, user: User, *, lock: bool = False) -> WeeklyPlan:
+    if lock:
+        db.scalar(select(User).where(User.id == user.id).with_for_update())
     week_start = current_week_start()
     plan = db.scalar(
         select(WeeklyPlan).where(WeeklyPlan.user_id == user.id, WeeklyPlan.week_start == week_start)
@@ -408,7 +519,12 @@ def category_for(name: str) -> str:
 
 
 def regenerate_grocery_list(
-    db: Session, user: User, plan: WeeklyPlan, *, preserve_edits: bool = False
+    db: Session,
+    user: User,
+    plan: WeeklyPlan,
+    *,
+    preserve_edits: bool = False,
+    commit: bool = True,
 ) -> GroceryList:
     existing = db.scalar(
         select(GroceryList).where(
@@ -427,48 +543,19 @@ def regenerate_grocery_list(
         grocery = GroceryList(user_id=user.id, weekly_plan_id=plan.id)
         db.add(grocery)
         db.flush()
-    pantry = {
-        item.normalized_name
-        for item in db.scalars(select(PantryItem).where(PantryItem.user_id == user.id)).all()
-    }
-    aggregate: dict[tuple[str, str | None], dict[str, Any]] = {}
-    slots = db.scalars(select(WeeklyPlanSlot).where(WeeklyPlanSlot.weekly_plan_id == plan.id)).all()
-    for slot in slots:
-        if slot.slot_type != "meal" or not slot.recipe_id:
-            continue
-        recipe = db.scalar(
-            select(Recipe)
-            .options(selectinload(Recipe.ingredients))
-            .where(and_(Recipe.id == slot.recipe_id, Recipe.archived_at.is_(None)))
-        )
-        if not recipe:
-            continue
-        scale = slot.servings / recipe.servings if recipe.servings else 1
-        for ingredient in recipe.ingredients:
-            if ingredient.normalized_name in pantry:
-                continue
-            key = (ingredient.normalized_name, ingredient.unit)
-            bucket = aggregate.setdefault(
-                key,
-                {
-                    "display_name": ingredient.normalized_name.title(),
-                    "quantity": 0.0 if ingredient.quantity is not None else None,
-                    "unit": ingredient.unit,
-                    "notes": None,
-                },
-            )
-            if ingredient.quantity is not None and bucket["quantity"] is not None:
-                bucket["quantity"] += ingredient.quantity * scale
-            elif ingredient.quantity is None:
-                bucket["notes"] = "Quantity requires review"
+    requirements = grocery_requirements(db, plan)
+    aggregate = pantry_adjusted_requirements(db, user.id, plan, requirements)
     walmart = WalmartSearchLinkAdapter()
-    for (name, _unit), item in sorted(aggregate.items()):
+    for (name, _unit), item in aggregate.items():
         db.add(
             GroceryListItem(
                 grocery_list_id=grocery.id,
                 normalized_name=name,
                 display_name=item["display_name"],
                 quantity=round(item["quantity"], 2) if item["quantity"] is not None else None,
+                required_quantity=round(item["required_quantity"], 2)
+                if item["required_quantity"] is not None
+                else None,
                 unit=item["unit"],
                 category=category_for(name),
                 walmart_search_url=walmart.build_search_url(name),
@@ -477,6 +564,10 @@ def regenerate_grocery_list(
                 notes=item["notes"],
             )
         )
-    db.commit()
+    update_manual_pantry(db, user.id, plan, grocery.id, requirements)
+    if commit:
+        db.commit()
+    else:
+        db.flush()
     db.refresh(grocery)
     return grocery

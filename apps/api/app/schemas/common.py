@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator
 
 
 class ApiModel(BaseModel):
@@ -287,10 +287,18 @@ class RecipeCreate(ApiModel):
     source_type: str = "manual"
     source_url: str | None = None
     source_title: str | None = None
-    ingredients: list[IngredientIn]
-    instructions: list[InstructionIn]
-    accept_placeholder_photo: bool = False
+    ingredients: list[IngredientIn] = Field(default_factory=list)
+    instructions: list[InstructionIn] = Field(default_factory=list)
+    accept_placeholder_photo: bool = True
     nutrition: RecipeNutrition | None = None
+
+    @field_validator("name")
+    @classmethod
+    def require_title(cls, value: str) -> str:
+        name = value.strip()
+        if len(name) < 2:
+            raise ValueError("Recipe name must contain at least two characters")
+        return name
 
 
 class RecipeOut(ApiModel):
@@ -323,6 +331,11 @@ class RecipeOut(ApiModel):
     can_edit: bool = False
     nutrition: RecipeNutrition | None = None
     last_selected_date: date | None = None
+    feedback_ignored: bool = False
+
+
+class RecipeFeedbackPreference(ApiModel):
+    ignored: bool
 
 
 class SwipeRequest(ApiModel):
@@ -362,6 +375,10 @@ class WeeklyPlanOut(ApiModel):
     slots: list[dict[str, Any]]
 
 
+class WeeklyPlanReorder(ApiModel):
+    ordered_slot_ids: list[str] = Field(min_length=1, max_length=1000)
+
+
 class WeeklyPlanReset(ApiModel):
     slot_date: date | None = None
 
@@ -384,8 +401,14 @@ class ProfileUpdate(ApiModel):
     notification_preferences: dict[str, Any] = Field(default_factory=dict)
 
 
-class PantryItemIn(ApiModel):
-    normalized_name: str
+class PantryCoverageIn(ApiModel):
+    coverage_mode: Literal["legacy", "enough", "quantity"] = "legacy"
+    quantity: float | None = Field(default=None, ge=0, le=999999, allow_inf_nan=False)
+    unit: str | None = Field(default=None, max_length=32)
+
+
+class PantryItemIn(PantryCoverageIn):
+    normalized_name: str = Field(min_length=1, max_length=180)
     category: str = "pantry"
 
 
