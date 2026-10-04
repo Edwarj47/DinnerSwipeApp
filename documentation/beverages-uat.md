@@ -32,9 +32,8 @@
 7. Verify Snack, Dessert, Sauce, and a previously imported custom category still
    work. Check narrow-phone and desktop layouts for wrapping and scrolling.
 
-These changes are local until the API and updated clients are released. No live
-AI call, live recipe modification, provider change, or APK build is required to
-run the isolated automated checks.
+No live AI call, live recipe modification, provider change, or APK build is
+required to run the isolated automated checks below.
 
 ## Local Verification (2026-10-04)
 
@@ -48,4 +47,14 @@ run the isolated automated checks.
 - Backend integration checked sharing, planning, nutrition overrides, and
   analytics export with the canonical beverage category. AI classification
   was checked against its schema and fixtures, not a live OpenAI request.
-- No production service, migration, GitHub push, or APK release was performed.
+- No production service, migration, GitHub push, or APK release was performed
+  during local verification.
+
+## Release Status
+
+Source `ef1630c` is pushed and CI passed. The API and worker now include beverage
+validation and AI classification. Standalone Android preview 17 is built and
+artifact-verified; physical-phone UAT and a live AI classification check remain
+pending. See [the release record](android-preview-uat.md#build-17-update).
+No existing recipes were automatically reclassified. The web frontend was not
+republished.

@@ -66,4 +66,12 @@ it does not move, duplicate, or remove the private original.
   pages, deselection, scrolling, failed sharing and reconnect/retry, group changes,
   the fixed footer, five-second feedback, and no horizontal overflow.
 - No live recipes were shared, no production services were restarted, and no
-  migration, GitHub push, or APK release was performed for this feature.
+  migration, GitHub push, or APK release was performed during local verification.
+
+## Release Status
+
+Source `ef1630c` is pushed and CI passed. API and worker are deployed; standalone
+Android preview 17 is built and artifact-verified. Read-only live picker checks
+passed without sharing customer recipes. Physical-phone UAT remains pending.
+See [the release and rollback record](android-preview-uat.md#build-17-update).
+The web frontend was not republished.

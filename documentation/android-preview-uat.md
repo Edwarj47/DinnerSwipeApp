@@ -1,6 +1,73 @@
 # Android Preview UAT
 
-Updated 2026-10-04 for Android preview build 15.
+Updated 2026-10-04 for Android preview build 17.
+
+## Build 17 Update
+
+- Source `ef1630c` pushed. [CI 37234549874](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/37234549874)
+  passed backend, frontend, and Docker jobs.
+- Profile > Group > select a shared group > Share recipes supports search,
+  individual/multiple selections, Select all across unloaded pages, and exceptions.
+  Sharing grants group access without moving or duplicating private originals.
+- Beverages is available in recipe creation, editing, web/AI review, display
+  labels, daily macros, and recipe-based logging, including fractional portions.
+- Local verification: 136 API tests passed with one existing skip; 125 mobile
+  tests, Ruff/mypy, lint/types, and web export passed. Isolated browser checks
+  passed at 320/390/1280 pixels. Real PostgreSQL checks passed concurrent share
+  retries, membership restrictions, beverage portions, and analytics export.
+- EAS build `1d824ec8-609c-4940-a788-5d9bd977b00f` finished October 4 at 21:14 UTC
+  from `ef1630c`. Package `dev.dcss.dinnerswipe`, version `0.1.0`, version code `17`.
+  Standalone preview APK; no Metro server is needed. The direct download link
+  is shared privately. Physical-phone installation and UAT remain pending.
+- Download length, ZIP integrity, embedded package/version, API URL, and bundled
+  feature checks passed. The signing certificate matches build 16. Size
+  79,601,382 bytes; SHA-256:
+  `2a9ce466fc26ffc7a2ab4e0eebfb88a4e2760eb1e2adea8c2bd6f5c3c6981f53`.
+- With explicit approval, API/worker image `d0b8227fbce2` was deployed, and the
+  pending additive migrations advanced the schema from `d8126c4ab391` to
+  `f20b84e901ac`. Offline receipts and hybrid pantry coverage are now supported
+  by the API. No billing/provider configuration was changed.
+- Fresh private backup and restore/migration checks:
+  `backups/releases/20261004T211732Z_preview17`. Includes database/media/environment,
+  a final quiescent snapshot, data fingerprints, and before/after container records.
+  Upgrade/downgrade/re-upgrade on a disposable restored database preserved all
+  original data. Live migration preserved every original value across 39 tables
+  and 1,385 rows before accepting requests again.
+- Live health, read-only authenticated picker pagination, route protection, beverage
+  validation/AI schema, and offline capability checks passed. No recipes were
+  shared or macro entries written to live customer accounts by release tests.
+- Only Dinner Swipe API and worker containers were recreated. The environment file,
+  Dinner Swipe web/Postgres, and all unrelated container IDs/images/start times
+  remained unchanged. The web frontend was not republished in this release.
+
+### Build 17 Phone Checks
+
+1. Install over build 16 without uninstalling; confirm the saved session remains.
+2. In Profile > Group, select a shared group. Share a few owned recipes, then use
+   search and Select all with an exception. Verify access from a second group member.
+3. Retry after a sharing or pagination connection failure. Selections should stay;
+   success feedback should clear after five seconds. Switch groups and verify reset.
+4. Create/edit a beverage, review an AI/web beverage draft, log 1.5 servings, and
+   edit the entry without changing its category. Check totals and exported data.
+5. Recheck bounded offline grocery/macros and hybrid pantry after an online refresh.
+   These use the newly deployed API capabilities; physical-device UAT is still needed.
+
+### Build 17 Rollback
+
+Retained images: `dinner-swipe-api:before-preview17` and
+`dinner-swipe-worker:before-preview17`. Keep the additive database schema and
+offline receipts during an application rollback. Do not downgrade after serving
+offline-capable clients or restore a whole database over subsequent user writes.
+
+```bash
+docker tag dinner-swipe-api:before-preview17 dinner-swipe-dinner-swipe-api
+docker tag dinner-swipe-worker:before-preview17 dinner-swipe-dinner-swipe-worker
+docker compose --profile production up -d --no-deps --no-build --wait dinner-swipe-api dinner-swipe-worker
+```
+
+The worker is currently an idle placeholder. Its old PID 1 ignored SIGTERM during
+this release; it was confirmed idle before being stopped. No active worker job
+was interrupted. Revisit graceful shutdown before adding real worker jobs.
 
 ## Build 15 Update
 

@@ -42,3 +42,9 @@ do not deploy the API/database or web container. Deployment requires a fresh
 Dinner Swipe-only backup and retained API/worker/web images for rollback. Pantry
 changes remain disabled against an API without the new capability. Desktop web
 changes require deployment and a refresh of the installed PWA.
+
+On 2026-10-04, the explicitly approved
+[preview 17 API deployment](android-preview-uat.md#build-17-update) applied
+`f20b84e901ac`. The live API now advertises hybrid pantry coverage. Existing pantry
+entries retain legacy behavior until changed by a compatible client. The web
+frontend remains on its prior build; native phone UAT is still pending.

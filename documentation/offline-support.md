@@ -6,10 +6,12 @@ Source `bbe2e76` was pushed on 2026-10-03. All GitHub CI jobs passed. Standalone
 Android preview 14 completed and its APK passed artifact verification; see
 [the build record](android-preview-uat.md#build-14-update).
 
-The production API/database and web remain on their prior deployment. Offline
-cache access and queued writes require migration `e19a71c042bf` and the updated
-API; installing the APK alone does not activate them. Physical-phone acceptance
-testing remains pending after that deployment.
+On 2026-10-04, the explicitly approved
+[preview 17 API deployment](android-preview-uat.md#build-17-update) applied
+`e19a71c042bf` and `f20b84e901ac`. The live API now advertises offline sync support.
+After an online session/data refresh, compatible APKs can use the bounded cache
+and queued edits described below. Physical-phone acceptance testing remains
+pending. The production web frontend remains on its prior build.
 
 ## Scope
 
