@@ -1,6 +1,40 @@
 # Android Preview UAT
 
-Updated 2026-10-03 for Android preview build 14.
+Updated 2026-10-04 for Android preview build 15.
+
+## Build 15 Update
+
+- Source `85768b0` pushed. [CI 37168022545](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/37168022545)
+  passed frontend, backend, and Docker jobs.
+- The expanded weekly meal editor uses a Day selection dropdown with Any day and
+  all seven dated days. Choosing a day saves the assignment; canceling or selecting
+  the current day makes no change. Failed saves preserve the previous assignment.
+- Replace is removed from the weekly editor. Adding, removing, and assigning meals
+  and existing drag controls remain available.
+- Servings and grocery quantity controls show one plus/minus icon with descriptive
+  accessibility labels and 44-pixel touch targets. Controls disable during saves
+  and respect the existing serving and quantity limits.
+- Local verification: 82 mobile tests, lint, TypeScript, web export, and mocked-API
+  browser checks at 320/390/1280 pixels. No customer data was written by these checks.
+- Android preview 15 finished October 4 at 01:38 UTC from `85768b0`, EAS build
+  `4c8b5f45-b2a7-4bde-8155-6ee14783f718`. The standalone APK does not need Metro.
+- Download, ZIP integrity, embedded package/version, production API URL, and new
+  feature bundle checks passed. Package `dev.dcss.dinnerswipe`, version code `15`;
+  signing certificate matches build 14. Size 79,584,905 bytes; SHA-256:
+  `e851434e265ebcc2f00c564a22b10ca873c859b8f60bcf0b7a5a112c0678beaf`.
+  The verified download link is shared privately. Physical-phone UAT remains pending.
+- This release contains client UI changes. The pending offline API rollout remains
+  described in [Offline support](offline-support.md).
+
+### Build 15 Phone Checks
+
+1. Install over build 14; confirm the saved session remains available.
+2. Edit a planned meal, open Day selection, choose another day, and reopen the app.
+   Confirm the saved day persists. Any day should move the meal to Unscheduled.
+3. Cancel the day menu and confirm the assignment stays unchanged. Confirm Replace
+   is absent and existing Add meal, Remove, and drag controls still work.
+4. Change meal servings and grocery quantity; each button should show one symbol,
+   save the change, and disable at the applicable minimum or maximum.
 
 ## Build 14 Update
 
