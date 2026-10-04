@@ -20,6 +20,13 @@ function resolveWorkspaceNodeModule(moduleName) {
 }
 
 config.watchFolders = [workspaceRoot];
+// Private release snapshots are not app sources and may be readable only by root.
+const upstreamBlockList = config.resolver.blockList;
+const backupPath = path.resolve(workspaceRoot, "backups").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+config.resolver.blockList = [
+  ...(Array.isArray(upstreamBlockList) ? upstreamBlockList : upstreamBlockList ? [upstreamBlockList] : []),
+  new RegExp(`^${backupPath}(?:[/\\\\]|$)`)
+];
 config.resolver.nodeModulesPaths = [
   path.resolve(projectRoot, "node_modules"),
   path.resolve(workspaceRoot, "node_modules")

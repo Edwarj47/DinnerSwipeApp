@@ -15,9 +15,9 @@ export function Screen({ children, scroll = true }: Props) {
   const tour = useGuidedTour();
   const contentRef = useRef<View>(null);
   const scrollRef = useRef<ScrollView>(null);
-  const canScroll = scroll || Platform.OS === "web";
+  const canScroll = scroll;
   const reveal = useCallback((node: View) => revealTourTarget(node, contentRef.current, scrollRef.current), []);
-  const content = <View ref={contentRef} collapsable={false} style={[styles.content, !canScroll && tour && { flex: 1, minHeight: 0, paddingBottom: 12 }]}>{children}</View>;
+  const content = <View ref={contentRef} collapsable={false} style={[styles.content, !canScroll && { flex: 1, minHeight: 0, paddingBottom: 12 }]}>{children}</View>;
   return (
     <TourScrollContext.Provider value={reveal}>
       <SafeAreaView style={styles.root} edges={tour ? ["left", "right", "bottom"] : undefined}>

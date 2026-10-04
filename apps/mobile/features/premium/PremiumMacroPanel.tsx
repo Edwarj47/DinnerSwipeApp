@@ -13,6 +13,7 @@ import { useOfflineStatus } from "@/services/offlineStore";
 import { MealLabel, MEAL_LABEL_OPTIONS, normalizeMealLabel } from "@/services/mealCategories";
 import { formatMealType } from "@/features/recipes/recipeDisplay";
 import { MacroChoice } from "./MacroChoice";
+import { SummaryPeriod, summaryDays } from "./SummaryPeriod";
 import { RecipeMacroLogger } from "@/features/recipes/RecipeMacroLogger";
 import { MacroDatePicker } from "./MacroDatePicker";
 import { TourTarget } from "@/features/onboarding/TourTarget";
@@ -28,10 +29,6 @@ import {
 } from "@/services/types";
 
 type MacroView = "day" | "grid" | "calendar" | "analytics";
-const SUMMARY_RANGES = [
-  { value: "1", label: "Today" }, { value: "7", label: "Last 7 days" },
-  { value: "14", label: "Last 14 days" }, { value: "365", label: "Last 365 days" }
-];
 
 export function PremiumMacroPanel() {
   const pendingMacros = useOfflineStatus(state => state.edits.some(edit => edit.kind.startsWith("macro_")));
@@ -58,13 +55,12 @@ export function PremiumMacroPanel() {
   const [entryFiber, setEntryFiber] = useState("");
   const [entryNotes, setEntryNotes] = useState("");
   const [recipeLog, setRecipeLog] = useState<MacroConfirmation | "new" | null>(null);
-  const [summarySelection, setSummarySelection] = useState<string | null>(null);
+  const [summarySelection, setSummarySelection] = useState<number | null>(null);
   const profile = useQuery({ queryKey: ["profile"], queryFn: () => apiFetch<UserProfile>("/api/v1/profile") });
-  const storedRange = String(profile.data?.notification_preferences?.macro_summary_days ?? "7");
-  const summaryRange = summarySelection ?? (SUMMARY_RANGES.some(option => option.value === storedRange) ? storedRange : "7");
+  const summaryRange = summarySelection ?? summaryDays(profile.data?.notification_preferences?.macro_summary_days) ?? 7;
   const summaryEnd = todayISO();
   const saveSummaryRange = useMutation({
-    mutationFn: (range: string) => saveProfilePreferences({ notification_preferences: { macro_summary_days: Number(range) } }),
+    mutationFn: (range: number) => saveProfilePreferences({ notification_preferences: { macro_summary_days: range } }),
     onSuccess: updated => { queryClient.setQueryData(["profile"], updated); setSummarySelection(null); },
     onError: () => { setSummarySelection(null); setError("Couldn't save the summary period. Try again."); }
   });
@@ -77,11 +73,7 @@ export function PremiumMacroPanel() {
   const premiumActive = Boolean(subscription.data?.premium_active ?? subscription.data?.active);
   const summary = useQuery({
     queryKey: ["macro-summary", summaryRange, summaryEnd],
-    queryFn: async (): Promise<MacroSummary> => {
-      const start = shiftISODate(summaryEnd, 1 - Number(summaryRange));
-      const data = await apiFetch<MacroAnalytics>(`/api/v1/macros/analytics?start_date=${start}&end_date=${summaryEnd}`);
-      return { ...data, active: true, recent_confirmations: [] };
-    },
+    queryFn: () => apiFetch<MacroSummary>(`/api/v1/macros/summary?days=${summaryRange}&end_date=${summaryEnd}`),
     enabled: premiumActive && !profile.isLoading,
     retry: false
   });
@@ -253,7 +245,7 @@ export function PremiumMacroPanel() {
         </View>
       ) : (
         <>
-          <TourTarget id="macros"><MacroChoice label="Summary period" value={summaryRange} options={SUMMARY_RANGES} disabled={saveSummaryRange.isPending} onChange={range => {
+          <TourTarget id="macros"><SummaryPeriod days={summaryRange} disabled={saveSummaryRange.isPending || !profile.data} onChange={range => {
             setSummarySelection(range); saveSummaryRange.mutate(range);
           }} />
           {pendingMacros ? <Text style={styles.meta}>Summary and trends exclude changes waiting to sync.</Text> : null}

@@ -1,11 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
-import { Image } from "expo-image";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Button } from "@/components/Button";
 import { Colors } from "@/components/theme";
 import { Recipe } from "@/services/types";
+import { RecipePhoto } from "./RecipePhoto";
 
 export function RecipeFeedbackSection({ ignored, recipes, pending, onOpen, onToggle }: {
   ignored: boolean;
@@ -28,7 +28,7 @@ export function RecipeFeedbackSection({ ignored, recipes, pending, onOpen, onTog
       {recipes.map(recipe => <View key={recipe.id} style={styles.row}>
         <Pressable accessibilityRole="button" accessibilityLabel={`Open ${recipe.name}`} style={styles.open} onPress={() => onOpen(recipe)}>
           <View style={styles.summary}>
-            {recipe.photo_url ? <Image source={{ uri: recipe.photo_url }} style={styles.photo} contentFit="cover" /> : null}
+            <RecipePhoto photoUrl={recipe.photo_url} accessibilityLabel={`${recipe.name} photo`} style={styles.photo} />
             <Text style={styles.name}>{recipe.name}</Text>
           </View>
           {(recipe.validation_warnings.length ? recipe.validation_warnings : [recipe.duplicate_status !== "new" ? "Possible duplicate recipe" : "Recipe details need review"]).map((warning, index) => <Text key={index} style={styles.warning}>{warning}</Text>)}

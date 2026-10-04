@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
+import { ActivityIndicator, Platform, StyleSheet, Text, View } from "react-native";
 
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
@@ -118,7 +118,7 @@ export default function DiscoverScreen() {
   }
 
   return (
-    <Screen scroll={Boolean(tour?.expanded && tour.step.id === "discover")}>
+    <Screen scroll={Platform.OS === "web" || Boolean(tour?.expanded && tour.step.id === "discover")}>
       <View style={styles.header}>
         <View style={styles.brand}>
           <BrandLogo size={46} />

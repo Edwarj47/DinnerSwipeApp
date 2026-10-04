@@ -1,4 +1,4 @@
-import { Image } from "expo-image";
+import { RecipePhoto } from "@/features/recipes/RecipePhoto";
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } from "react";
 import { Pressable, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
@@ -104,9 +104,8 @@ export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ re
     <GestureDetector gesture={gesture}>
       <Animated.View style={[styles.card, animated]}>
         <Pressable accessibilityRole="button" accessibilityLabel={`Open ${recipe.name}`} onPress={onOpen}>
-          <Image
-            source={{ uri: recipe.photo_url ?? undefined }}
-            placeholder={require("../../assets/icon.png")}
+          <RecipePhoto
+            photoUrl={recipe.photo_url}
             accessibilityLabel={recipe.name}
             style={[styles.image, compact && { maxHeight: Math.max(100, Math.min(320, height - 420)) }]}
             contentFit="cover"

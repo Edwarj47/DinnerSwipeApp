@@ -206,7 +206,7 @@ def test_summary_supports_today_and_full_year_with_exact_end_date(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:
     end = date(2026, 10, 4)
-    for days in (1, 7, 14, 365):
+    for days in (1, 7, 14, 21, 365, 501, 3650):
         response = client.get(
             f"/api/v1/macros/summary?days={days}&end_date={end}", headers=auth_headers
         )
@@ -214,4 +214,4 @@ def test_summary_supports_today_and_full_year_with_exact_end_date(
         assert response.json()["days"] == days
         assert response.json()["start_date"] == str(end - timedelta(days=days - 1))
         assert response.json()["end_date"] == str(end)
-    assert client.get("/api/v1/macros/summary?days=367", headers=auth_headers).status_code == 422
+    assert client.get("/api/v1/macros/summary?days=3651", headers=auth_headers).status_code == 422

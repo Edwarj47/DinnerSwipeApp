@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
-import { Image } from "expo-image";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -10,6 +9,7 @@ import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
+import { RecipePhoto } from "./RecipePhoto";
 
 export function RecipePicker({ title, visible, busy, error, ownedOnly = false, weeklyChoices = false, onClose, onSelect }: {
   title: string; visible: boolean; busy: boolean; error?: string;
@@ -48,7 +48,7 @@ export function RecipePicker({ title, visible, busy, error, ownedOnly = false, w
             </View> : null}
             {matches.map(recipe => (
               <Pressable key={recipe.id} accessibilityRole="button" accessibilityLabel={`Choose ${recipe.name}`} disabled={busy} onPress={() => onSelect(recipe)} style={[styles.row, busy && styles.disabled]}>
-                {recipe.photo_url ? <Image source={{ uri: recipe.photo_url }} style={styles.photo} contentFit="cover" /> : <Ionicons name="restaurant-outline" size={30} color={Colors.muted} />}
+                <RecipePhoto photoUrl={recipe.photo_url} accessibilityLabel={`${recipe.name} photo`} style={styles.photo} />
                 <View style={styles.copy}><Text style={styles.name}>{recipe.name}</Text><Text style={styles.meta}>{recipe.total_minutes ? `${recipe.total_minutes} min` : "Recipe"}</Text></View>
                 <Ionicons name="add-circle-outline" size={24} color={Colors.tomato} />
               </Pressable>

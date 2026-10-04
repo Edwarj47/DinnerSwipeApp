@@ -6,6 +6,7 @@ import { AppState, AppStateStatus, Text } from "react-native";
 
 import { BiometricGate } from "@/components/BiometricGate";
 import { getBiometricSettings, setBiometricPreference, setBiometricTimeout } from "@/services/biometrics";
+import { clearAuthTokens } from "@/services/api";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("@/components/BrandLogo", () => ({ BrandLogo: () => null }));
@@ -33,6 +34,7 @@ beforeEach(async () => {
   jest.mocked(SecureStore.getItemAsync).mockImplementation(async key => storage.get(key) ?? null);
   jest.mocked(SecureStore.setItemAsync).mockImplementation(async (key, value) => { storage.set(key, value); });
   authenticate.mockReset().mockResolvedValue({ success: true });
+  jest.mocked(clearAuthTokens).mockClear();
   jest.spyOn(Date, "now").mockImplementation(() => now);
   AppState.currentState = "active";
   jest.spyOn(AppState, "addEventListener").mockImplementation((_, callback) => {
@@ -146,4 +148,65 @@ test("disabled biometrics do not prompt and invalid stored timeouts default safe
   await transition("background");
   await transition("active", 900_000);
   expect(authenticate).not.toHaveBeenCalled();
+});
+
+test.each(["background", "inactive", null] as const)("cold launch in %s waits for active before unlocking", async initialState => {
+  AppState.currentState = initialState as AppStateStatus;
+  const screen = mount();
+  try {
+    await screen.findByLabelText("Unlock Dinner Swipe with biometrics");
+    expect(authenticate).not.toHaveBeenCalled();
+    expect(screen.queryByText("Private meals")).toBeNull();
+    await transition("active");
+    await screen.findByText("Private meals");
+    expect(authenticate).toHaveBeenCalledTimes(1);
+  } finally { screen.unmount(); }
+});
+
+test("a long native prompt transition does not immediately relock successful authentication", async () => {
+  await setBiometricTimeout(0);
+  authenticate.mockImplementation(async () => {
+    AppState.currentState = "inactive";
+    onState("inactive");
+    now += 20_000;
+    return { success: true };
+  });
+  const screen = mount();
+  try {
+    await screen.findByText("Private meals");
+    await transition("active");
+    expect(screen.getByText("Private meals")).toBeTruthy();
+    expect(authenticate).toHaveBeenCalledTimes(1);
+  } finally { screen.unmount(); }
+});
+
+test("password fallback clears the saved session without switching off biometrics", async () => {
+  authenticate.mockResolvedValue({ success: false, error: "system_cancel" });
+  const screen = mount();
+  try {
+    await screen.findByText("Unlock was cancelled or not recognized.");
+    fireEvent.press(screen.getByLabelText("Clear saved session and sign in with password"));
+    await waitFor(() => expect(clearAuthTokens).toHaveBeenCalledTimes(1));
+    await screen.findByText("Private meals");
+    expect((await getBiometricSettings()).enabled).toBe(true);
+  } finally { screen.unmount(); }
+});
+
+test("cancellation followed by a delayed active event does not loop native prompts", async () => {
+  authenticate.mockImplementation(async () => {
+    AppState.currentState = "inactive";
+    onState("inactive");
+    return { success: false, error: "user_cancel" };
+  });
+  const screen = mount();
+  try {
+    await screen.findByText("Unlock was cancelled or not recognized.");
+    await transition("active", 2000);
+    expect(authenticate).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText("Private meals")).toBeNull();
+    authenticate.mockResolvedValue({ success: true });
+    fireEvent.press(screen.getByLabelText("Unlock Dinner Swipe with biometrics"));
+    await screen.findByText("Private meals");
+    expect(authenticate).toHaveBeenCalledTimes(2);
+  } finally { screen.unmount(); }
 });

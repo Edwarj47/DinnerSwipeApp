@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Image } from "expo-image";
 import { useMemo, useState } from "react";
+import { RecipePhoto } from "@/features/recipes/RecipePhoto";
 import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 
 import { Button } from "@/components/Button";
@@ -79,7 +79,7 @@ function GroupRecipePicker({ household, onClose, onShared }: {
     return <Pressable accessibilityRole="checkbox" accessibilityLabel={`${shared ? "Already shared:" : "Select"} ${recipe.name}`}
       accessibilityState={{ checked, disabled }} disabled={disabled} onPress={() => toggle(recipe.id)}
       style={[styles.row, checked && !shared && styles.selected]}>
-      {recipe.photo_url ? <Image source={{ uri: recipe.photo_url }} style={styles.photo} contentFit="cover" /> : <View style={styles.photoPlaceholder}><Ionicons name="restaurant-outline" size={24} color={Colors.muted} /></View>}
+      <RecipePhoto photoUrl={recipe.photo_url} accessibilityLabel={`${recipe.name} photo`} style={styles.photo} />
       <View style={styles.copy}><Text style={styles.recipeName}>{recipe.name}</Text>
         <Text style={[styles.meta, shared && styles.shared]}>{shared ? "Already shared" : recipe.is_hidden ? "Hidden in your library" : recipe.total_minutes ? `${recipe.total_minutes} min` : "My recipe"}</Text>
       </View>
@@ -146,7 +146,7 @@ const styles = StyleSheet.create({
   selectAll: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44 }, selectLabel: { color: Colors.ink, fontWeight: "600", fontSize: 14 },
   list: { flex: 1 }, row: { flexDirection: "row", gap: 12, alignItems: "center", minHeight: 80, paddingVertical: 14, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: Colors.border },
   selected: { backgroundColor: Colors.softRed }, recipeName: { color: Colors.ink, fontWeight: "700", fontSize: 15, lineHeight: 21 },
-  photo: { width: 48, height: 48, borderRadius: 6 }, photoPlaceholder: { width: 48, height: 48, borderRadius: 6, alignItems: "center", justifyContent: "center", backgroundColor: Colors.background },
+  photo: { width: 48, height: 48, borderRadius: 6 },
   shared: { color: Colors.basil }, more: { padding: 16, gap: 8 }, empty: { padding: 18, gap: 12 },
   footer: { borderTopWidth: 1, borderColor: Colors.border, padding: 18, gap: 10 },
   selectionCount: { color: Colors.ink, fontSize: 14, fontWeight: "600" }, error: { color: Colors.danger, lineHeight: 20 }

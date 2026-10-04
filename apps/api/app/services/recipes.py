@@ -387,6 +387,8 @@ def add_recipe_to_week(db: Session, user: User, recipe_id: str, plan: WeeklyPlan
     else:
         slot.slot_type = "meal"
         slot.recipe_id = recipe_id
+    # Discover chooses a meal, not a day. Empty slots may retain dates after a reset.
+    slot.slot_date = None
     db.flush()
     return slot
 

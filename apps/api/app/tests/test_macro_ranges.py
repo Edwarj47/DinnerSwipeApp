@@ -66,6 +66,17 @@ def test_exact_date_and_all_time_export_are_complete_and_user_scoped(
     assert recent["totals"]["calories"] == 500
     assert recent["days"] == 365
     assert len(recent["daily_totals"]) == 365
+    summary = client.get(
+        f"/api/v1/macros/summary?days=501&end_date={date.today()}", headers=auth_headers
+    )
+    assert summary.status_code == 200
+    assert summary.json()["days"] == 501
+    assert summary.json()["start_date"] == str(old_date)
+    assert summary.json()["totals"]["calories"] == 750
+    assert summary.json()["eaten_meals"] == 2
+    assert "daily_totals" not in summary.json()
+    excluded = client.get("/api/v1/macros/summary?days=500", headers=auth_headers).json()
+    assert excluded["totals"]["calories"] == 500
 
     analytics = client.get("/api/v1/macros/analytics?all_time=true", headers=auth_headers)
     assert analytics.status_code == 200
@@ -92,6 +103,12 @@ def test_macro_ranges_reject_invalid_ranges_and_stay_premium_only(
         client.get("/api/v1/macros/export?all_time=true", headers=auth_headers).status_code == 402
     )
     enable_premium(db_session)
+    for query in ("days=0", "days=3651", "days=2.5", "days=3650&end_date=0001-01-01"):
+        response = client.get(f"/api/v1/macros/summary?{query}", headers=auth_headers)
+        assert response.status_code == 422, query
+    longest = client.get("/api/v1/macros/summary?days=3650", headers=auth_headers)
+    assert longest.status_code == 200
+    assert longest.json()["days"] == 3650
     for query in (
         "start_date=2026-01-03&end_date=2026-01-01",
         "start_date=bad",

@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Image } from "expo-image";
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Button } from "@/components/Button";
@@ -8,6 +7,7 @@ import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
+import { RecipePhoto } from "./RecipePhoto";
 
 export function RecipeLibrarySection({ collection, q, onOpen, onActions }: {
   collection: "library" | "hidden" | "archived"; q: string; onOpen: (recipe: Recipe) => void; onActions: (recipe: Recipe) => void;
@@ -40,7 +40,7 @@ export function RecipeLibrarySection({ collection, q, onOpen, onActions }: {
       {recipes.data?.pages.flat().map(recipe => <View key={recipe.id} style={styles.row}>
         <Pressable accessibilityRole="button" accessibilityLabel={`Open ${recipe.name}`} style={styles.open} onPress={() => onOpen(recipe)}
           onLongPress={collection === "library" ? () => onActions(recipe) : undefined} delayLongPress={420}>
-          <Image source={{ uri: recipe.photo_url ?? undefined }} style={styles.photo} contentFit="cover" />
+          <RecipePhoto photoUrl={recipe.photo_url} accessibilityLabel={`${recipe.name} photo`} style={styles.photo} />
           <View style={styles.body}><Text style={styles.name}>{recipe.name}</Text><Text style={styles.meta}>{recipe.total_minutes ?? "?"} min</Text></View>
         </Pressable>
         {collection === "library" ? <Pressable accessibilityRole="button" accessibilityLabel={`Actions for ${recipe.name}`} style={styles.icon} onPress={() => onActions(recipe)}>

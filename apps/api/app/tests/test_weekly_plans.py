@@ -113,6 +113,38 @@ def test_reset_week_restores_profile_defaults_and_is_repeatable(
         assert [slot["sort_order"] for slot in result["slots"]] == [0, 1, 2]
 
 
+def test_discover_add_is_unscheduled_after_resetting_a_dated_slot(
+    client: TestClient, auth_headers: dict[str, str]
+) -> None:
+    recipe, plan, slot = add_meal(client, auth_headers)
+    sunday = str(date.fromisoformat(plan["week_start"]) + timedelta(days=6))
+    moved = client.put(
+        f"/api/v1/weekly-plans/current/slots/{slot['id']}",
+        headers=auth_headers,
+        json={"slot_date": sunday},
+    )
+    assert moved.status_code == 200
+    monday = client.post(
+        "/api/v1/weekly-plans/current/slots",
+        headers=auth_headers,
+        json={"recipe_id": recipe["id"], "slot_date": plan["week_start"]},
+    )
+    assert monday.status_code == 200
+    reset = client.post(
+        "/api/v1/weekly-plans/current/reset",
+        headers=auth_headers,
+        json={"slot_date": sunday},
+    )
+    assert reset.status_code == 200
+    _, after, added = add_meal(client, auth_headers, "New Discover meal")
+    assert added["id"] == slot["id"]
+    assert added["slot_date"] is None
+    assert any(
+        item["recipe_id"] == recipe["id"] and item["slot_date"] == plan["week_start"]
+        for item in after["slots"]
+    )
+
+
 def test_reset_and_move_reject_dates_outside_current_week(
     client: TestClient, auth_headers: dict[str, str]
 ) -> None:

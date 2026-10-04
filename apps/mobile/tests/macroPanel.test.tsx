@@ -2,7 +2,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { Share } from "react-native";
 import { PremiumMacroPanel } from "@/features/premium/PremiumMacroPanel";
-import { shiftISODate, todayISO } from "@/features/premium/macroDates";
+import { todayISO } from "@/features/premium/macroDates";
 import { apiFetch } from "@/services/api";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
@@ -116,14 +116,15 @@ test("summary period persists across mounts without overwriting other preference
   const screen = mount();
   try {
     await screen.findByLabelText("Summary period: Last 14 days");
-    await waitFor(() => expect(request).toHaveBeenCalledWith(`/api/v1/macros/analytics?start_date=${shiftISODate(todayISO(), -13)}&end_date=${todayISO()}`));
+    await waitFor(() => expect(request).toHaveBeenCalledWith(`/api/v1/macros/summary?days=14&end_date=${todayISO()}`));
     fireEvent.press(screen.getByLabelText("Summary period: Last 14 days"));
-    fireEvent.press(screen.getByLabelText("Last 365 days"));
-    await waitFor(() => expect(profile.notification_preferences.macro_summary_days).toBe(365));
+    fireEvent.changeText(screen.getByLabelText("Summary days"), "21");
+    fireEvent.press(screen.getByLabelText("Apply summary period"));
+    await waitFor(() => expect(profile.notification_preferences.macro_summary_days).toBe(21));
     expect(profile.notification_preferences.confirm_plan_reset).toBe(false);
-    await waitFor(() => expect(request).toHaveBeenCalledWith(`/api/v1/macros/analytics?start_date=${shiftISODate(todayISO(), -364)}&end_date=${todayISO()}`));
+    await waitFor(() => expect(request).toHaveBeenCalledWith(`/api/v1/macros/summary?days=21&end_date=${todayISO()}`));
   } finally { screen.close(); }
   const again = mount();
-  try { await again.findByLabelText("Summary period: Last 365 days"); }
+  try { await again.findByLabelText("Summary period: Last 21 days"); }
   finally { again.close(); }
 });

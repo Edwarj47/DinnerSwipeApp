@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Image } from "expo-image";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
@@ -17,6 +16,7 @@ import { WeekDrag, WeekDragHandle, WeekDropDay, WeekDropMeal } from "@/features/
 import { reorderDaySlots } from "@/features/planner/weekDrop";
 import { DaySelection } from "@/features/planner/DaySelection";
 import { RecipePicker } from "@/features/recipes/RecipePicker";
+import { RecipePhoto } from "@/features/recipes/RecipePhoto";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { useCurrentWeek } from "@/features/planner/useCurrentWeek";
 import { TourTarget } from "@/features/onboarding/TourTarget";
@@ -224,7 +224,7 @@ export default function WeekScreen() {
             <View style={[styles.row, isExpanded ? styles.rowExpanded : null]}>
               <View style={styles.cardTop}>
                 <WeekDragHandle id={slot.id} label={slot.recipe_name ?? slotLabel(slot.slot_type)} disabled={busy} />
-                {slot.recipe_photo_url ? <Image source={{ uri: slot.recipe_photo_url }} style={styles.thumb} contentFit="cover" /> : null}
+                {slot.recipe_id ? <RecipePhoto photoUrl={slot.recipe_photo_url} accessibilityLabel={`${slot.recipe_name ?? "Meal"} photo`} style={styles.thumb} /> : null}
                 <View style={styles.slotMain}>
                   <Text style={styles.meal}>{slot.recipe_name ?? slotLabel(slot.slot_type)}</Text>
                   <Text style={styles.meta}>

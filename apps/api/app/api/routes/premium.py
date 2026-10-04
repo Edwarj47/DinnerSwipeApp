@@ -35,6 +35,7 @@ from app.services.billing import (
 )
 from app.services.coupons import apply_coupon
 from app.services.macros import (
+    MAX_SUMMARY_DAYS,
     create_confirmation,
     delete_macro_entry,
     get_or_create_targets,
@@ -121,7 +122,7 @@ async def stripe_webhook(
 def get_macro_summary(
     db: DbDep,
     current_user: CurrentUser,
-    days: int = Query(default=7, ge=1, le=366),
+    days: int = Query(default=7, ge=1, le=MAX_SUMMARY_DAYS),
     end_date: date | None = None,
 ) -> dict[str, object]:
     return macro_summary(db, current_user, days, end_date)

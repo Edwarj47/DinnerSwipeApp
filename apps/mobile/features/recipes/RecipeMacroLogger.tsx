@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Image } from "expo-image";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
@@ -13,6 +12,7 @@ import { MEAL_LABEL_OPTIONS, normalizeMealLabel } from "@/services/mealCategorie
 import { MacroConfirmation, Recipe } from "@/services/types";
 import { NutritionFields } from "./NutritionFields";
 import { nutritionInputs, parseNutrition, scaleNutritionInputs } from "./recipeNutrition";
+import { RecipePhoto } from "./RecipePhoto";
 
 // Mount a fresh logger for each entry so drafts cannot leak between recipes or days.
 export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayISO(), onClose }: {
@@ -74,7 +74,7 @@ export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayIS
           {recipes.isError ? <Button label="Retry recipes" icon="refresh" onPress={() => { void recipes.refetch(); }} /> : null}
           {recipes.data?.pages.flat().map(item => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Log ${item.name}`} style={styles.recipe}
             onPress={() => { setRecipe(item); setLabel(normalizeMealLabel(item.meal_type)); setNutrition(nutritionInputs(item.nutrition)); }}>
-            <Image source={{ uri: item.photo_url ?? undefined }} style={styles.photo} /><View style={{ flex: 1 }}><Text style={styles.name}>{item.name}</Text>
+            <RecipePhoto photoUrl={item.photo_url} accessibilityLabel={`${item.name} photo`} style={styles.photo} /><View style={{ flex: 1 }}><Text style={styles.name}>{item.name}</Text>
               <Text style={styles.meta}>{item.nutrition?.calories != null ? `${item.nutrition.calories} cal / serving` : "Calories not entered"}</Text></View>
             <Ionicons name="add-circle-outline" size={24} color={Colors.tomato} /></Pressable>)}
           {recipes.data && !recipes.data.pages.flat().length ? <Text style={styles.meta}>No recipes found.</Text> : null}

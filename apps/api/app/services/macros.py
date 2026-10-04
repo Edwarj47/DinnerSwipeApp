@@ -28,6 +28,8 @@ from app.schemas.common import (
 from app.services.billing import is_premium_active, require_premium, serialize_premium_status
 from app.services.recipes import accessible_recipes_query
 
+MAX_SUMMARY_DAYS = 3650
+
 
 def get_or_create_targets(db: Session, user: User) -> MacroProfileTarget:
     target = db.scalar(select(MacroProfileTarget).where(MacroProfileTarget.user_id == user.id))
@@ -220,7 +222,11 @@ def macro_summary(
         db.scalar(select(UserSubscription).where(UserSubscription.user_id == user.id))
     )
     end_date = end_date or date.today()
-    start_date = end_date - timedelta(days=max(1, min(days, 366)) - 1)
+    bounded_days = max(1, min(days, MAX_SUMMARY_DAYS))
+    try:
+        start_date = end_date - timedelta(days=bounded_days - 1)
+    except OverflowError as error:
+        raise HTTPException(422, "Choose a later end date") from error
     target = db.scalar(select(MacroProfileTarget).where(MacroProfileTarget.user_id == user.id))
     rows = _rows_for_window(db, user, start_date, end_date)
     totals = {
@@ -231,7 +237,7 @@ def macro_summary(
         "fiber_g": _sum_macro(rows, "fiber_g"),
     }
     return {
-        "days": max(1, min(days, 366)),
+        "days": bounded_days,
         "start_date": start_date,
         "end_date": end_date,
         "active": active,

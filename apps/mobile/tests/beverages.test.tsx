@@ -120,6 +120,7 @@ test("recipe picker logging recognizes beverage portions and preserves the categ
 test("standalone daily logging and editing retain Beverages instead of reverting to Dinner", async () => {
   request.mockImplementation(async (path, init) => {
     if (path.endsWith("/subscription/status")) return { premium_active: true, current_tier: "premium", plans: [] };
+    if (path.includes("/summary")) return { totals: { calories: 0, protein_g: 0 }, eaten_meals: 0 };
     if (path.includes("/analytics")) return { totals: {}, averages: {}, daily_totals: [], targets: {} };
     if (path.includes("/entries")) return init?.method ? entry : [entry];
     return {};

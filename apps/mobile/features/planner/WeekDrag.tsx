@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { revealTourTarget, TourScrollContext } from "@/features/onboarding/TourContext";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
@@ -127,7 +127,7 @@ export function WeekDrag({ days, disabled, onAssign, onReorder, children }: {
       <HoverDay.Provider value={hover}>
       <HoverMeal.Provider value={drag ? { beforeId, activeId: drag.id } : null}>
         <View ref={root} style={styles.root} onLayout={measure}>
-          <ScrollView ref={scroll} scrollEnabled={!dragging} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled"
+          <ScrollView ref={scroll} testID="week-scroll" style={styles.scroll} showsVerticalScrollIndicator={Platform.OS === "web"} scrollEnabled={!dragging} contentContainerStyle={styles.list} keyboardShouldPersistTaps="handled"
             onContentSizeChange={(_, height) => { contentHeight.current = height; measure(); }}
             onScroll={event => { offset.current = event.nativeEvent.contentOffset.y; if (active.current) measure(); }} scrollEventThrottle={16}>
             <TourScrollContext.Provider value={revealTour}>
@@ -199,6 +199,7 @@ export function WeekDropMeal({ id, day, children }: { id: string; day: string; c
 
 const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0 },
+  scroll: { flex: 1, minHeight: 0 },
   insertion: { position: "absolute", top: -5, left: 0, right: 0, height: 3, backgroundColor: Colors.basil },
   endInsertion: { position: "absolute", bottom: 0, left: 4, right: 4, height: 3, backgroundColor: Colors.basil },
   list: { gap: 18, paddingBottom: 24 },

@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Image } from "expo-image";
 import { useEffect, useState } from "react";
 import { StyleSheet, Text, View } from "react-native";
 import { Button } from "@/components/Button";
@@ -8,6 +7,7 @@ import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { appendRecipeImage, RecipeImage, RecipePhotoPicker } from "./RecipePhotoPicker";
+import { RecipePhoto } from "./RecipePhoto";
 
 export function RecipePhotoEditor({ recipe, onUpdated }: { recipe: Recipe; onUpdated?: (recipe: Recipe) => void }) {
   const client = useQueryClient();
@@ -38,7 +38,7 @@ export function RecipePhotoEditor({ recipe, onUpdated }: { recipe: Recipe; onUpd
     }
   });
   return <View style={styles.section}>
-    <Image source={{ uri: photo ?? undefined }} placeholder={require("../../assets/icon.png")}
+    <RecipePhoto photoUrl={photo}
       accessibilityLabel={recipe.name} style={styles.photo} contentFit="contain" />
     {recipe.can_edit ? editing ? <View style={styles.controls}>
       <RecipePhotoPicker disabled={upload.isPending} onSelect={async image => { setSaved(false); await upload.mutateAsync(image); }} />
