@@ -1,3 +1,5 @@
+import { normalizeRecipeCategory } from "@/services/mealCategories";
+
 export function formatSourceType(value: string | null | undefined) {
   switch ((value ?? "").toLowerCase()) {
     case "manual":
@@ -40,6 +42,7 @@ export function formatDifficulty(value: string | null | undefined) {
 }
 
 export function formatMealType(value: string | null | undefined) {
+  if (normalizeRecipeCategory(value) === "beverage") return "Beverages";
   return prettify(value, "Dinner");
 }
 

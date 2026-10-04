@@ -34,7 +34,7 @@ export const TOUR_STEPS: TourStep[] = [
   { id: "groups", section: "groups", path: "/profile", params: { section: "group" },
     title: "Plan with your people", body: "Keep a private kitchen, create a shared group, or join by invitation. Select a group to vote and manage invitations. Basic allows one shared group; Premium allows unlimited groups." },
   { id: "macros", section: "macros", path: "/profile", params: { section: "macros" },
-    title: "Your daily nutrition", body: "Log a meal or snack, or confirm a planned meal in This Week. Switch between Day, Grid, Calendar, and Trends. Choose a period before exporting. The overview shows the last seven days." },
+    title: "Your daily nutrition", body: "Log a meal, snack, or beverage, or confirm a planned meal in This Week. Switch between Day, Grid, Calendar, and Trends. Choose a period before exporting. The overview shows the last seven days." },
   { id: "account", section: "account", path: "/profile", params: { section: "account" },
     title: "Set your own defaults", body: "Control reset confirmations and, on supported phones, biometrics and the lock timeout. Replay tour stays in Account whenever you need it." }
 ];

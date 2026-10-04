@@ -5,7 +5,7 @@ import string
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import Select, func, select
+from sqlalchemy import Select, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models.entities import (
@@ -213,27 +213,122 @@ def rotate_invite(db: Session, user: User, household_id: str) -> dict[str, Any]:
     return serialize_household(db, user, household.id)
 
 
-def share_recipe(db: Session, user: User, household_id: str, recipe_id: str) -> dict[str, bool]:
+def own_shareable_recipes(user: User, q: str = "") -> Select[tuple[Recipe]]:
+    query = accessible_recipes_query(user).where(Recipe.owner_user_id == user.id).order_by(None)
+    if q.strip():
+        query = query.where(Recipe.name.icontains(q.strip(), autoescape=True))
+    return query
+
+
+def group_recipe_options(
+    db: Session,
+    user: User,
+    household_id: str,
+    *,
+    q: str = "",
+    limit: int = 50,
+    offset: int = 0,
+) -> dict[str, Any]:
     household = current_household(db, user, household_id)
-    recipe = db.scalar(
-        accessible_recipes_query(user).where(
-            Recipe.id == recipe_id, Recipe.owner_user_id == user.id
-        )
-    )
-    if not recipe or household.is_personal:
+    if household.is_personal:
         raise HTTPException(
             status_code=404, detail="Choose one of your own recipes and a shared group."
         )
-    # Lock the group so retries cannot create duplicate shares.
-    db.scalar(select(Household).where(Household.id == household.id).with_for_update())
-    existing = db.scalar(
-        select(HouseholdRecipe).where(
-            HouseholdRecipe.household_id == household.id, HouseholdRecipe.recipe_id == recipe.id
+    query = own_shareable_recipes(user, q)
+    already_shared = or_(
+        Recipe.household_id == household.id,
+        Recipe.id.in_(
+            select(HouseholdRecipe.recipe_id).where(HouseholdRecipe.household_id == household.id)
+        ),
+    )
+    total = db.scalar(select(func.count()).select_from(query.subquery())) or 0
+    shared_count = (
+        db.scalar(select(func.count()).select_from(query.where(already_shared).subquery())) or 0
+    )
+    recipes = (
+        db.scalars(query.order_by(func.lower(Recipe.name), Recipe.id).limit(limit).offset(offset))
+        .unique()
+        .all()
+    )
+    shared_ids = set(
+        db.scalars(
+            select(HouseholdRecipe.recipe_id).where(
+                HouseholdRecipe.household_id == household.id,
+                HouseholdRecipe.recipe_id.in_([recipe.id for recipe in recipes]),
+            )
         )
     )
-    if not existing:
-        db.add(HouseholdRecipe(household_id=household.id, recipe_id=recipe.id))
-        db.commit()
+    return {
+        "items": [
+            {
+                "recipe": serialize_recipe(recipe, user.id, db),
+                "is_shared": recipe.household_id == household.id or recipe.id in shared_ids,
+            }
+            for recipe in recipes
+        ],
+        "total": total,
+        "shared_count": shared_count,
+    }
+
+
+def share_recipes(
+    db: Session,
+    user: User,
+    household_id: str,
+    *,
+    recipe_ids: list[str],
+    select_all: bool = False,
+    excluded_recipe_ids: list[str] | None = None,
+    q: str = "",
+) -> dict[str, int]:
+    # Shares and membership changes lock the same group. Recheck membership under
+    # that lock, and lock source recipes in a stable order before committing once.
+    target_id = household_id
+    if household_id == "current":
+        if not user.profile or not user.profile.household_id:
+            raise HTTPException(status_code=404, detail="Choose a shared group.")
+        target_id = user.profile.household_id
+    household = db.scalar(
+        select(Household).where(Household.id == target_id).with_for_update()
+    )
+    if not household or household.is_personal or not current_member(db, user, household):
+        raise HTTPException(
+            status_code=404, detail="Choose one of your own recipes and a shared group."
+        )
+    query = own_shareable_recipes(user, q if select_all else "")
+    selected_ids = set(recipe_ids)
+    if select_all:
+        if excluded_recipe_ids:
+            query = query.where(Recipe.id.not_in(excluded_recipe_ids))
+    else:
+        query = query.where(Recipe.id.in_(selected_ids))
+    recipes = db.scalars(query.order_by(Recipe.id).with_for_update()).unique().all()
+    if not select_all and (not selected_ids or len(recipes) != len(selected_ids)):
+        raise HTTPException(status_code=404, detail="One or more recipes are unavailable to share.")
+    shared_ids = set(
+        db.scalars(
+            select(HouseholdRecipe.recipe_id).where(
+                HouseholdRecipe.household_id == household.id,
+                HouseholdRecipe.recipe_id.in_([recipe.id for recipe in recipes]),
+            )
+        )
+    )
+    already_shared_count = 0
+    for recipe in recipes:
+        if recipe.household_id == household.id or recipe.id in shared_ids:
+            already_shared_count += 1
+        else:
+            db.add(HouseholdRecipe(household_id=household.id, recipe_id=recipe.id))
+    db.commit()
+    return {
+        "shared_count": len(recipes) - already_shared_count,
+        "already_shared_count": already_shared_count,
+        "recipe_count": len(recipes),
+    }
+
+
+def share_recipe(db: Session, user: User, household_id: str, recipe_id: str) -> dict[str, bool]:
+    share_recipes(db, user, household_id, recipe_ids=[recipe_id])
     return {"shared": True}
 
 

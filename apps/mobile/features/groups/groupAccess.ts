@@ -14,7 +14,7 @@ export function inviteCode(value: string) {
 }
 
 export async function applyGroupChange(client: QueryClient, group: Household) {
-  const keys = ["household", "households", "vote-options", "votes", "recipes", "profile"];
+  const keys = ["household", "households", "vote-options", "votes", "recipes", "profile", "group-recipe-options"];
   await Promise.all(keys.map(key => client.cancelQueries({ queryKey: [key] })));
   client.setQueryData(["household"], group);
   await Promise.all(keys.map(key => client.invalidateQueries({ queryKey: [key] })));

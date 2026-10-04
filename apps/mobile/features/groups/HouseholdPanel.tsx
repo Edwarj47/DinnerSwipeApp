@@ -7,8 +7,8 @@ import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Household, SafetyFilterMode, VoteOption, VoteResult, VoteSummary } from "@/services/types";
-import { RecipePicker } from "@/features/recipes/RecipePicker";
 import { GroupManager } from "./GroupManager";
+import { GroupRecipeSharing } from "./GroupRecipeSharing";
 
 const safetyModes: SafetyFilterMode[] = ["off", "warn", "block"];
 const safetyLabels: Record<SafetyFilterMode, string> = {
@@ -21,7 +21,6 @@ export function HouseholdPanel() {
   const queryClient = useQueryClient();
   const [status, setStatus] = useTransientMessage();
   const [ownerTools, setOwnerTools] = useState(false);
-  const [shareOpen, setShareOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState<{ id: string; email: string } | null>(null);
   const [maxMinutes, setMaxMinutes] = useState("");
   const { data: household, error: householdError, refetch: reloadHousehold } = useQuery<Household>({ queryKey: ["household"], queryFn: () => apiFetch<Household>("/api/v1/households/current") });
@@ -31,11 +30,7 @@ export function HouseholdPanel() {
     enabled: !!household && !household.is_personal
   });
   const { data: votes, error: votesError, refetch: reloadVotes } = useQuery<VoteSummary>({ queryKey: ["votes", household?.id], queryFn: () => apiFetch<VoteSummary>(`/api/v1/households/${household?.id}/votes`), enabled: !!household && !household.is_personal });
-  useEffect(() => { setTransferTarget(null); setOwnerTools(false); setShareOpen(false); setStatus(""); }, [household?.id, setStatus]);
-  const shareRecipe = useMutation({
-    mutationFn: (id: string) => apiFetch(`/api/v1/households/${household?.id}/recipes`, { method: "POST", body: JSON.stringify({ recipe_id: id }) }),
-    onSuccess: async () => { setShareOpen(false); setStatus("Recipe shared with this group."); await queryClient.invalidateQueries({ queryKey: ["vote-options"] }); }
-  });
+  useEffect(() => { setTransferTarget(null); setOwnerTools(false); setStatus(""); }, [household?.id, setStatus]);
   const updateSettings = useMutation({
     mutationFn: (payload: { allergen_filter_mode: SafetyFilterMode; dislike_filter_mode: SafetyFilterMode }) =>
       apiFetch<Household>(`/api/v1/households/${household?.id}/settings`, { method: "PATCH", body: JSON.stringify(payload) }),
@@ -83,9 +78,9 @@ export function HouseholdPanel() {
       {householdError ? <Button label="Retry current group" icon="refresh" onPress={() => { void reloadHousehold(); }} /> : null}
       {household && !household.is_personal ? <>
       <Text style={styles.title}>{household.name}</Text>
+      <GroupRecipeSharing key={household.id} household={household} />
       <Text style={styles.section}>Vote this week</Text>
       {optionsError || votesError ? <Button label="Retry group votes" icon="refresh" onPress={() => { void reloadOptions(); void reloadVotes(); }} /> : null}
-      <Button label="Share a recipe" icon="add" onPress={() => { shareRecipe.reset(); setShareOpen(true); }} />
       <View style={styles.filterRow}>
         <TextInput accessibilityLabel="Maximum cook time for group voting" value={maxMinutes} onChangeText={setMaxMinutes} keyboardType="number-pad" placeholder="Max minutes" style={styles.input} />
         <Text style={styles.meta}>Optional filter for this group vote list.</Text>
@@ -138,7 +133,6 @@ export function HouseholdPanel() {
         );
       })}
       {voteOptions?.length === 0 ? <Text style={styles.meta}>No recipes match the current group filters.</Text> : null}
-      <RecipePicker title="Share one of your recipes" ownedOnly visible={shareOpen} busy={shareRecipe.isPending} error={shareRecipe.error?.message} onClose={() => setShareOpen(false)} onSelect={recipe => shareRecipe.mutate(recipe.id)} />
       <Modal visible={!!transferTarget} transparent animationType="fade" onRequestClose={() => { if (!transferOwner.isPending) setTransferTarget(null); }}>
         <View style={styles.backdrop}><View style={styles.confirm} accessibilityViewIsModal>
           <Text style={styles.title}>Transfer ownership?</Text>

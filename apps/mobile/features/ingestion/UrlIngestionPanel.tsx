@@ -6,8 +6,10 @@ import { StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors } from "@/components/theme";
+import { MacroChoice } from "@/features/premium/MacroChoice";
 import { formatCandidateStatus } from "@/features/recipes/recipeDisplay";
 import { apiFetch } from "@/services/api";
+import { normalizeRecipeCategory, recipeCategoryOptions } from "@/services/mealCategories";
 
 type Candidate = {
   id: string;
@@ -33,6 +35,7 @@ export function UrlIngestionPanel() {
   const [status, setStatus] = useTransientMessage(busy);
   const [editName, setEditName] = useState("");
   const [editPhoto, setEditPhoto] = useState("");
+  const [editMealType, setEditMealType] = useState("dinner");
   const [editIngredients, setEditIngredients] = useState("");
   const [editInstructions, setEditInstructions] = useState("");
   const history = useQuery<Candidate[]>({
@@ -51,6 +54,7 @@ export function UrlIngestionPanel() {
 
   function collapseReview() {
     setCandidate(null); setEditName(""); setEditPhoto("");
+    setEditMealType("dinner");
     setEditIngredients(""); setEditInstructions("");
   }
 
@@ -81,6 +85,7 @@ export function UrlIngestionPanel() {
       setCandidate(full);
       setEditName(String(full.extracted_data?.name ?? ""));
       setEditPhoto(String(full.extracted_data?.photo_url ?? ""));
+      setEditMealType(normalizeRecipeCategory(String(full.extracted_data?.meal_type ?? "dinner")));
       setEditIngredients(linesFrom(full.extracted_data?.ingredients));
       setEditInstructions(linesFrom(full.extracted_data?.instructions));
       setStatus("Recipe draft ready for review.");
@@ -94,6 +99,7 @@ export function UrlIngestionPanel() {
     setUrl(full.source_url);
     setEditName(String(full.extracted_data?.name ?? ""));
     setEditPhoto(String(full.extracted_data?.photo_url ?? ""));
+    setEditMealType(normalizeRecipeCategory(String(full.extracted_data?.meal_type ?? "dinner")));
     setEditIngredients(linesFrom(full.extracted_data?.ingredients));
     setEditInstructions(linesFrom(full.extracted_data?.instructions));
     setStatus("Review draft loaded.");
@@ -115,7 +121,7 @@ export function UrlIngestionPanel() {
           cook_minutes: candidate.extracted_data?.cook_minutes ?? null,
           total_minutes: candidate.extracted_data?.total_minutes ?? null,
           difficulty: String(candidate.extracted_data?.difficulty ?? "requires_review"),
-          meal_type: String(candidate.extracted_data?.meal_type ?? "dinner"),
+          meal_type: editMealType,
           source_type: String(candidate.extracted_data?.source_type ?? "url_html"),
           source_url: candidate.source_url,
           source_title: String(candidate.extracted_data?.source_title ?? ""),
@@ -162,6 +168,8 @@ export function UrlIngestionPanel() {
           {editPhoto ? <Image source={{ uri: editPhoto }} style={styles.photo} contentFit="cover" /> : <View style={styles.emptyPhoto}><Text style={styles.emptyPhotoText}>Photo required or approve placeholder</Text></View>}
           <Text style={styles.inputLabel}>Name</Text>
           <TextInput accessibilityLabel="Review recipe name" value={editName} onChangeText={setEditName} style={styles.input} />
+          <Text style={styles.inputLabel}>Meal type</Text>
+          <MacroChoice label="Review meal type" value={editMealType} onChange={setEditMealType} options={recipeCategoryOptions(editMealType)} disabled={busy} />
           <Text style={styles.inputLabel}>Photo</Text>
           <TextInput accessibilityLabel="Review recipe photo URL" value={editPhoto} onChangeText={setEditPhoto} autoCapitalize="none" style={styles.input} />
           <Text style={styles.meta}>{candidate.source_url}</Text>

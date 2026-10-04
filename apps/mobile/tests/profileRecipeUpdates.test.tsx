@@ -67,8 +67,10 @@ test("Manual form has no prefilled samples and camera permission is handled", as
   const screen = mount(<ManualRecipePanel />);
   try {
     expect(screen.queryByText("Ranch")).toBeNull();
-    expect(screen.queryByText("Dinner")).toBeNull();
+    expect(screen.getByLabelText("Meal type: Dinner")).toBeTruthy();
     expect(screen.getByLabelText("Recipe name").props.value).toBe("");
+    expect(screen.getByLabelText("Ingredients").props.value).toBe("");
+    expect(screen.getByLabelText("Instructions").props.value).toBe("");
     jest.mocked(ImagePicker.requestCameraPermissionsAsync).mockResolvedValue({ granted: false } as never);
     fireEvent.press(screen.getByLabelText("Take photo"));
     await screen.findByText("Allow camera access in device settings to take a photo.");

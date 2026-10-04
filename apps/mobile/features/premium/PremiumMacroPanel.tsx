@@ -10,6 +10,8 @@ import { Colors } from "@/components/theme";
 import { apiFetch, savedMessage } from "@/services/api";
 import { saveProfilePreferences } from "@/services/profilePreferences";
 import { useOfflineStatus } from "@/services/offlineStore";
+import { MealLabel, MEAL_LABEL_OPTIONS, normalizeMealLabel } from "@/services/mealCategories";
+import { formatMealType } from "@/features/recipes/recipeDisplay";
 import { MacroChoice } from "./MacroChoice";
 import { RecipeMacroLogger } from "@/features/recipes/RecipeMacroLogger";
 import { MacroDatePicker } from "./MacroDatePicker";
@@ -26,17 +28,9 @@ import {
 } from "@/services/types";
 
 type MacroView = "day" | "grid" | "calendar" | "analytics";
-type MealLabel = "breakfast" | "lunch" | "dinner" | "snack";
 const SUMMARY_RANGES = [
   { value: "1", label: "Today" }, { value: "7", label: "Last 7 days" },
   { value: "14", label: "Last 14 days" }, { value: "365", label: "Last 365 days" }
-];
-
-const MEAL_LABEL_OPTIONS: { label: string; value: MealLabel }[] = [
-  { label: "Breakfast", value: "breakfast" },
-  { label: "Lunch", value: "lunch" },
-  { label: "Dinner", value: "dinner" },
-  { label: "Snack", value: "snack" }
 ];
 
 export function PremiumMacroPanel() {
@@ -445,7 +439,7 @@ function DayMacroView({
 
       <View style={styles.entryForm}>
         <Text style={styles.subsection}>{editingEntryId ? "Edit entry" : "Add macro entry"}</Text>
-        <TextInput accessibilityLabel="Entry name" value={entryName} onChangeText={setEntryName} placeholder="Meal, snack, or item" style={styles.input} />
+        <TextInput accessibilityLabel="Entry name" value={entryName} onChangeText={setEntryName} placeholder="Meal, snack, or beverage" style={styles.input} />
         <SegmentedControl accessibilityLabel="Meal label" value={mealLabel} onChange={setMealLabel} options={MEAL_LABEL_OPTIONS} wrap />
         <View style={styles.grid}>
           <TextInput accessibilityLabel="Calories" value={entryCalories} onChangeText={setEntryCalories} keyboardType="number-pad" placeholder="Calories" style={[styles.input, styles.gridInput]} />
@@ -608,7 +602,7 @@ function EntryRow({ entry, onPress }: { entry: MacroConfirmation; onPress: () =>
       <View style={{ flex: 1 }}>
         <Text style={styles.entryTitle}>{entry.entry_name ?? entry.recipe_name ?? "Macro entry"}</Text>
         <Text style={styles.meta}>
-          {entry.meal_label ?? "meal"} - {entry.calories ?? 0} cal - {entry.protein_g ?? 0}g protein
+          {formatMealType(entry.meal_label ?? "meal")} - {entry.calories ?? 0} cal - {entry.protein_g ?? 0}g protein
         </Text>
       </View>
       <Text style={styles.editText}>Edit</Text>
@@ -710,11 +704,6 @@ function valueToInput(value: number | null | undefined) {
 function inputToNumber(value: string) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && value.trim() ? parsed : null;
-}
-
-function normalizeMealLabel(value: string | null | undefined): MealLabel {
-  if (value === "breakfast" || value === "lunch" || value === "snack") return value;
-  return "dinner";
 }
 
 function shortDate(value: string) {

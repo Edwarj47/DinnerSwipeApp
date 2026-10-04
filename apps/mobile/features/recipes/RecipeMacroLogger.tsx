@@ -9,6 +9,7 @@ import { Colors } from "@/components/theme";
 import { MacroDatePicker } from "@/features/premium/MacroDatePicker";
 import { isISODate, todayISO } from "@/features/premium/macroDates";
 import { apiFetch } from "@/services/api";
+import { MEAL_LABEL_OPTIONS, normalizeMealLabel } from "@/services/mealCategories";
 import { MacroConfirmation, Recipe } from "@/services/types";
 import { NutritionFields } from "./NutritionFields";
 import { nutritionInputs, parseNutrition, scaleNutritionInputs } from "./recipeNutrition";
@@ -21,7 +22,7 @@ export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayIS
   const [recipe, setRecipe] = useState(initialRecipe);
   const [q, setQ] = useState("");
   const [mealDate, setMealDate] = useState(entry?.meal_date ?? date);
-  const [label, setLabel] = useState(entry?.meal_label ?? initialRecipe?.meal_type ?? "dinner");
+  const [label, setLabel] = useState(() => normalizeMealLabel(entry?.meal_label ?? initialRecipe?.meal_type));
   const [portions, setPortions] = useState(String(entry?.servings_consumed ?? 1));
   const [scaledPortions, setScaledPortions] = useState(entry?.servings_consumed || 1);
   const [nutrition, setNutrition] = useState(nutritionInputs(entry ?? initialRecipe?.nutrition));
@@ -72,7 +73,7 @@ export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayIS
           {recipes.isLoading ? <Text>Loading recipes...</Text> : null}
           {recipes.isError ? <Button label="Retry recipes" icon="refresh" onPress={() => { void recipes.refetch(); }} /> : null}
           {recipes.data?.pages.flat().map(item => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={`Log ${item.name}`} style={styles.recipe}
-            onPress={() => { setRecipe(item); setLabel(["breakfast", "lunch", "dinner", "snack"].includes(item.meal_type) ? item.meal_type : "dinner"); setNutrition(nutritionInputs(item.nutrition)); }}>
+            onPress={() => { setRecipe(item); setLabel(normalizeMealLabel(item.meal_type)); setNutrition(nutritionInputs(item.nutrition)); }}>
             <Image source={{ uri: item.photo_url ?? undefined }} style={styles.photo} /><View style={{ flex: 1 }}><Text style={styles.name}>{item.name}</Text>
               <Text style={styles.meta}>{item.nutrition?.calories != null ? `${item.nutrition.calories} cal / serving` : "Calories not entered"}</Text></View>
             <Ionicons name="add-circle-outline" size={24} color={Colors.tomato} /></Pressable>)}
@@ -81,7 +82,7 @@ export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayIS
         </> : <>
           <Text style={styles.name}>{entry?.entry_name ?? entry?.recipe_name ?? recipe?.name}</Text>
           <View style={styles.header}><TextInput accessibilityLabel="Recipe log date" value={mealDate} onChangeText={setMealDate} style={[styles.input, styles.flexInput]} /><MacroDatePicker value={mealDate} onChange={setMealDate} /></View>
-          <SegmentedControl accessibilityLabel="Logged meal" wrap value={label} onChange={setLabel} options={[{ label: "Breakfast", value: "breakfast" }, { label: "Lunch", value: "lunch" }, { label: "Dinner", value: "dinner" }, { label: "Snack", value: "snack" }]} />
+          <SegmentedControl accessibilityLabel="Logged meal" wrap value={label} onChange={setLabel} options={MEAL_LABEL_OPTIONS} />
           <Text style={styles.name}>Servings eaten</Text>
           <View style={styles.header}>
             <Button label="" accessibilityLabel="Half serving less" icon="remove" disabled={Number(portions) <= 0.5} onPress={() => changePortions(String(Math.max(0.5, Number(portions) - 0.5)))} />

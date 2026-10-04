@@ -6,6 +6,7 @@ from typing import Any
 
 from bs4 import BeautifulSoup
 
+from app.core.meal_categories import normalize_beverage_category
 from app.services.parsing import parse_ingredients, parse_instructions
 
 
@@ -32,6 +33,15 @@ def _instruction_texts(value: Any) -> list[str]:
         if isinstance(text, str) and text.strip():
             texts.append(text)
     return texts
+
+
+def _meal_type(value: Any) -> str:
+    categories = [
+        normalize_beverage_category(item)
+        for item in _as_list(value)
+        if isinstance(item, str) and item.strip()
+    ]
+    return "beverage" if "beverage" in categories else next(iter(categories), "dinner")
 
 
 def extract_json_ld_recipe(html: str) -> dict[str, Any]:
@@ -67,7 +77,7 @@ def extract_json_ld_recipe(html: str) -> dict[str, Any]:
                     "cook_minutes": _parse_duration_minutes(item.get("cookTime")),
                     "total_minutes": _parse_duration_minutes(item.get("totalTime")),
                     "cuisine": item.get("recipeCuisine"),
-                    "meal_type": item.get("recipeCategory") or "dinner",
+                    "meal_type": _meal_type(item.get("recipeCategory")),
                     "field_sources": {
                         "name": "structured_data",
                         "ingredients": "structured_data",

@@ -3,7 +3,17 @@ from __future__ import annotations
 from datetime import date, datetime
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, HttpUrl, field_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    EmailStr,
+    Field,
+    HttpUrl,
+    field_validator,
+    model_validator,
+)
+
+from app.core.meal_categories import normalize_beverage_category
 
 
 class ApiModel(BaseModel):
@@ -157,6 +167,11 @@ class MealMacroConfirmationIn(ApiModel):
     fiber_g: float | None = Field(default=None, ge=0, le=500)
     notes: str | None = Field(default=None, max_length=500)
 
+    @field_validator("meal_label")
+    @classmethod
+    def normalize_category(cls, value: str | None) -> str | None:
+        return normalize_beverage_category(value) if value is not None else None
+
 
 class MacroEntryUpdate(ApiModel):
     entry_name: str | None = Field(default=None, min_length=1, max_length=160)
@@ -170,6 +185,11 @@ class MacroEntryUpdate(ApiModel):
     fat_g: float | None = Field(default=None, ge=0, le=1000)
     fiber_g: float | None = Field(default=None, ge=0, le=500)
     notes: str | None = Field(default=None, max_length=500)
+
+    @field_validator("meal_label")
+    @classmethod
+    def normalize_category(cls, value: str | None) -> str | None:
+        return normalize_beverage_category(value) if value is not None else None
 
 
 class MealMacroConfirmationOut(ApiModel):
@@ -291,6 +311,11 @@ class RecipeCreate(ApiModel):
     instructions: list[InstructionIn] = Field(default_factory=list)
     accept_placeholder_photo: bool = True
     nutrition: RecipeNutrition | None = None
+
+    @field_validator("meal_type")
+    @classmethod
+    def normalize_category(cls, value: str) -> str:
+        return normalize_beverage_category(value)
 
     @field_validator("name")
     @classmethod
@@ -472,6 +497,44 @@ class HouseholdCreate(ApiModel):
 
 class HouseholdRecipeRequest(ApiModel):
     recipe_id: str = Field(min_length=1, max_length=36)
+
+
+class HouseholdRecipeOptionOut(ApiModel):
+    recipe: RecipeOut
+    is_shared: bool
+
+
+class HouseholdRecipeOptionsOut(ApiModel):
+    items: list[HouseholdRecipeOptionOut]
+    total: int
+    shared_count: int
+
+
+class HouseholdRecipeShareRequest(ApiModel):
+    recipe_ids: list[str] = Field(default_factory=list, max_length=500)
+    select_all: bool = False
+    excluded_recipe_ids: list[str] = Field(default_factory=list, max_length=500)
+    q: str = Field(default="", max_length=200)
+
+    @model_validator(mode="after")
+    def require_selection(self) -> HouseholdRecipeShareRequest:
+        if self.select_all:
+            if self.recipe_ids:
+                raise ValueError("Choose recipe IDs or select all, not both")
+        elif not self.recipe_ids or self.excluded_recipe_ids or self.q:
+            raise ValueError("Choose recipes to share")
+        if any(
+            not value.strip() or len(value) > 36
+            for value in [*self.recipe_ids, *self.excluded_recipe_ids]
+        ):
+            raise ValueError("Invalid recipe ID")
+        return self
+
+
+class HouseholdRecipeShareOut(ApiModel):
+    shared_count: int
+    already_shared_count: int
+    recipe_count: int
 
 
 class HouseholdSettingsUpdate(ApiModel):

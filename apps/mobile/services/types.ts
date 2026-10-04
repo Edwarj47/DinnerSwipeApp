@@ -70,6 +70,10 @@ export type Household = {
 
 export type SafetyFilterMode = "off" | "warn" | "block";
 
+export type GroupRecipeOption = { recipe: Recipe; is_shared: boolean };
+export type GroupRecipeOptions = { items: GroupRecipeOption[]; total: number; shared_count: number };
+export type GroupRecipeShareResult = { shared_count: number; already_shared_count: number; recipe_count: number };
+
 export type VoteOption = {
   recipe: Recipe;
   is_blocked: boolean;

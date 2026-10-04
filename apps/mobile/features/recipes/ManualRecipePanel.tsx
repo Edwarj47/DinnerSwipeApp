@@ -9,6 +9,8 @@ import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
+import { normalizeRecipeCategory, recipeCategoryOptions } from "@/services/mealCategories";
+import { MacroChoice } from "@/features/premium/MacroChoice";
 import { AiRecipeJob } from "./aiRecipeTypes";
 import { appendRecipeImage, RecipeImage, RecipePhotoPicker } from "./RecipePhotoPicker";
 import { NutritionFields } from "./NutritionFields";
@@ -33,7 +35,7 @@ export function ManualRecipePanel({ initialDraft, initialRecipe, onSaved, onCanc
   const [name, setName] = useState(initial?.name ?? "");
   const [description, setDescription] = useState(initial?.description ?? "");
   const [photoUrl, setPhotoUrl] = useState(initialRecipe?.photo_url ?? "");
-  const [mealType, setMealType] = useState(initial?.meal_type ?? "dinner");
+  const [mealType, setMealType] = useState(() => normalizeRecipeCategory(initial?.meal_type));
   const [difficulty, setDifficulty] = useState(initial?.difficulty ?? "easy");
   const [servings, setServings] = useState(String(initial?.servings ?? 4));
   const [prepMinutes, setPrepMinutes] = useState(initial?.prep_minutes != null ? String(initial.prep_minutes) : "");
@@ -146,9 +148,11 @@ export function ManualRecipePanel({ initialDraft, initialRecipe, onSaved, onCanc
       <RecipePhotoPicker onSelect={uploadPhoto} disabled={create.isPending} />
       <TextInput accessibilityLabel="Photo URL" value={photoUrl} onChangeText={setPhotoUrl} placeholder="Photo URL or upload result" autoCapitalize="none" style={styles.input} />
       {photoUrl ? <Image source={{ uri: photoUrl }} style={styles.preview} contentFit="contain" /> : null}
+      <Text style={styles.fieldLabel}>Meal type</Text>
+      <MacroChoice label="Meal type" value={mealType} onChange={setMealType} options={recipeCategoryOptions(mealType)} disabled={create.isPending} />
       <View style={styles.grid}>
         {([
-          ["Servings", servings, setServings, true], ["Meal type", mealType, setMealType, false],
+          ["Servings", servings, setServings, true],
           ["Difficulty", difficulty, setDifficulty, false], ["Prep minutes", prepMinutes, setPrepMinutes, true],
           ["Cook minutes", cookMinutes, setCookMinutes, true], ["Total minutes", totalMinutes, setTotalMinutes, true]
         ] as const).map(([label, value, setter, numeric]) => <View key={label} style={styles.gridInput}>

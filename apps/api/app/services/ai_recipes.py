@@ -18,7 +18,7 @@ from app.services.billing import is_premium_active, subscription_for_user
 
 JOB_TYPE = "ai_recipe"
 BASIC_LIMIT = 3
-PROMPT_VERSION = "recipe-draft-v2-nutrition"
+PROMPT_VERSION = "recipe-draft-v3-beverages"
 
 
 class RecipeDraft(BaseModel):
@@ -30,7 +30,7 @@ class RecipeDraft(BaseModel):
     cook_minutes: int | None = Field(ge=0, le=1440)
     total_minutes: int | None = Field(ge=0, le=1440)
     difficulty: Literal["easy", "medium", "hard"]
-    meal_type: Literal["breakfast", "lunch", "dinner", "snack", "dessert", "sauce"]
+    meal_type: Literal["breakfast", "lunch", "dinner", "snack", "beverage", "dessert", "sauce"]
     ingredients: list[str] = Field(min_length=1, max_length=80)
     instructions: list[str] = Field(min_length=1, max_length=40)
     review_notes: list[str] = Field(max_length=8)
@@ -182,6 +182,8 @@ async def generate(description: str, image: bytes | None, mime: str | None) -> R
                     "when no preparation is needed. Do not warn that cooking times are "
                     "estimated for such items. Keep description factual and brief; put "
                     "uncertainty only in review_notes without repeating it. "
+                    "Use meal_type=beverage for drinks, smoothies, shakes, coffee, tea, "
+                    "and other beverages; do not classify them as snack. "
                     "Ingredients must be separate plain-text "
                     "lines; instructions separate ordered steps without numeric prefixes. "
                     "Only concise plain-English review_notes for genuine uncertainty. "
