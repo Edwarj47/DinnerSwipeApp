@@ -84,12 +84,27 @@ increase worker counts blindly: the current auth rate limiter is process-local.
   biometric UAT and a representative concurrency/load test remain pending. No live
   customer recipe, plan, macro, or billing writes were made by these checks.
 
-## Release Boundary
+## Release Record
 
-These are local source changes until released. The installed production web app
-is on an older frontend than Android preview 17, explaining why the previous web
-scroll work was not available there. Web/API deployment needs a fresh Dinner
-Swipe-only backup and retained images; no schema migration is required. Native
-biometric fixes need a new APK and physical-phone acceptance testing. No live
-recipes, billing/provider resources, or unrelated services are changed by these
-local checks.
+- Source `9767b41` is pushed; [CI 37242832541](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/37242832541)
+  passed all three jobs. Android preview 18 finished October 4 at 7:24 PM EDT.
+  Artifact integrity, embedded version/package/API URL, feature markers, and
+  signing-certificate equality with build 17 passed. Physical-device UAT is pending.
+- API and web are deployed at `https://dinner.dcss.dev`. The previously older web
+  frontend has been replaced; reload the installed web app to receive the new bundle.
+  Images are API `234f1fc386b4` and web `594de2568cc3`.
+- Fresh private backup is `backups/releases/20261004T232139Z_preview18`. Isolated
+  restore covered 41 tables and 1,391 rows; PostgreSQL checks passed custom-day
+  inclusion/limits, Sunday-reset slot reuse, and preservation of other dated meals.
+  No migration was needed; schema remains `f20b84e901ac`.
+- Public health, anonymous route rejection, read-only authenticated summaries,
+  and deployed browser fixtures passed. Live totals matched database queries.
+  Public HTML and hashed JavaScript match the deployed image byte for byte.
+- Only API/web containers were recreated. The environment file, worker/Postgres,
+  and all unrelated container IDs/images/start times were verified unchanged.
+  No customer recipe/plan/macro writes or billing/provider changes were made.
+- A bundle-filename assumption in the release verifier triggered an initial
+  application rollback. It was corrected and tested against the candidate image
+  before the successful redeployment. No database restore was performed on live data.
+- Rollback tags, APK verification details, and phone acceptance steps are in
+  [Android preview UAT](android-preview-uat.md#build-18-update).

@@ -1,6 +1,74 @@
 # Android Preview UAT
 
-Updated 2026-10-04 for Android preview build 17.
+Updated 2026-10-04 for Android preview build 18.
+
+## Build 18 Update
+
+- Source `9767b41` pushed. [CI 37242832541](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/37242832541)
+  passed backend, frontend, and Docker jobs.
+- Desktop mouse-wheel scrolling works across the main pages. This Week uses one
+  bounded scroll area and retains drag ordering and cross-day assignment.
+- Missing or broken recipe photos use the bundled Dinner Swipe logo across the
+  library, pickers, meal cards, details, sharing, and macro logging.
+- New Discover/Plan It meals are Unscheduled, including when reusing a dated empty
+  slot left after a reset. Existing scheduled meals are not moved.
+- Macro summary accepts 1-3,650 whole days and remembers the user's selection.
+  Apply queries the lightweight summary endpoint; Calendar/Trends ranges and
+  all-time export remain unchanged.
+- Biometric prompts wait for the foreground and do not loop after cancellation
+  or immediately re-lock after a slow native prompt. Password fallback preserves
+  the biometric preference. Physical-phone biometric UAT remains required.
+- Local verification: 137 API tests passed with one existing skip; 152 mobile
+  tests across 27 suites, Ruff/mypy, lint/types, and web export passed. Isolated
+  browser checks passed at 320/390/1280 pixels.
+- EAS build `43bc1588-a00b-4846-875c-6fa1b179d1f9` finished October 4 at 7:24 PM EDT
+  from `9767b41`. Package `dev.dcss.dinnerswipe`, version `0.1.0`, version code `18`.
+  Standalone preview APK; no Metro server is needed. The direct download link is
+  shared privately. Install over build 17 to preserve local session data.
+- Download length, ZIP integrity, embedded package/version, production API URL,
+  and bundled feature checks passed. The signing certificate matches build 17.
+  Size 79,602,897 bytes; SHA-256:
+  `56d3d3bf50ad9399ea2a4c332feb8313758e7023fd69998de67e4e6e4922b769`.
+- With explicit approval, API image `234f1fc386b4` and web image `594de2568cc3`
+  were deployed to `https://dinner.dcss.dev`. No migration was required; schema
+  remains `f20b84e901ac`. No billing/provider configuration was changed.
+- Fresh private backup: `backups/releases/20261004T232139Z_preview18`, including
+  database/media/environment, restored-data fingerprints, and container records.
+  Isolated restore covered 41 tables and 1,391 rows. PostgreSQL smoke tests passed
+  custom summary inclusion/limits and Sunday reset followed by an Unscheduled swipe.
+- Live read-only authenticated summaries for 501/3,650 days matched stored totals.
+  Invalid ranges, anonymous route protection, public health, and deployed browser
+  checks passed. Public HTML/JavaScript bytes match the deployed web image.
+  No customer recipe, plan, macro, or billing writes were made by release tests.
+- Only API/web containers changed. Environment, Dinner Swipe worker/Postgres,
+  and all unrelated container IDs/images/start times were verified unchanged.
+- The first switch was rolled back because an artifact verification script
+  assumed an `entry-` bundle name instead of this build's `index-` name. The
+  corrected check was tested on the candidate image before the successful switch.
+
+### Build 18 Phone Checks
+
+1. Install over the existing app without uninstalling; confirm the saved session.
+2. Cold-launch with biometrics enabled; cancel, retry, and use password fallback.
+   Confirm the preference remains enabled and the background grace period works.
+3. Check imported/missing/broken photo fallbacks, then add a real recipe photo.
+4. Reset Sunday and Plan It on a new recipe; it should be Unscheduled. Existing
+   scheduled meals should remain on their assigned days.
+5. Set summary days to 21 or 501, Apply, and reopen the app; verify persistence.
+   Reload the installed web app and check wheel scrolling across all main pages.
+
+### Build 18 Rollback
+
+Retained images: `dinner-swipe-api:before-preview18` and
+`dinner-swipe-web:before-preview18`. No database rollback is needed for this release.
+Keep the schema and subsequent customer writes; do not restore a whole database
+over new data. Worker/Postgres do not need restarting.
+
+```bash
+docker tag dinner-swipe-api:before-preview18 dinner-swipe-dinner-swipe-api
+docker tag dinner-swipe-web:before-preview18 dinner-swipe-dinner-swipe-web
+docker compose --profile production up -d --no-deps --no-build --wait dinner-swipe-api dinner-swipe-web
+```
 
 ## Build 17 Update
 
