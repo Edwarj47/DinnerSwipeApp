@@ -13,6 +13,7 @@ import { apiFetch } from "@/services/api";
 import { PremiumStatus, UserProfile, WeeklyPlan } from "@/services/types";
 import { shouldConfirmPlanReset } from "@/services/profilePreferences";
 import { WeekDrag, WeekDragHandle, WeekDropDay } from "@/features/planner/WeekDrag";
+import { DaySelection } from "@/features/planner/DaySelection";
 import { RecipePicker } from "@/features/recipes/RecipePicker";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { useCurrentWeek } from "@/features/planner/useCurrentWeek";
@@ -21,7 +22,6 @@ import { TourTarget } from "@/features/onboarding/TourTarget";
 type WeeklySlot = WeeklyPlan["slots"][number];
 type SlotPatch = Partial<Omit<WeeklySlot, "id" | "recipe_name" | "recipe_photo_url" | "recipe_total_minutes" | "recipe_difficulty">>;
 
-const DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const SLOT_TYPES: { label: string; value: WeeklySlot["slot_type"] }[] = [
   { label: "Meal", value: "meal" },
   { label: "Leftovers", value: "leftovers" },
@@ -224,17 +224,8 @@ export default function WeekScreen() {
               </View>
               {isExpanded ? (
                 <>
-                  <View style={styles.days}>
-                    <Pressable accessibilityRole="button" disabled={busy} onPress={() => update.mutate({ slot, patch: { slot_date: null } })} style={[styles.dayChip, !slot.slot_date && styles.activeChip]}>
-                      <Text style={[styles.dayChipText, !slot.slot_date && styles.activeChipText]}>Any</Text>
-                    </Pressable>
-                    {dayOptions.map((day, dayIndex) => (
-                      <Pressable key={day.iso} accessibilityRole="button" disabled={busy} accessibilityLabel={`Assign to ${day.label}`} onPress={() => update.mutate({ slot, patch: { slot_date: day.iso } })} style={[styles.dayChip, slot.slot_date === day.iso && styles.activeChip]}>
-                        <Text style={[styles.dayChipText, slot.slot_date === day.iso && styles.activeChipText]}>{DAYS[dayIndex]}</Text>
-                        <Text style={[styles.dateText, slot.slot_date === day.iso && styles.activeChipText]}>{day.short}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
+                  <DaySelection days={dayOptions} value={slot.slot_date} disabled={busy}
+                    onChange={date => update.mutate({ slot, patch: { slot_date: date } })} />
                   <View style={styles.typeRow}>
                     {SLOT_TYPES.map((item) => (
                       <Pressable key={item.value} accessibilityRole="button" onPress={() => update.mutate({ slot, patch: { slot_type: item.value } })} style={[styles.typeButton, slot.slot_type === item.value && styles.typeActive]}>
@@ -244,9 +235,9 @@ export default function WeekScreen() {
                   </View>
                   <View style={styles.controls}>
                     <View style={styles.stepper}>
-                      <Button label="-" icon="remove" onPress={() => update.mutate({ slot, patch: { servings: Math.max(1, slot.servings - 1) } })} />
+                      <Button label="" icon="remove" accessibilityLabel="Decrease servings" disabled={busy || slot.servings <= 1} onPress={() => update.mutate({ slot, patch: { servings: slot.servings - 1 } })} />
                       <Text style={styles.servings}>{slot.servings}</Text>
-                      <Button label="+" icon="add" onPress={() => update.mutate({ slot, patch: { servings: slot.servings + 1 } })} />
+                      <Button label="" icon="add" accessibilityLabel="Increase servings" disabled={busy || slot.servings >= 30} onPress={() => update.mutate({ slot, patch: { servings: slot.servings + 1 } })} />
                     </View>
                     <Button label={slot.is_locked ? "Unlock" : "Keep"} icon={slot.is_locked ? "lock-open" : "lock-closed"} onPress={() => update.mutate({ slot, patch: { is_locked: !slot.is_locked } })} />
                   </View>
@@ -263,7 +254,6 @@ export default function WeekScreen() {
                       </>
                     ) : null}
                     {slot.recipe_id ? <Button label="Remove" icon="trash" variant="danger" disabled={busy} onPress={() => remove.mutate(slot.id)} /> : null}
-                    <Button label="Replace" icon="swap-horizontal" onPress={() => openSlotPicker(router, slot, slot.recipe_name ?? "this dinner")} />
                   </View>
                 </>
               ) : null}
@@ -318,16 +308,6 @@ function slotLabel(type: WeeklySlot["slot_type"]) {
   return "Choose a meal";
 }
 
-function openSlotPicker(router: ReturnType<typeof useRouter>, slot: WeeklySlot, replaceName: string) {
-  router.push({
-    pathname: "/",
-    params: {
-      replace_slot_id: slot.id,
-      replace_name: replaceName
-    }
-  });
-}
-
 const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
   title: { fontSize: 32, fontWeight: "900", color: Colors.ink },
@@ -359,12 +339,6 @@ const styles = StyleSheet.create({
   day: { color: Colors.basil, fontWeight: "800", fontSize: 12, textTransform: "uppercase" },
   meal: { color: Colors.ink, fontSize: 18, fontWeight: "800", textTransform: "capitalize" },
   meta: { color: Colors.muted, marginTop: 2 },
-  days: { flexDirection: "row", flexWrap: "wrap", gap: 6 },
-  dayChip: { minWidth: 44, minHeight: 44, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  activeChip: { backgroundColor: Colors.tomato, borderColor: Colors.tomato },
-  dayChipText: { color: Colors.ink, fontWeight: "900", fontSize: 12 },
-  dateText: { color: Colors.muted, fontSize: 11, marginTop: 1 },
-  activeChipText: { color: "#fff" },
   typeRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, backgroundColor: Colors.softRed, borderRadius: 8, padding: 4 },
   typeButton: { flexGrow: 1, minHeight: 38, borderRadius: 7, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   typeActive: { backgroundColor: Colors.surface },

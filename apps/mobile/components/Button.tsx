@@ -20,10 +20,10 @@ export function Button({ label, icon, variant = "secondary", onPress, accessibil
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.button, styles[variant], disabled ? styles.disabled : null]}
+      style={[styles.button, styles[variant], icon && !label ? styles.iconOnly : null, disabled ? styles.disabled : null]}
     >
       {icon ? <Ionicons name={icon} size={18} color={variant === "secondary" ? Colors.ink : "#fff"} /> : null}
-      <Text style={[styles.label, variant !== "secondary" && styles.lightLabel]}>{label}</Text>
+      {label ? <Text style={[styles.label, variant !== "secondary" && styles.lightLabel]}>{label}</Text> : null}
     </Pressable>
   );
 }
@@ -39,6 +39,7 @@ const styles = StyleSheet.create({
     gap: 8
   },
   primary: { backgroundColor: Colors.tomato },
+  iconOnly: { width: 44, height: 44, paddingHorizontal: 0, flexShrink: 0 },
   secondary: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   danger: { backgroundColor: Colors.danger },
   disabled: { opacity: 0.45 },

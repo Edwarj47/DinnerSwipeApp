@@ -168,8 +168,8 @@ export default function GroceryScreen() {
                 </Pressable>
                 {isExpanded ? (
                   <View style={styles.itemControls}>
-                  <Button label="-" icon="remove" onPress={() => patchItem.mutate({ item, patch: { quantity: Math.max(0, (item.quantity ?? 1) - 1) } })} />
-                  <Button label="+" icon="add" onPress={() => patchItem.mutate({ item, patch: { quantity: (item.quantity ?? 0) + 1 } })} />
+                  <Button label="" icon="remove" accessibilityLabel={`Decrease ${item.display_name} quantity`} disabled={patchItem.isPending || item.quantity === 0} onPress={() => patchItem.mutate({ item, patch: { quantity: Math.max(0, (item.quantity ?? 1) - 1) } })} />
+                  <Button label="" icon="add" accessibilityLabel={`Increase ${item.display_name} quantity`} disabled={patchItem.isPending} onPress={() => patchItem.mutate({ item, patch: { quantity: (item.quantity ?? 0) + 1 } })} />
                   {retailerUrl(item) ? (
                     <Button
                       label={item.retailer_display_name ?? data?.retailer_display_name ?? "Walmart"}
