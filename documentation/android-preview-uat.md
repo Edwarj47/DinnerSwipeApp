@@ -1,6 +1,66 @@
 # Android Preview UAT
 
-Updated 2026-10-05 for Android preview build 19.
+Updated 2026-10-05 for Android preview build 20.
+
+## Build 20 Update
+
+- Source `fa4629f` pushed. [CI 37258571275](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/37258571275)
+  passed backend, frontend, and Docker jobs.
+- Profile > Account > Account Settings > Planning now includes Weekly reset.
+  Manual only is the default and carries meals into new weeks. Automatic mode
+  lets the user choose a reset weekday and optional 9 AM phone reminder.
+- The Monday-Sunday layout stays unchanged. Reset uses midnight in the saved
+  account time zone; phone reminders use 9 AM in the phone's local time zone.
+  Enabling or changing the schedule never immediately clears existing meals.
+- Time zone initialization was verified from fresh browser entries on Profile,
+  Grocery, This Week and Discover. General profile updates cannot overwrite the
+  server reset cursor. Logged nutrition and swipe analytics are retained.
+- Local checks passed: 148 backend tests, one existing skip; 174 mobile tests
+  in 30 suites; Python/mobile lint, mypy, TypeScript, and web export.
+- A fresh Dinner Swipe backup was restored into isolated PostgreSQL. All
+  1,466 original rows across 41 tables stayed unchanged during fixture tests.
+  Twenty-four concurrent requests verified one rollover and one scheduled reset,
+  with portions, locks, grocery recalculation and logged nutrition preserved.
+- Candidate and live browser checks passed at 320x720, 390x844 and 1280x720:
+  setting persistence, transient notices, custom macro summaries, recipe logos,
+  drag behavior and mouse scrolling. Independent weight-unit and pantry
+  regression checks also passed on the candidate. API calls were intercepted
+  by fixtures; browser tests did not modify customer data.
+- API/worker image `efab2d7b04bb` and web image `ad7348c1ad63` are live at
+  `https://dinner.dcss.dev`. Served web assets match the image. Public health and
+  anonymous route protection checks passed. Only Dinner Swipe API, worker and
+  web were recreated; Postgres, environment and all unrelated containers stayed
+  unchanged. No schema migration, billing or provider changes were made.
+- Live read-only before/after checks confirmed the customer's 10 recovered
+  meals, portions, order, locks, logged nutrition and swipe history unchanged.
+- Private rollback archive: `backups/releases/20261005T031351Z_preview20`.
+  Database, media, environment, image tags and verification records retained.
+  Rollback tags: `dinner-swipe-api:before-preview20`,
+  `dinner-swipe-worker:before-preview20`, `dinner-swipe-web:before-preview20`.
+- EAS build `f51ee43f-9d40-4f8a-b94f-38168942968a` finished on October 5
+  at 03:24 UTC from `fa4629f`. Standalone preview version `0.1.0`, package
+  `dev.dcss.dinnerswipe`, Android version code `20`; no Metro server is required.
+- Download length, ZIP integrity, embedded package/version, production API URL,
+  and bundled settings/reminder checks passed. The signing certificate matches
+  build 19. SHA-256:
+  `906bc9aab4d587254d9efca226530f7c20d4d22e586312c71c62961d0849ae3e`.
+  The direct download link is shared privately. Install over build 19 to retain
+  the local session. Physical-phone installation and notification delivery UAT
+  remain pending; native scheduling/cancellation paths passed mocked tests.
+
+### Build 20 Phone Checks
+
+1. Install over build 19 and confirm the restored meals remain present.
+2. In Planning settings, verify Manual only carries meals without a reminder.
+3. Choose Automatic, a weekday and a phone reminder; grant OS notification
+   permission. Saving must not clear meals until the next selected reset day.
+4. Verify the local weekly reminder and that tapping it opens This Week.
+   Android battery/notification controls can delay or suppress delivery.
+5. Disable the reminder or select Manual only and save; verify cancellation.
+   Repeat after signing out and signing into a different account.
+6. Verify local midnight rollover and no repeat reset after adding new meals.
+
+Detailed behavior and edge cases: [Weekly reset UAT](weekly-reset-uat.md).
 
 ## Build 19 Update
 

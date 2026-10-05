@@ -16,6 +16,8 @@
 - Optional phone reminders repeat at 9 AM on the selected day in the phone's local
   time zone. Android/iOS notification permission is required. Web saves the account
   preference; open the mobile app afterward to schedule it on that phone.
+  OS battery and notification controls can delay or suppress delivery. Account
+  changes made on another device take effect on the phone when it next opens.
 - Manual and automatic resets preserve historical plans, saved recipes, favorites,
   hidden recipes, swipe analytics and logged nutrition. A new week does not duplicate
   consumed-meal records. Its grocery list is recalculated rather than copying the
