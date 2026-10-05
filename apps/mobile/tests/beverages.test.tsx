@@ -51,7 +51,7 @@ test("manual creation and complete recipe editing offer Beverages", async () => 
     expect(screen.getByLabelText("Meal type: Beverages")).toBeTruthy();
     fireEvent.press(screen.getByLabelText("Save recipe"));
     await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/recipes", expect.objectContaining({ method: "POST" })));
-    expect(JSON.parse(String(request.mock.calls[0][1]?.body))).toMatchObject({ name: "Mint tea", meal_type: "beverage", ingredients: [], instructions: [] });
+    expect(JSON.parse(String(request.mock.calls.find(([path, init]) => path === "/api/v1/recipes" && init?.method === "POST")![1]?.body))).toMatchObject({ name: "Mint tea", meal_type: "beverage", ingredients: [], instructions: [] });
   } finally { screen.close(); }
   request.mockClear();
   const edit = mount(<ManualRecipePanel initialRecipe={recipe} />);
@@ -59,7 +59,7 @@ test("manual creation and complete recipe editing offer Beverages", async () => 
     expect(edit.getByLabelText("Meal type: Beverages")).toBeTruthy();
     fireEvent.press(edit.getByLabelText("Save recipe"));
     await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/recipes/shake", expect.objectContaining({ method: "PUT" })));
-    expect(JSON.parse(String(request.mock.calls[0][1]?.body)).meal_type).toBe("beverage");
+    expect(JSON.parse(String(request.mock.calls.find(([path, init]) => path === "/api/v1/recipes/shake" && init?.method === "PUT")![1]?.body)).meal_type).toBe("beverage");
   } finally { edit.close(); }
 });
 
@@ -68,8 +68,8 @@ test("legacy recipe categories survive editing without being changed", async () 
   try {
     expect(screen.getByLabelText("Meal type: Appetizer")).toBeTruthy();
     fireEvent.press(screen.getByLabelText("Save recipe"));
-    await waitFor(() => expect(request).toHaveBeenCalled());
-    expect(JSON.parse(String(request.mock.calls[0][1]?.body)).meal_type).toBe("Appetizer");
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/recipes/shake", expect.objectContaining({ method: "PUT" })));
+    expect(JSON.parse(String(request.mock.calls.find(([path, init]) => path === "/api/v1/recipes/shake" && init?.method === "PUT")![1]?.body)).meal_type).toBe("Appetizer");
   } finally { screen.close(); }
 });
 
@@ -113,7 +113,7 @@ test("recipe picker logging recognizes beverage portions and preserves the categ
     expect(edit.getByLabelText("Beverages").props.accessibilityState.selected).toBe(true);
     fireEvent.press(edit.getByLabelText("Save entry"));
     await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/macros/entries/drink-entry", expect.objectContaining({ method: "PUT" })));
-    expect(JSON.parse(String(request.mock.calls[0][1]?.body)).meal_label).toBe("beverage");
+    expect(JSON.parse(String(request.mock.calls.find(([path, init]) => path === "/api/v1/macros/entries/drink-entry" && init?.method === "PUT")![1]?.body)).meal_label).toBe("beverage");
   } finally { edit.close(); }
 });
 

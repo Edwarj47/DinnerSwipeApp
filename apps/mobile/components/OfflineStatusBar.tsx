@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button } from "./Button";
 import { Colors } from "./theme";
@@ -10,21 +10,30 @@ import { discardOfflineChange, useOfflineStatus } from "@/services/offlineStore"
 const fieldLabels: Record<string, string> = { is_checked: "Collected", quantity: "Quantity", entry_name: "Name", meal_date: "Date",
   meal_label: "Meal", servings_consumed: "Servings", status: "Status", calories: "Calories", protein_g: "Protein (g)",
   carbs_g: "Carbs (g)", fat_g: "Fat (g)", fiber_g: "Fiber (g)", notes: "Notes" };
+export const SYNC_NOTICE_DELAY_MS = 10_000;
 
 export function OfflineStatusBar() {
-  const { offline, syncing, edits, storageError } = useOfflineStatus();
+  const { offline, syncing, edits, storageError, noticeSince } = useOfflineStatus();
   const [open, setOpen] = useState(false);
   const [error, setError] = useState("");
+  const [elapsedSince, setElapsedSince] = useState<number | null>(null);
   const client = useQueryClient();
-  if (!offline && !syncing && !edits.length && !storageError && !open) return null;
+  useEffect(() => {
+    if (noticeSince === null) return;
+    const timer = setTimeout(() => setElapsedSince(noticeSince), Math.max(0, SYNC_NOTICE_DELAY_MS - (Date.now() - noticeSince)));
+    return () => clearTimeout(timer);
+  }, [noticeSince]);
   const issues = edits.filter(edit => edit.issue).length;
+  const delayed = noticeSince !== null && (elapsedSince === noticeSince || Date.now() - noticeSince >= SYNC_NOTICE_DELAY_MS);
+  const showBand = Boolean(storageError || issues || delayed);
+  if (!showBand && !open) return null;
   const title = storageError || (issues ? `${issues} change${issues === 1 ? " needs" : "s need"} review`
-    : syncing ? "Syncing saved changes..." : edits.length ? `${edits.length} change${edits.length === 1 ? "" : "s"} waiting to sync` : "Offline - downloaded data");
+    : syncing ? "Taking longer to sync. Changes are saved." : edits.length ? `${edits.length} change${edits.length === 1 ? "" : "s"} waiting to sync` : "Offline - downloaded data");
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={title} style={styles.band} onPress={() => setOpen(true)}>
+    {showBand ? <Pressable accessibilityRole="button" accessibilityLabel={title} style={styles.band} onPress={() => setOpen(true)}>
       <Ionicons name={issues ? "alert-circle-outline" : offline ? "cloud-offline-outline" : "sync-outline"} size={20} color={Colors.ink} />
       <Text style={styles.label}>{title}</Text><Ionicons name="chevron-forward" size={18} color={Colors.ink} />
-    </Pressable>
+    </Pressable> : null}
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
       <View style={styles.backdrop}><View style={styles.modal}>
         <View style={styles.header}><Text style={styles.title}>Saved on this device</Text>

@@ -1,10 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
+import { WeightTextInput } from "@/components/WeightUnits";
+import { convertWeight, formatWeight, weightFactor } from "@/services/weightUnits";
+import { useMeasurementUnits } from "@/services/measurementPreferences";
 
 export type PantrySelection = {
   itemId?: string;
@@ -21,8 +24,13 @@ export function PantryCoverageEditor({ selection, onClose, onSaved }: {
   selection: PantrySelection; onClose: () => void; onSaved: (mode: string) => void;
 }) {
   const client = useQueryClient();
+  const weightUnit = useMeasurementUnits().ingredient_weight;
   const [amount, setAmount] = useState(selection.stockQuantity != null ? String(selection.stockQuantity) : "");
   const [unit, setUnit] = useState(selection.stockQuantity != null ? selection.stockUnit ?? "each" : selection.unit ?? "each");
+  const factor = weightFactor(unit);
+  const convertInput = factor !== null;
+  const grams = amount.trim() && Number.isFinite(Number(amount)) && factor !== null ? String(Number(amount) * factor) : amount;
+  const required = selection.requiredQuantity != null ? convertWeight(selection.requiredQuantity, selection.unit, weightUnit) : null;
   const save = useMutation({
     mutationFn: (mode: "enough" | "quantity") => apiFetch(selection.itemId ? `/api/v1/grocery-lists/items/${selection.itemId}/pantry` : "/api/v1/grocery-lists/pantry", {
       method: "POST", body: JSON.stringify({ normalized_name: selection.normalizedName, category: selection.category, coverage_mode: mode, quantity: mode === "quantity" ? Number(amount) : null, unit: mode === "quantity" ? unit.trim() || null : null })
@@ -34,31 +42,36 @@ export function PantryCoverageEditor({ selection, onClose, onSaved }: {
   });
   const validAmount = amount.trim() !== "" && Number.isFinite(Number(amount)) && Number(amount) >= 0 && Number(amount) <= 999999;
   return <Modal visible transparent animationType="fade" onRequestClose={onClose}>
-    <View style={styles.backdrop}>
+    <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.backdrop}>
       <Pressable accessibilityRole="button" accessibilityLabel="Close pantry editor" style={StyleSheet.absoluteFill} onPress={onClose} />
       <View accessibilityViewIsModal style={styles.panel}>
+        <ScrollView style={{ flexShrink: 1 }} contentContainerStyle={{ gap: 12 }} keyboardShouldPersistTaps="handled" testID="pantry-editor-scroll">
         <Text style={styles.heading}>In Pantry</Text>
         <Text style={styles.name}>{selection.name}</Text>
-        {selection.requiredQuantity != null ? <Text style={styles.meta}>Needed this week: {selection.requiredQuantity} {selection.unit ?? "each"}</Text> : null}
+        {selection.requiredQuantity != null ? <Text style={styles.meta}>Needed this week: {required !== null ? `${formatWeight(required, weightUnit)} ${weightUnit}` : `${selection.requiredQuantity} ${selection.unit ?? "each"}`}</Text> : null}
         <Button label="Have enough for this week" icon="checkmark-done-outline" variant="primary" disabled={save.isPending} onPress={() => save.mutate("enough")} />
         <View style={styles.amountSection}>
           <Text style={styles.label}>Amount available</Text>
           <View style={styles.fields}>
-            <TextInput accessibilityLabel="On-hand quantity" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="Quantity" style={[styles.input, { flex: 1 }]} />
-            <TextInput accessibilityLabel="Pantry unit" value={unit} onChangeText={setUnit} placeholder="Unit" style={[styles.input, { flex: 1 }]} />
+            {convertInput ? <WeightTextInput accessibilityLabel="On-hand quantity" grams={grams} unit={weightUnit}
+              onChangeGrams={value => setAmount(value.trim() && Number.isFinite(Number(value)) ? String(Number(value) / factor!) : value)}
+              placeholder="Quantity" style={[styles.input, { flex: 1 }]} />
+              : <TextInput accessibilityLabel="On-hand quantity" value={amount} onChangeText={setAmount} keyboardType="decimal-pad" placeholder="Quantity" style={[styles.input, { flex: 1 }]} />}
+            <TextInput accessibilityLabel="Pantry unit" value={convertInput ? weightUnit : unit} editable={!convertInput} onChangeText={setUnit} placeholder="Unit" style={[styles.input, { flex: 1 }]} />
           </View>
           <Button label="Save amount" icon="save-outline" disabled={save.isPending || !validAmount} onPress={() => save.mutate("quantity")} />
         </View>
         {save.isError ? <Text accessibilityRole="alert" style={styles.error}>{save.error.message}</Text> : null}
         <Button label="Cancel" icon="close" onPress={onClose} />
+        </ScrollView>
       </View>
-    </View>
+    </KeyboardAvoidingView>
   </Modal>;
 }
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, padding: 18, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center" },
-  panel: { width: "100%", maxWidth: 420, backgroundColor: Colors.surface, borderRadius: 8, padding: 16, gap: 12 },
+  panel: { width: "100%", maxWidth: 420, maxHeight: "100%", backgroundColor: Colors.surface, borderRadius: 8, padding: 16 },
   heading: { fontSize: 20, color: Colors.ink, fontWeight: "900" },
   name: { fontSize: 17, color: Colors.ink, fontWeight: "800" },
   meta: { color: Colors.muted },

@@ -14,6 +14,7 @@ test("editing or cancelling does not query, and Apply submits a valid whole numb
   const change = jest.fn();
   const screen = render(<SummaryPeriod days={21} onChange={change} />);
   fireEvent.press(screen.getByLabelText("Summary period: Last 21 days"));
+  expect(screen.getByText("Choose how many days to show, including today. Enter 1 for today only.")).toBeTruthy();
   fireEvent.changeText(screen.getByLabelText("Summary days"), "0");
   expect(screen.getByLabelText("Apply summary period").props.accessibilityState.disabled).toBe(true);
   fireEvent.press(screen.getByLabelText("Apply summary period"));

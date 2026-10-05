@@ -25,8 +25,9 @@ const recipe: Recipe = {
   tags: ["vegetarian"], can_edit: true, is_favorite: false, is_hidden: false,
   nutrition: { calories: 100, protein_g: 4, carbs_g: 12, fat_g: 2, fiber_g: 3 }
 };
-function mount(element: React.ReactElement) {
+function mount(element: React.ReactElement, preferences: Record<string, unknown> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false, gcTime: 0 } } });
+  client.setQueryData(["profile"], { notification_preferences: preferences });
   const screen = render(<QueryClientProvider client={client}>{element}</QueryClientProvider>);
   return { ...screen, rerenderElement: (element: React.ReactElement) => screen.rerender(<QueryClientProvider client={client}>{element}</QueryClientProvider>), close: () => { screen.unmount(); client.clear(); } };
 }
@@ -77,6 +78,16 @@ test("owner edit loads all fields, preserves structured metadata and uses PUT", 
   } finally { screen.close(); }
 });
 
+test("ingredient weights show an optional equivalent without rewriting preparation text", () => {
+  const original = "100 grams carrots, peeled and finely chopped";
+  const screen = mount(<RecipeDetailSheet recipe={{ ...recipe, ingredients: [{ original_text: original, normalized_name: "carrot", quantity: 100, unit: "g" }] }} visible onClose={jest.fn()} />, { ingredient_weight_unit: "oz" });
+  try {
+    expect(screen.getByText(original)).toBeTruthy();
+    expect(screen.getByText("3.527 oz")).toBeTruthy();
+    expect(request).not.toHaveBeenCalled();
+  } finally { screen.close(); }
+});
+
 test("closing an in-flight edit does not reopen the recipe when saving finishes", async () => {
   let finish!: (value: Recipe) => void;
   request.mockImplementation(() => new Promise(resolve => { finish = resolve; }));
@@ -122,6 +133,7 @@ test.each(["Approve", "Reject"])("web %s collapses review immediately after succ
     fireEvent.changeText(screen.getByLabelText("Recipe URL"), candidate.source_url);
     fireEvent.press(screen.getByLabelText("Fetch recipe"));
     await screen.findByText("Review recipe");
+    await waitFor(() => expect(screen.getByLabelText(action).props.accessibilityState.disabled).toBe(false));
     fireEvent.press(screen.getByLabelText(action));
     await waitFor(() => expect(screen.queryByText("Review recipe")).toBeNull());
     expect(screen.getByText("Recent web drafts")).toBeTruthy();

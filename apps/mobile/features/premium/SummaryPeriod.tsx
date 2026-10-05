@@ -36,6 +36,7 @@ export function SummaryPeriod({ days, onChange, disabled = false }: {
             </Pressable>
           </View>
           <Text style={styles.label}>Days</Text>
+          <Text style={styles.help}>Choose how many days to show, including today. Enter 1 for today only.</Text>
           <TextInput accessibilityLabel="Summary days" value={input} onChangeText={setInput} keyboardType="number-pad"
             inputMode="numeric" selectTextOnFocus style={styles.input} />
           {value === null ? <Text accessibilityRole="alert" style={styles.error}>Enter a whole number from 1 to {MAX_SUMMARY_DAYS}.</Text> : null}
@@ -50,6 +51,7 @@ export function SummaryPeriod({ days, onChange, disabled = false }: {
 const styles = StyleSheet.create({
   trigger: { minHeight: 48, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, backgroundColor: Colors.surface },
   label: { fontWeight: "700", color: Colors.ink, flexShrink: 1 },
+  help: { fontSize: 14, lineHeight: 20, color: Colors.muted },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", padding: 18, alignItems: "center", justifyContent: "center" },
   menu: { width: "100%", maxWidth: 420, padding: 16, borderRadius: 8, backgroundColor: Colors.surface, gap: 12 },
   heading: { fontSize: 20, fontWeight: "800", color: Colors.ink, flex: 1 },

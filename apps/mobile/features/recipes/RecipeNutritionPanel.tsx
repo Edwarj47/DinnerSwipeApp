@@ -8,8 +8,11 @@ import { PremiumStatus, Recipe } from "@/services/types";
 import { NutritionFields } from "./NutritionFields";
 import { RecipeMacroLogger } from "./RecipeMacroLogger";
 import { NUTRIENTS, nutritionInputs, parseNutrition } from "./recipeNutrition";
+import { convertWeight, formatWeight } from "@/services/weightUnits";
+import { useMeasurementUnits } from "@/services/measurementPreferences";
 
 export function RecipeNutritionPanel({ recipe, onUpdated }: { recipe: Recipe; onUpdated?: (recipe: Recipe) => void }) {
+  const units = useMeasurementUnits();
   const client = useQueryClient();
   const [current, setCurrent] = useState(recipe);
   const [editing, setEditing] = useState(false);
@@ -28,7 +31,10 @@ export function RecipeNutritionPanel({ recipe, onUpdated }: { recipe: Recipe; on
       <View style={styles.actions}><Button label="Save nutrition" icon="save" variant="primary" disabled={save.isPending} onPress={() => save.mutate()} />
         <Button label="Cancel" icon="close" disabled={save.isPending} onPress={() => setEditing(false)} /></View>
     </> : <>
-      <View style={styles.values}>{NUTRIENTS.map(([key, label]) => <View key={key} style={styles.value}><Text style={styles.label}>{label}</Text><Text style={styles.number}>{current.nutrition?.[key] ?? "Not entered"}</Text></View>)}</View>
+      <View style={styles.values}>{NUTRIENTS.map(([key, label]) => <View key={key} style={styles.value}>
+        <Text style={styles.label}>{key === "calories" ? label : label.replace("(g)", `(${units[key]})`)}</Text>
+        <Text style={styles.number}>{current.nutrition?.[key] == null ? "Not entered" : key === "calories" ? current.nutrition[key] : formatWeight(convertWeight(current.nutrition[key]!, "g", units[key])!, units[key])}</Text>
+      </View>)}</View>
       <View style={styles.actions}>
         {recipe.can_edit ? <Button label="Edit nutrition" icon="create-outline" onPress={() => { setFields(nutritionInputs(current.nutrition)); setEditing(true); }} /> : null}
         {(subscription.data?.premium_active ?? subscription.data?.active) && !recipe.is_archived ? <Button label="Log meal" icon="add-circle-outline" variant="primary" onPress={() => setLogging(true)} /> : null}

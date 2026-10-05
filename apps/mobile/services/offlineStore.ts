@@ -24,14 +24,20 @@ export type OfflineData = {
   edits: OfflineEdit[];
 };
 export const useOfflineStatus = create<{
-  offline: boolean; syncing: boolean; edits: OfflineEdit[]; storageError: string;
-}>(() => ({ offline: false, syncing: false, edits: [], storageError: "" }));
+  offline: boolean; syncing: boolean; edits: OfflineEdit[]; storageError: string; noticeSince: number | null;
+}>(() => ({ offline: false, syncing: false, edits: [], storageError: "", noticeSince: null }));
+// Keep the delay across screen changes and outbox updates, not per checkbox tap.
+useOfflineStatus.subscribe(state => {
+  const pending = state.offline || state.syncing || state.edits.length > 0;
+  if (pending && state.noticeSince === null) useOfflineStatus.setState({ noticeSince: Date.now() });
+  else if (!pending && state.noticeSince !== null) useOfflineStatus.setState({ noticeSince: null });
+});
 const PREFIX = "dinnerSwipe.offline.v1.";
 let owner: string | null = null;
 let writes: Promise<unknown> = Promise.resolve();
 export function setOfflineOwner(id: string | null) {
   owner = id;
-  useOfflineStatus.setState({ edits: [], storageError: "", syncing: false });
+  useOfflineStatus.setState({ edits: [], storageError: "", syncing: false, noticeSince: null });
 }
 export function offlineOwner() { return owner; }
 export function deviceOffline() { return useOfflineStatus.getState().offline; }

@@ -12,6 +12,8 @@ import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { TourTarget } from "@/features/onboarding/TourTarget";
 import { PantryCoverageEditor, PantrySelection } from "@/features/grocery/PantryCoverageEditor";
+import { convertWeight, formatWeight, weightFactor, WeightUnit } from "@/services/weightUnits";
+import { useMeasurementUnits } from "@/services/measurementPreferences";
 
 type GroceryItem = {
   id: string;
@@ -36,6 +38,7 @@ type GroceryListResponse = { items: GroceryItem[]; recipe_groups?: RecipeGroup[]
 type GroceryMode = "list" | "add" | "pantry";
 
 export default function GroceryScreen() {
+  const weightUnit = useMeasurementUnits().ingredient_weight;
   const queryClient = useQueryClient();
   const [status, setStatus] = useTransientMessage();
   const [mode, setMode] = useState<GroceryMode>("list");
@@ -161,7 +164,7 @@ export default function GroceryScreen() {
             <View key={item.id} style={styles.pantryRow}>
               <Pressable accessibilityRole="button" accessibilityLabel={`Update ${item.normalized_name} pantry`} disabled={!pantryReady} style={{ flex: 1, gap: 3 }} onPress={() => setPantrySelection({ name: item.normalized_name, normalizedName: item.normalized_name, category: item.category, stockQuantity: item.quantity, stockUnit: item.unit })}>
                 <Text style={styles.pantryText}>{item.normalized_name}</Text>
-                <Text style={styles.meta}>{item.coverage_mode === "quantity" ? `${item.quantity} ${item.unit ?? "each"} on hand` : item.needs_confirmation ? "Confirm this week's coverage" : item.coverage_mode === "enough" ? "Enough for this week's meals" : "Confirm stock amount"}</Text>
+                <Text style={styles.meta}>{item.coverage_mode === "quantity" ? `${formatQuantity({ quantity: item.quantity ?? null, unit: item.unit ?? null }, weightUnit)} on hand` : item.needs_confirmation ? "Confirm this week's coverage" : item.coverage_mode === "enough" ? "Enough for this week's meals" : "Confirm stock amount"}</Text>
               </Pressable>
               <Pressable accessibilityRole="button" accessibilityLabel={`Remove ${item.normalized_name} from pantry`} disabled={deletePantry.isPending} onPress={() => deletePantry.mutate(item)} style={styles.removePantry}>
                 <Ionicons name="trash-outline" size={20} color={Colors.muted} />
@@ -196,8 +199,8 @@ export default function GroceryScreen() {
               <View style={styles.itemBody}>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${item.display_name}`} onPress={() => setExpandedItemId(isExpanded ? null : item.id)} style={styles.itemSummary}>
                   <Text style={[styles.name, item.is_checked && styles.checked]}>{item.display_name}</Text>
-                  <Text style={styles.meta}>{item.recipe_quantity !== undefined ? `For recipe: ${formatQuantity({ ...item, quantity: item.recipe_quantity })}` : formatQuantity(item)}</Text>
-                  {(item.recipe_count ?? 0) > 1 ? <Text style={styles.meta}>Shopping total: {formatQuantity(item)}</Text> : null}
+                  <Text style={styles.meta}>{item.recipe_quantity !== undefined ? `For recipe: ${formatQuantity({ ...item, quantity: item.recipe_quantity }, weightUnit)}` : formatQuantity(item, weightUnit)}</Text>
+                  {(item.recipe_count ?? 0) > 1 ? <Text style={styles.meta}>Shopping total: {formatQuantity(item, weightUnit)}</Text> : null}
                   {item.notes ? <Text style={styles.meta}>{item.notes}</Text> : null}
                 </Pressable>
               </View>
@@ -211,10 +214,10 @@ export default function GroceryScreen() {
               </View>
                 {isExpanded ? (
                   <>
-                  <Text style={styles.meta}>Shopping total: {formatQuantity(item)}</Text>
+                  <Text style={styles.meta}>Shopping total: {formatQuantity(item, weightUnit)}</Text>
                   <View style={styles.itemControls}>
-                  <Button label="" icon="remove" accessibilityLabel={`Decrease ${item.display_name} quantity`} disabled={patchItem.isPending || item.quantity === 0} onPress={() => patchItem.mutate({ item, patch: { quantity: Math.max(0, (item.quantity ?? 1) - 1) } })} />
-                  <Button label="" icon="add" accessibilityLabel={`Increase ${item.display_name} quantity`} disabled={patchItem.isPending} onPress={() => patchItem.mutate({ item, patch: { quantity: (item.quantity ?? 0) + 1 } })} />
+                  <Button label="" icon="remove" accessibilityLabel={`Decrease ${item.display_name} quantity`} disabled={patchItem.isPending || item.quantity === 0} onPress={() => patchItem.mutate({ item, patch: { quantity: Math.max(0, (item.quantity ?? 1) - quantityStep(item.unit, weightUnit)) } })} />
+                  <Button label="" icon="add" accessibilityLabel={`Increase ${item.display_name} quantity`} disabled={patchItem.isPending} onPress={() => patchItem.mutate({ item, patch: { quantity: (item.quantity ?? 0) + quantityStep(item.unit, weightUnit) } })} />
                   {retailerUrl(item) ? (
                     <Button
                       label={item.retailer_display_name ?? data?.retailer_display_name ?? "Walmart"}
@@ -245,9 +248,16 @@ export default function GroceryScreen() {
   );
 }
 
-function formatQuantity(item: GroceryItem) {
+function formatQuantity(item: { quantity: number | null; unit: string | null }, target: WeightUnit | null) {
   if (item.quantity === null) return item.unit ? item.unit : "Quantity needs review";
+  const converted = target ? convertWeight(item.quantity, item.unit, target) : null;
+  if (converted !== null && target) return `${formatWeight(converted, target)} ${target}`;
   return `${Number(item.quantity.toFixed(2))} ${item.unit ?? ""}`.trim();
+}
+
+function quantityStep(unit: string | null, target: WeightUnit | null) {
+  const factor = weightFactor(unit);
+  return factor !== null && target ? weightFactor(target)! / factor : 1;
 }
 
 function retailerUrl(item: GroceryItem) {

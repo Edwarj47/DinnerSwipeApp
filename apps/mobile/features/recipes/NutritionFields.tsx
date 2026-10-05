@@ -1,13 +1,22 @@
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import { Colors } from "@/components/theme";
 import { NUTRIENTS, NutritionInputs } from "./recipeNutrition";
+import { WeightTextInput } from "@/components/WeightUnits";
+import { useMeasurementUnits } from "@/services/measurementPreferences";
 
 export function NutritionFields({ value, onChange }: { value: NutritionInputs; onChange: (value: NutritionInputs) => void }) {
-  return <View style={styles.grid}>{NUTRIENTS.map(([key, label]) => <View key={key} style={styles.field}>
-    <Text style={styles.label}>{label}</Text>
-    <TextInput accessibilityLabel={label} keyboardType="decimal-pad" value={value[key]} placeholder="Not entered"
-      onChangeText={(text) => onChange({ ...value, [key]: text })} style={styles.input} />
-  </View>)}</View>;
+  const units = useMeasurementUnits();
+  return <View style={styles.grid}>{NUTRIENTS.map(([key, originalLabel]) => {
+    const unit = key === "calories" ? "g" : units[key];
+    const label = originalLabel.replace("(g)", `(${unit})`);
+    return <View key={key} style={styles.field}>
+      <Text style={styles.label}>{label}</Text>
+      {key === "calories" ? <TextInput accessibilityLabel={label} keyboardType="decimal-pad" value={value[key]} placeholder="Not entered"
+        onChangeText={text => onChange({ ...value, [key]: text })} style={styles.input} />
+        : <WeightTextInput accessibilityLabel={label} grams={value[key]} onChangeGrams={text => onChange({ ...value, [key]: text })}
+          unit={unit} placeholder="Not entered" style={styles.input} />}
+    </View>;
+  })}</View>;
 }
 const styles = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },

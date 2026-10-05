@@ -7,6 +7,9 @@ import { Button } from "@/components/Button";
 import { SUCCESS_MESSAGE_MS } from "@/components/useTransientMessage";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
+import { WeightTextInput } from "@/components/WeightUnits";
+import { convertWeight, formatWeight } from "@/services/weightUnits";
+import { NutrientWeight, useMeasurementUnits } from "@/services/measurementPreferences";
 import { apiFetch, savedMessage } from "@/services/api";
 import { saveProfilePreferences } from "@/services/profilePreferences";
 import { useOfflineStatus } from "@/services/offlineStore";
@@ -31,6 +34,8 @@ import {
 type MacroView = "day" | "grid" | "calendar" | "analytics";
 
 export function PremiumMacroPanel() {
+  const units = useMeasurementUnits();
+  const unit = units.protein_g;
   const pendingMacros = useOfflineStatus(state => state.edits.some(edit => edit.kind.startsWith("macro_")));
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
@@ -253,7 +258,7 @@ export function PremiumMacroPanel() {
           {summary.data ? <Text style={styles.meta}>{summary.data.start_date} to {summary.data.end_date}</Text> : null}
           <View style={styles.metrics}>
             <Metric label="Consumed" value={summary.data ? String(summary.data.eaten_meals) : "-"} />
-            <Metric label="Protein" value={summary.data ? `${summary.data.totals.protein_g}g` : "-"} />
+            <Metric label="Protein" value={summary.data ? `${formatWeight(convertWeight(summary.data.totals.protein_g, "g", unit)!, unit)} ${unit}` : "-"} />
             <Metric label="Calories" value={summary.data ? String(summary.data.totals.calories) : "-"} />
           </View></TourTarget>
 
@@ -261,9 +266,9 @@ export function PremiumMacroPanel() {
             <Text style={styles.subsection}>Targets</Text>
             <View style={styles.grid}>
               <TextInput accessibilityLabel="Daily calories target" value={calories} onChangeText={setCalories} keyboardType="number-pad" placeholder="Calories" style={[styles.input, styles.gridInput]} />
-              <TextInput accessibilityLabel="Daily protein target" value={protein} onChangeText={setProtein} keyboardType="decimal-pad" placeholder="Protein g" style={[styles.input, styles.gridInput]} />
-              <TextInput accessibilityLabel="Daily carbs target" value={carbs} onChangeText={setCarbs} keyboardType="decimal-pad" placeholder="Carbs g" style={[styles.input, styles.gridInput]} />
-              <TextInput accessibilityLabel="Daily fat target" value={fat} onChangeText={setFat} keyboardType="decimal-pad" placeholder="Fat g" style={[styles.input, styles.gridInput]} />
+              <WeightTextInput accessibilityLabel="Daily protein target" grams={protein} onChangeGrams={setProtein} unit={unit} placeholder={`Protein ${unit}`} style={[styles.input, styles.gridInput]} />
+              <WeightTextInput accessibilityLabel="Daily carbs target" grams={carbs} onChangeGrams={setCarbs} unit={units.carbs_g} placeholder={`Carbs ${units.carbs_g}`} style={[styles.input, styles.gridInput]} />
+              <WeightTextInput accessibilityLabel="Daily fat target" grams={fat} onChangeGrams={setFat} unit={units.fat_g} placeholder={`Fat ${units.fat_g}`} style={[styles.input, styles.gridInput]} />
             </View>
             <TextInput accessibilityLabel="Macro goal" value={goal} onChangeText={setGoal} placeholder="Goal" style={styles.input} />
             <Button
@@ -410,6 +415,8 @@ function DayMacroView({
   onDelete: () => void;
   onEdit: (entry: MacroConfirmation) => void;
 }) {
+  const units = useMeasurementUnits();
+  const unit = units.protein_g;
   return (
     <View style={styles.viewBox}>
       <View style={styles.dayHeader}>
@@ -425,7 +432,7 @@ function DayMacroView({
       {!isISODate(selectedDate) ? <Text style={styles.error}>Enter a date as YYYY-MM-DD.</Text> : null}
       <View style={styles.metrics}>
         <Metric label="Calories" value={selectedTotal ? String(selectedTotal.calories) : "-"} />
-        <Metric label="Protein" value={selectedTotal ? `${selectedTotal.protein_g}g` : "-"} />
+        <Metric label="Protein" value={selectedTotal ? `${formatWeight(convertWeight(selectedTotal.protein_g, "g", unit)!, unit)} ${unit}` : "-"} />
         <Metric label="Entries" value={selectedTotal ? String(selectedTotal.entry_count) : "-"} />
       </View>
 
@@ -435,10 +442,10 @@ function DayMacroView({
         <SegmentedControl accessibilityLabel="Meal label" value={mealLabel} onChange={setMealLabel} options={MEAL_LABEL_OPTIONS} wrap />
         <View style={styles.grid}>
           <TextInput accessibilityLabel="Calories" value={entryCalories} onChangeText={setEntryCalories} keyboardType="number-pad" placeholder="Calories" style={[styles.input, styles.gridInput]} />
-          <TextInput accessibilityLabel="Protein grams" value={entryProtein} onChangeText={setEntryProtein} keyboardType="decimal-pad" placeholder="Protein g" style={[styles.input, styles.gridInput]} />
-          <TextInput accessibilityLabel="Carbs grams" value={entryCarbs} onChangeText={setEntryCarbs} keyboardType="decimal-pad" placeholder="Carbs g" style={[styles.input, styles.gridInput]} />
-          <TextInput accessibilityLabel="Fat grams" value={entryFat} onChangeText={setEntryFat} keyboardType="decimal-pad" placeholder="Fat g" style={[styles.input, styles.gridInput]} />
-          <TextInput accessibilityLabel="Fiber grams" value={entryFiber} onChangeText={setEntryFiber} keyboardType="decimal-pad" placeholder="Fiber g" style={[styles.input, styles.gridInput]} />
+          <WeightTextInput accessibilityLabel={`Protein ${unit === "g" ? "grams" : "ounces"}`} grams={entryProtein} onChangeGrams={setEntryProtein} unit={unit} placeholder={`Protein ${unit}`} style={[styles.input, styles.gridInput]} />
+          <WeightTextInput accessibilityLabel={`Carbs ${units.carbs_g === "g" ? "grams" : "ounces"}`} grams={entryCarbs} onChangeGrams={setEntryCarbs} unit={units.carbs_g} placeholder={`Carbs ${units.carbs_g}`} style={[styles.input, styles.gridInput]} />
+          <WeightTextInput accessibilityLabel={`Fat ${units.fat_g === "g" ? "grams" : "ounces"}`} grams={entryFat} onChangeGrams={setEntryFat} unit={units.fat_g} placeholder={`Fat ${units.fat_g}`} style={[styles.input, styles.gridInput]} />
+          <WeightTextInput accessibilityLabel={`Fiber ${units.fiber_g === "g" ? "grams" : "ounces"}`} grams={entryFiber} onChangeGrams={setEntryFiber} unit={units.fiber_g} placeholder={`Fiber ${units.fiber_g}`} style={[styles.input, styles.gridInput]} />
         </View>
         <TextInput accessibilityLabel="Entry notes" value={entryNotes} onChangeText={setEntryNotes} placeholder="Notes" style={styles.input} />
         <View style={styles.actions}>
@@ -466,6 +473,7 @@ function GridMacroView({
   dailyTotals: MacroAnalytics["daily_totals"];
   onPickDay: (day: string) => void;
 }) {
+  const unit = useMeasurementUnits().protein_g;
   const recent = dailyTotals.slice(-7);
   return (
     <View style={styles.viewBox}>
@@ -476,7 +484,7 @@ function GridMacroView({
             <Text style={styles.dayName}>{shortDate(day.meal_date)}</Text>
             <Text style={styles.dayCalories}>{day.calories}</Text>
             <Text style={styles.miniLabel}>calories</Text>
-            <Text style={styles.miniText}>{day.protein_g}g protein</Text>
+            <Text style={styles.miniText}>{formatWeight(convertWeight(day.protein_g, "g", unit)!, unit)} {unit} protein</Text>
           </Pressable>
         ))}
       </View>
@@ -555,6 +563,7 @@ function AnalyticsMacroView({
   exportPending: boolean;
   onExport: () => void;
 }) {
+  const unit = useMeasurementUnits().protein_g;
   return (
     <View style={styles.viewBox}>
       <Text style={styles.subsection}>{range === "all" ? "All-time analytics" : `${range}-day analytics`}</Text>
@@ -566,13 +575,13 @@ function AnalyticsMacroView({
       <View style={styles.metrics}>
         <Metric label="Days logged" value={String(analytics?.days_logged ?? 0)} />
         <Metric label="Cal / logged day" value={String(analytics?.averages.calories ?? 0)} />
-        <Metric label="Protein / logged day" value={`${analytics?.averages.protein_g ?? 0}g`} />
+        <Metric label="Protein / logged day" value={`${formatWeight(convertWeight(analytics?.averages.protein_g ?? 0, "g", unit)!, unit)} ${unit}`} />
       </View>
       <View style={styles.analyticsList}>
         <MacroLine label="Calories" value={analytics?.totals.calories ?? 0} target={analytics?.targets.daily_calories ?? null} />
-        <MacroLine label="Protein" value={analytics?.totals.protein_g ?? 0} target={analytics?.targets.daily_protein_g ?? null} suffix="g" />
-        <MacroLine label="Carbs" value={analytics?.totals.carbs_g ?? 0} target={analytics?.targets.daily_carbs_g ?? null} suffix="g" />
-        <MacroLine label="Fat" value={analytics?.totals.fat_g ?? 0} target={analytics?.targets.daily_fat_g ?? null} suffix="g" />
+        <MacroLine label="Protein" value={analytics?.totals.protein_g ?? 0} target={analytics?.targets.daily_protein_g ?? null} nutrient="protein_g" />
+        <MacroLine label="Carbs" value={analytics?.totals.carbs_g ?? 0} target={analytics?.targets.daily_carbs_g ?? null} nutrient="carbs_g" />
+        <MacroLine label="Fat" value={analytics?.totals.fat_g ?? 0} target={analytics?.targets.daily_fat_g ?? null} nutrient="fat_g" />
       </View>
       <Button label="Export analytics" icon="download" variant="primary" disabled={exportPending} onPress={onExport} />
     </View>
@@ -589,12 +598,13 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function EntryRow({ entry, onPress }: { entry: MacroConfirmation; onPress: () => void }) {
+  const unit = useMeasurementUnits().protein_g;
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.entryRow}>
       <View style={{ flex: 1 }}>
         <Text style={styles.entryTitle}>{entry.entry_name ?? entry.recipe_name ?? "Macro entry"}</Text>
         <Text style={styles.meta}>
-          {formatMealType(entry.meal_label ?? "meal")} - {entry.calories ?? 0} cal - {entry.protein_g ?? 0}g protein
+          {formatMealType(entry.meal_label ?? "meal")} - {entry.calories ?? 0} cal - {formatWeight(convertWeight(entry.protein_g ?? 0, "g", unit)!, unit)} {unit} protein
         </Text>
       </View>
       <Text style={styles.editText}>Edit</Text>
@@ -606,20 +616,25 @@ function MacroLine({
   label,
   value,
   target,
-  suffix = ""
+  nutrient
 }: {
   label: string;
   value: number;
   target?: number | null;
-  suffix?: string;
+  nutrient?: NutrientWeight;
 }) {
-  const targetText = target ? `Daily target: ${target}${suffix}` : "";
+  const units = useMeasurementUnits();
+  const unit = units[nutrient ?? "protein_g"];
+  const displaySuffix = nutrient ? ` ${unit}` : "";
+  const displayValue = nutrient ? formatWeight(convertWeight(value, "g", unit)!, unit) : value;
+  const displayTarget = nutrient && target != null ? formatWeight(convertWeight(target, "g", unit)!, unit) : target;
+  const targetText = target ? `Daily target: ${displayTarget}${displaySuffix}` : "";
   return (
     <View style={styles.macroLine}>
       <Text style={styles.macroLineLabel}>{label}</Text>
       <Text style={styles.macroLineValue}>
-        Total: {value}
-        {suffix}
+        Total: {displayValue}
+        {displaySuffix}
       </Text>
       {targetText ? <Text style={styles.meta}>{targetText}</Text> : null}
     </View>

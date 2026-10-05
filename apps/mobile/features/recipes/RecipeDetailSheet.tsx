@@ -19,6 +19,8 @@ import { formatDifficulty, formatMealType, formatSourceType } from "@/features/r
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
+import { useMeasurementUnits } from "@/services/measurementPreferences";
+import { ingredientWeightNote } from "@/services/weightUnits";
 import { RecipeNutritionPanel } from "./RecipeNutritionPanel";
 import { RecipePhotoEditor } from "./RecipePhotoEditor";
 import { ManualRecipePanel } from "./ManualRecipePanel";
@@ -34,6 +36,7 @@ type Props = {
 };
 
 export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, onAction, onUpdated }: Props) {
+  const weightUnit = useMeasurementUnits().ingredient_weight;
   const queryClient = useQueryClient();
   const [savedRecipe, setSavedRecipe] = useState<{ sourceId: string; recipe: Recipe } | null>(null);
   const recipe = savedRecipe && savedRecipe.sourceId === originalRecipe?.id ? savedRecipe.recipe : originalRecipe;
@@ -197,12 +200,16 @@ export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, on
               </View>
             </View></> : null}
             <RecipeSection title="Ingredients">
-              {recipe.ingredients.map((item, index) => (
+              {recipe.ingredients.map((item, index) => {
+                const equivalent = ingredientWeightNote(item.quantity, item.unit, weightUnit);
+                return (
                 <View key={`${item.original_text}-${index}`} style={styles.ingredientRow}>
                   <View style={styles.check} />
-                  <Text style={styles.rowText}>{item.original_text}</Text>
+                  <View style={{ flex: 1, gap: 4 }}><Text style={[styles.rowText, { flex: 0 }]}>{item.original_text}</Text>
+                    {equivalent ? <Text style={styles.ingredientEquivalent}>{equivalent}</Text> : null}</View>
                 </View>
-              ))}
+                );
+              })}
             </RecipeSection>
             <RecipeSection title="Steps">
               {recipe.instructions.map((step) => (
@@ -333,6 +340,7 @@ const styles = StyleSheet.create({
   stepRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   stepNumber: { width: 26, height: 26, borderRadius: 13, backgroundColor: Colors.tomato, color: "#fff", fontWeight: "900", textAlign: "center", lineHeight: 26 },
   rowText: { color: Colors.ink, fontSize: 16, lineHeight: 23, flex: 1 },
+  ingredientEquivalent: { color: Colors.muted, fontSize: 14, lineHeight: 20 },
   tags: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   tag: { backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6, color: Colors.muted, fontWeight: "800" },
   sourceLink: { flexDirection: "row", alignItems: "center", gap: 7, minHeight: 44 },

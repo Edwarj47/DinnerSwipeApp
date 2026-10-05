@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 
 import GroceryScreen from "@/app/(tabs)/grocery";
 import RecipesScreen from "@/app/(tabs)/recipes";
@@ -7,6 +7,7 @@ import { ManualRecipePanel } from "@/features/recipes/ManualRecipePanel";
 import { PantryCoverageEditor } from "@/features/grocery/PantryCoverageEditor";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
+import { GRAMS_PER_OUNCE } from "@/services/weightUnits";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-image", () => ({ Image: () => null }));
@@ -21,8 +22,9 @@ jest.mock("@/features/ingestion/UrlRecycleBinPanel", () => ({ UrlRecycleBinPanel
 jest.mock("@/services/api", () => ({ apiFetch: jest.fn() }));
 
 const request = jest.mocked(apiFetch);
-function mount(child: React.ReactNode) {
+function mount(child: React.ReactNode, preferences: Record<string, unknown> = {}) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { retry: false, gcTime: 0 } } });
+  client.setQueryData(["profile"], { notification_preferences: preferences });
   const screen = render(<QueryClientProvider client={client}>{child}</QueryClientProvider>);
   return { ...screen, client, close: () => { screen.unmount(); client.clear(); } };
 }
@@ -126,5 +128,45 @@ test("an older API cannot silently treat partial stock as full pantry coverage",
     expect(screen.getByLabelText("Put Red onion in pantry").props.accessibilityState.disabled).toBe(true);
     fireEvent.press(screen.getByLabelText("Put Red onion in pantry"));
     expect(screen.queryByLabelText("Have enough for this week")).toBeNull();
+  } finally { screen.close(); }
+});
+
+test("grocery ounce display and quantity steps retain the ingredient's stored grams", async () => {
+  const rice = { id: "rice", display_name: "Rice", quantity: 100, unit: "g", category: "pantry", is_checked: false, match_status: "search_link" };
+  const milk = { ...rice, id: "milk", display_name: "Milk", quantity: 2, unit: "cups" };
+  request.mockImplementation(async path => path.endsWith("/current") ? { items: [rice, milk] } : []);
+  const screen = mount(<GroceryScreen />);
+  try {
+    await screen.findByText("100 g");
+    act(() => screen.client.setQueryData(["profile"], { notification_preferences: { ingredient_weight_unit: "oz" } }));
+    await screen.findByText("3.527 oz");
+    expect(screen.getByText("2 cups")).toBeTruthy();
+    expect(request.mock.calls.every(([, init]) => !init?.method)).toBe(true);
+    fireEvent.press(screen.getByLabelText("Edit Rice"));
+    fireEvent.press(screen.getByLabelText("Increase Rice quantity"));
+    await waitFor(() => expect(request.mock.calls.some(([path]) => path.endsWith("/items/rice"))).toBe(true));
+    const payload = JSON.parse(String(request.mock.calls.find(([path]) => path.endsWith("/items/rice"))![1]?.body));
+    expect(payload.quantity).toBeCloseTo(100 + GRAMS_PER_OUNCE, 8);
+    expect(payload.unit).toBeUndefined();
+    act(() => screen.client.setQueryData(["profile"], { notification_preferences: { ingredient_weight_unit: "g" } }));
+    await screen.findByText("100 g");
+    expect(screen.queryByText("As added")).toBeNull();
+  } finally { screen.close(); }
+});
+
+test("pantry ounce entry converts back to the existing grocery weight unit", async () => {
+  request.mockResolvedValue({ id: "pantry" });
+  const saved = jest.fn();
+  const screen = mount(<PantryCoverageEditor selection={{ itemId: "rice", name: "Rice", normalizedName: "rice", category: "pantry", requiredQuantity: 100, unit: "g" }} onClose={jest.fn()} onSaved={saved} />, { ingredient_weight_unit: "oz" });
+  try {
+    expect(screen.queryByText("As added")).toBeNull();
+    expect(screen.getByLabelText("Pantry unit").props.value).toBe("oz");
+    expect(screen.getByLabelText("Pantry unit").props.editable).toBe(false);
+    fireEvent.changeText(screen.getByLabelText("On-hand quantity"), "2");
+    fireEvent.press(screen.getByLabelText("Save amount"));
+    await waitFor(() => expect(saved).toHaveBeenCalledWith("quantity"));
+    const payload = JSON.parse(String(request.mock.calls[0][1]?.body));
+    expect(payload.unit).toBe("g");
+    expect(payload.quantity).toBe(2 * GRAMS_PER_OUNCE);
   } finally { screen.close(); }
 });

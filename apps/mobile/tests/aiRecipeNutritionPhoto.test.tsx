@@ -48,8 +48,8 @@ test("label values populate review and user corrections are saved", async () => 
     expect(screen.getByLabelText("Prep minutes").props.value).toBe("0");
     fireEvent.changeText(screen.getByLabelText("Protein (g)"), "31");
     fireEvent.press(screen.getByLabelText("Save recipe"));
-    await waitFor(() => expect(request).toHaveBeenCalled());
-    const body = JSON.parse(request.mock.calls[0][1]!.body as string);
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/ai-recipes/label/approve", expect.objectContaining({ method: "POST" })));
+    const body = JSON.parse(request.mock.calls.find(([path]) => path === "/api/v1/ai-recipes/label/approve")![1]!.body as string);
     expect(body.nutrition).toEqual({ ...nutrition, protein_g: 31 });
   } finally { screen.close(); }
 });
@@ -60,8 +60,8 @@ test("whole-container totals normalize while old drafts remain empty", async () 
   try {
     expect(screen.getByLabelText("Whole recipe").props.accessibilityState.selected).toBe(true);
     fireEvent.press(screen.getByLabelText("Save recipe"));
-    await waitFor(() => expect(request).toHaveBeenCalled());
-    const body = JSON.parse(request.mock.calls[0][1]!.body as string);
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/ai-recipes/label/approve", expect.objectContaining({ method: "POST" })));
+    const body = JSON.parse(request.mock.calls.find(([path]) => path === "/api/v1/ai-recipes/label/approve")![1]!.body as string);
     expect(body.nutrition).toEqual({ calories: 80, protein_g: 15, carbs_g: 2, fat_g: 1.5, fiber_g: 1 });
   } finally { screen.close(); }
   const old = mount(<ManualRecipePanel initialDraft={{ ...draft, draft: { ...draft.draft!, nutrition: undefined } }} />);

@@ -4,6 +4,7 @@ import { Share } from "react-native";
 import { PremiumMacroPanel } from "@/features/premium/PremiumMacroPanel";
 import { todayISO } from "@/features/premium/macroDates";
 import { apiFetch } from "@/services/api";
+import { GRAMS_PER_OUNCE } from "@/services/weightUnits";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-linking", () => ({ openURL: jest.fn() }));
@@ -127,4 +128,31 @@ test("summary period persists across mounts without overwriting other preference
   const again = mount();
   try { await again.findByLabelText("Summary period: Last 21 days"); }
   finally { again.close(); }
+});
+
+test("macro ounce inputs and targets submit grams while calories remain unchanged", async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init) => path === "/api/v1/profile"
+    ? { notification_preferences: { protein_unit: "oz", fiber_unit: "oz" } } : original(path, init));
+  const screen = mount();
+  try {
+    await screen.findByLabelText("Protein ounces");
+    expect(screen.getByText("1.058 oz")).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText("Entry name"), "Shake");
+    fireEvent.changeText(screen.getByLabelText("Calories"), "160");
+    fireEvent.changeText(screen.getByLabelText("Protein ounces"), "1");
+    fireEvent.changeText(screen.getByLabelText("Fat grams"), "0");
+    expect(screen.getByLabelText("Carbs grams")).toBeTruthy();
+    expect(screen.getByLabelText("Fiber ounces")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Add"));
+    await screen.findByText("Macro entry added.");
+    const entry = JSON.parse(String(request.mock.calls.find(([path, init]) => path.endsWith("/entries") && init?.method === "POST")![1]?.body));
+    expect(entry).toMatchObject({ calories: 160, protein_g: GRAMS_PER_OUNCE, fat_g: 0, carbs_g: null });
+    fireEvent.changeText(screen.getByLabelText("Daily protein target"), "5");
+    fireEvent.changeText(screen.getByLabelText("Daily calories target"), "2000");
+    fireEvent.press(screen.getByLabelText("Save targets"));
+    await waitFor(() => expect(request.mock.calls.some(([path, init]) => path.endsWith("/targets") && init?.method === "PUT")).toBe(true));
+    const target = JSON.parse(String(request.mock.calls.find(([path, init]) => path.endsWith("/targets") && init?.method === "PUT")![1]?.body));
+    expect(target).toMatchObject({ daily_protein_g: 5 * GRAMS_PER_OUNCE, daily_calories: 2000 });
+  } finally { screen.close(); }
 });

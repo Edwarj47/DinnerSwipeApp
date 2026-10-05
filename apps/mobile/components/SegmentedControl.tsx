@@ -7,6 +7,7 @@ import { Colors } from "@/components/theme";
 type Option<T extends string> = {
   label: string;
   value: T;
+  accessibilityLabel?: string;
   icon?: ComponentProps<typeof Ionicons>["name"];
 };
 
@@ -16,9 +17,10 @@ type Props<T extends string> = {
   onChange: (value: T) => void;
   accessibilityLabel?: string;
   wrap?: boolean;
+  disabled?: boolean;
 };
 
-export function SegmentedControl<T extends string>({ value, options, onChange, accessibilityLabel, wrap = false }: Props<T>) {
+export function SegmentedControl<T extends string>({ value, options, onChange, accessibilityLabel, wrap = false, disabled = false }: Props<T>) {
   return (
     <View accessibilityLabel={accessibilityLabel} style={[styles.segment, wrap && styles.wrap]}>
       {options.map((option) => {
@@ -27,10 +29,13 @@ export function SegmentedControl<T extends string>({ value, options, onChange, a
           <Pressable
             key={option.value}
             accessibilityRole="button"
-            accessibilityLabel={option.label}
-            accessibilityState={{ selected: active }}
+            accessibilityLabel={option.accessibilityLabel ?? option.label}
+            accessibilityState={{ selected: active, disabled }}
+            aria-pressed={active}
+            aria-disabled={disabled}
+            disabled={disabled}
             onPress={() => onChange(option.value)}
-            style={[styles.button, wrap && styles.wrapButton, active ? styles.active : null]}
+            style={[styles.button, wrap && styles.wrapButton, active ? styles.active : null, disabled && { opacity: 0.5 }]}
           >
             {option.icon ? <Ionicons name={option.icon} size={14} color={Colors.muted} /> : null}
             <Text style={[styles.label, active ? styles.activeLabel : null]}>{option.label}</Text>
