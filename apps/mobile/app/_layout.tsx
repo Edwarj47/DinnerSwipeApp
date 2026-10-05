@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AuthGate } from "@/components/AuthGate";
 import { OfflineRuntime } from "@/components/OfflineRuntime";
+import { PlanningRuntime } from "@/components/PlanningRuntime";
 import { BiometricGate } from "@/components/BiometricGate";
 import { Colors } from "@/components/theme";
 import { SubscriptionGate } from "@/features/subscription/SubscriptionGate";
@@ -21,6 +22,7 @@ export default function RootLayout() {
           <AuthGate>
             <SubscriptionGate>
               <OfflineRuntime />
+              <PlanningRuntime />
               <Stack screenOptions={{ headerShown: false }} />
             </SubscriptionGate>
             <StatusBar style="dark" />

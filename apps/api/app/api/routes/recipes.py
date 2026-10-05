@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, timedelta
 from typing import Literal
 
 from fastapi import APIRouter, HTTPException, Query, UploadFile
@@ -14,6 +14,7 @@ from app.models.entities import (
     MealSwipe,
     Recipe,
     UserProfile,
+    WeeklyPlan,
     WeeklyPlanSlot,
 )
 from app.schemas.common import (
@@ -24,6 +25,7 @@ from app.schemas.common import (
     SwipeRequest,
 )
 from app.services.media_storage import get_media_storage
+from app.services.planning import planning_settings, week_bounds
 from app.services.recipes import (
     IGNORED_FEEDBACK_KEY,
     accessible_recipes_query,
@@ -69,16 +71,24 @@ def list_recipes(
     if q:
         query = query.where(Recipe.name.ilike(f"%{q}%"))
     if weekly_picks:
-        start = datetime.combine(current_week_start(), time.min)
+        week = current_week_start(current_user)
+        start, end = week_bounds(current_user, week)
         query = query.where(
-            Recipe.id.in_(
-                select(MealSwipe.recipe_id).where(
-                    MealSwipe.user_id == current_user.id,
-                    MealSwipe.created_at >= start,
-                    MealSwipe.created_at < start + timedelta(days=7),
-                    MealSwipe.action.in_(["add", "favorite"]),
-                    MealSwipe.undone_at.is_(None),
-                )
+            or_(
+                Recipe.id.in_(
+                    select(MealSwipe.recipe_id).where(
+                        MealSwipe.user_id == current_user.id,
+                        MealSwipe.created_at >= start,
+                        MealSwipe.created_at < end,
+                        MealSwipe.action.in_(["add", "favorite"]),
+                        MealSwipe.undone_at.is_(None),
+                    )
+                ),
+                Recipe.id.in_(
+                    select(WeeklyPlanSlot.recipe_id)
+                    .join(WeeklyPlan, WeeklyPlan.id == WeeklyPlanSlot.weekly_plan_id)
+                    .where(WeeklyPlan.user_id == current_user.id, WeeklyPlan.week_start == week)
+                ),
             )
         )
     effective_max = max_total_minutes or (
@@ -275,9 +285,9 @@ def swipe_summary(
     current_user: BasicUser,
     week_start: date | None = None,
 ) -> dict[str, object]:
-    week = week_start or current_week_start()
+    week = week_start or current_week_start(current_user)
     week -= timedelta(days=week.weekday())
-    start = datetime.combine(week, time.min)
+    start, end = week_bounds(current_user, week)
     rows = db.execute(
         select(
             MealSwipe.recipe_id,
@@ -288,13 +298,13 @@ def swipe_summary(
         .where(
             MealSwipe.user_id == current_user.id,
             MealSwipe.created_at >= start,
-            MealSwipe.created_at < start + timedelta(days=7),
+            MealSwipe.created_at < end,
         )
         .group_by(MealSwipe.recipe_id, MealSwipe.action)
     ).all()
     return {
         "week_start": week,
-        "timezone": "UTC",
+        "timezone": planning_settings(current_user)["time_zone"],
         "counts": [
             {"recipe_id": recipe_id, "action": action, "selections": count, "undone": undone}
             for recipe_id, action, count, undone in rows

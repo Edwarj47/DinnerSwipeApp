@@ -7,7 +7,13 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbDep
 from app.models.entities import UserProfile
-from app.schemas.common import OnboardingUpdate, ProfileUpdate
+from app.schemas.common import OnboardingUpdate, ProfileUpdate, WeeklyPlanningUpdate
+from app.services.planning import (
+    CURSOR_KEY,
+    SETTINGS_KEY,
+    planning_settings,
+    update_planning_settings,
+)
 from app.services.recipes import IGNORED_FEEDBACK_KEY
 
 router = APIRouter(prefix="/profile", tags=["profile"])
@@ -30,6 +36,7 @@ def get_profile(current_user: CurrentUser) -> dict[str, object]:
         "walmart_zip": profile.walmart_zip,
         "preferred_grocery_retailer": profile.preferred_grocery_retailer,
         "notification_preferences": profile.notification_preferences,
+        "weekly_planning": planning_settings(current_user),
         "onboarding_completed_at": profile.onboarding_completed_at,
         "tutorial_completed_at": profile.tutorial_completed_at,
         "tutorial_dismissed_at": profile.tutorial_dismissed_at,
@@ -51,13 +58,22 @@ def update_profile(
     for key, value in payload.model_dump().items():
         if key == "notification_preferences":
             value = dict(value)
-            stored = (profile.notification_preferences or {}).get(IGNORED_FEEDBACK_KEY)
-            if stored is not None:
-                value[IGNORED_FEEDBACK_KEY] = stored
-            else:
-                value.pop(IGNORED_FEEDBACK_KEY, None)
+            for protected in (IGNORED_FEEDBACK_KEY, SETTINGS_KEY, CURSOR_KEY):
+                stored = (profile.notification_preferences or {}).get(protected)
+                if stored is not None:
+                    value[protected] = stored
+                else:
+                    value.pop(protected, None)
         setattr(profile, key, value)
     db.commit()
+    return get_profile(current_user)
+
+
+@router.patch("/planning")
+def update_planning(
+    payload: WeeklyPlanningUpdate, db: DbDep, current_user: CurrentUser
+) -> dict[str, object]:
+    update_planning_settings(db, current_user, payload.model_dump())
     return get_profile(current_user)
 
 

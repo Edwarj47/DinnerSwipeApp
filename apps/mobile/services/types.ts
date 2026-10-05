@@ -103,6 +103,14 @@ export type VoteResult = {
   voters?: { email: string; vote: "yes" | "maybe" | "no" }[];
 };
 
+export type WeeklyPlanningSettings = {
+  mode: "manual" | "automatic";
+  reset_day: number;
+  notify: boolean;
+  time_zone: string;
+  time_zone_configured?: boolean;
+};
+
 export type UserProfile = {
   email: string;
   household_size: number;
@@ -117,6 +125,7 @@ export type UserProfile = {
   walmart_zip: string | null;
   preferred_grocery_retailer: "walmart" | "publix" | "kroger" | "instacart";
   notification_preferences: Record<string, unknown>;
+  weekly_planning?: WeeklyPlanningSettings;
   onboarding_completed_at?: string | null;
   tutorial_completed_at?: string | null;
   tutorial_dismissed_at?: string | null;
@@ -243,6 +252,7 @@ export type MacroExport = {
 export type WeeklyPlan = {
   id: string;
   week_start: string;
+  reset_cycle?: string | null;
   meal_target: number;
   slots: {
     id: string;

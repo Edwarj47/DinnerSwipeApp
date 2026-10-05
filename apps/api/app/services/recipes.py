@@ -216,7 +216,8 @@ def update_recipe(db: Session, recipe: Recipe, payload: RecipeCreate) -> Recipe:
     # Refresh materialized grocery lists only for plans using this recipe this week.
     plans = db.scalars(
         select(WeeklyPlan).where(
-            WeeklyPlan.week_start == current_week_start(),
+            WeeklyPlan.week_start >= current_week_start() - timedelta(days=7),
+            WeeklyPlan.week_start <= current_week_start() + timedelta(days=7),
             WeeklyPlan.id.in_(
                 select(WeeklyPlanSlot.weekly_plan_id).where(WeeklyPlanSlot.recipe_id == recipe.id)
             ),
@@ -224,7 +225,7 @@ def update_recipe(db: Session, recipe: Recipe, payload: RecipeCreate) -> Recipe:
     ).all()
     for plan in plans:
         user = db.get(User, plan.user_id)
-        if user:
+        if user and plan.week_start == current_week_start(user):
             regenerate_grocery_list(db, user, plan, preserve_edits=True, commit=False)
     db.commit()
     db.refresh(recipe)
@@ -332,36 +333,19 @@ def accessible_recipes_query(
     )
 
 
-def current_week_start() -> date:
+def current_week_start(user: User | None = None) -> date:
+    if user is not None:
+        from app.services.planning import week_start_for
+
+        return week_start_for(user)
     today = datetime.now(UTC).date()
     return today - timedelta(days=today.weekday())
 
 
 def get_or_create_current_plan(db: Session, user: User, *, lock: bool = False) -> WeeklyPlan:
-    if lock:
-        db.scalar(select(User).where(User.id == user.id).with_for_update())
-    week_start = current_week_start()
-    plan = db.scalar(
-        select(WeeklyPlan).where(WeeklyPlan.user_id == user.id, WeeklyPlan.week_start == week_start)
-    )
-    if plan:
-        return plan
-    target = user.profile.weekly_meal_target if user.profile else 5
-    plan = WeeklyPlan(user_id=user.id, week_start=week_start, meal_target=target)
-    db.add(plan)
-    db.flush()
-    for index in range(target):
-        db.add(
-            WeeklyPlanSlot(
-                weekly_plan_id=plan.id,
-                slot_type="flexible",
-                servings=user.profile.household_size if user.profile else 4,
-                sort_order=index,
-            )
-        )
-    db.commit()
-    db.refresh(plan)
-    return plan
+    from app.services.planning import reconcile_current_plan
+
+    return reconcile_current_plan(db, user, lock=lock)
 
 
 def add_recipe_to_week(db: Session, user: User, recipe_id: str, plan: WeeklyPlan) -> WeeklyPlanSlot:
@@ -490,9 +474,15 @@ def serialize_plan(db: Session, plan: WeeklyPlan) -> dict[str, Any]:
             "recipe_difficulty": recipe.difficulty if recipe else None,
         }
 
+    owner = db.get(User, plan.user_id)
     return {
         "id": plan.id,
         "week_start": plan.week_start,
+        "reset_cycle": (
+            ((owner.profile.notification_preferences or {}) if owner and owner.profile else {}).get(
+                "weekly_planning_cursor"
+            )
+        ),
         "meal_target": plan.meal_target,
         "slots": [
             {

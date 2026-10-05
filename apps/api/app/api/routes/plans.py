@@ -13,6 +13,7 @@ from app.schemas.common import (
     WeeklySlotCreate,
     WeeklySlotUpdate,
 )
+from app.services.planning import reset_plan_slots
 from app.services.recipes import (
     accessible_recipes_query,
     clear_plan_slot,
@@ -38,49 +39,7 @@ def reset_plan(payload: WeeklyPlanReset, db: DbDep, current_user: BasicUser) -> 
         days=7
     ):
         raise HTTPException(status_code=422, detail="Choose a day in this week.")
-    slots = list(
-        db.scalars(
-            select(WeeklyPlanSlot)
-            .where(WeeklyPlanSlot.weekly_plan_id == plan.id)
-            .order_by(WeeklyPlanSlot.sort_order, WeeklyPlanSlot.id)
-        ).all()
-    )
-    selected = [
-        slot for slot in slots if payload.slot_date is None or slot.slot_date == payload.slot_date
-    ]
-    # Logged nutrition is historical data, not part of the editable plan.
-    ids = [slot.id for slot in selected]
-    retire_slot_choices(db, current_user.id, ids)
-    if ids:
-        db.query(MealMacroConfirmation).filter(
-            MealMacroConfirmation.weekly_plan_slot_id.in_(ids),
-            MealMacroConfirmation.user_id == current_user.id,
-        ).update({MealMacroConfirmation.weekly_plan_slot_id: None}, synchronize_session=False)
-    servings = current_user.profile.household_size if current_user.profile else 4
-    for slot in selected:
-        slot.recipe_id = None
-        slot.slot_type = "flexible"
-        slot.servings = servings
-        slot.is_locked = False
-        if payload.slot_date is None:
-            slot.slot_date = None
-    if payload.slot_date is None:
-        target = current_user.profile.weekly_meal_target if current_user.profile else 5
-        plan.meal_target = target
-        for slot in slots[target:]:
-            db.delete(slot)
-        for index, slot in enumerate(slots[:target]):
-            slot.sort_order = index
-        for index in range(len(slots), target):
-            db.add(
-                WeeklyPlanSlot(
-                    weekly_plan_id=plan.id,
-                    slot_type="flexible",
-                    servings=servings,
-                    sort_order=index,
-                )
-            )
-    db.flush()
+    reset_plan_slots(db, current_user, plan, payload.slot_date)
     regenerate_grocery_list(db, current_user, plan, preserve_edits=True)
     return serialize_plan(db, plan)
 

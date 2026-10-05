@@ -1,6 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import * as Crypto from "expo-crypto";
+import { clearPlanningReminders } from "./planningReminders";
 import { MacroConfirmation, PremiumStatus } from "./types";
 import { cacheable, changeOffline, deviceOffline, findMacro, loadOffline, macroAfter, offlineAccess, offlineOwner,
   OfflineEdit, overlay, readOffline, setDeviceOffline, setOfflineOwner, useOfflineStatus } from "./offlineStore";
@@ -99,6 +100,7 @@ export async function getRefreshToken() {
 export async function clearAuthTokens() {
   sessionEpoch++;
   setOfflineOwner(null);
+  await clearPlanningReminders().catch(() => undefined);
   await Promise.all([deleteStorageItem(ACCESS_TOKEN_KEY), deleteStorageItem(REFRESH_TOKEN_KEY), deleteStorageItem(OFFLINE_OWNER_KEY)]);
   emitAuthChanged();
 }

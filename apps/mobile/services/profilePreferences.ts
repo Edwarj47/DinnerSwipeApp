@@ -11,6 +11,6 @@ export async function saveProfilePreferences(changes: Partial<UserProfile>) {
   const updated = { ...current, ...changes, notification_preferences: {
     ...current.notification_preferences, ...changes.notification_preferences
   } };
-  const { email, onboarding_completed_at, tutorial_completed_at, tutorial_dismissed_at, tutorial_version_seen, ...payload } = updated;
+  const { email, weekly_planning, onboarding_completed_at, tutorial_completed_at, tutorial_dismissed_at, tutorial_version_seen, ...payload } = updated;
   return apiFetch<UserProfile>("/api/v1/profile", { method: "PUT", body: JSON.stringify(payload) });
 }

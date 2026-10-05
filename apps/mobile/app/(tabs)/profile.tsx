@@ -19,6 +19,7 @@ import { openTutorial } from "@/services/tutorial";
 import { PremiumStatus, UserProfile } from "@/services/types";
 import { TourTarget } from "@/features/onboarding/TourTarget";
 import { MeasurementSettings } from "@/features/preferences/MeasurementSettings";
+import { WeeklyPlanningSettings } from "@/features/preferences/WeeklyPlanningSettings";
 
 type ProfileSection = "account" | "meals" | "group" | "macros";
 type AccountAction = "overview" | "reset" | "data" | "delete";
@@ -333,6 +334,8 @@ export default function ProfileScreen() {
                 trackColor={{ false: Colors.border, true: "#f4aaa8" }}
               />
             </View>
+            <View style={styles.divider} />
+            <WeeklyPlanningSettings />
             <View style={styles.divider} />
             <MeasurementSettings />
             <View style={styles.divider} />

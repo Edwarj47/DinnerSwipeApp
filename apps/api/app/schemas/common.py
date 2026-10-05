@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from typing import Any, Literal
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from pydantic import (
     BaseModel,
@@ -18,6 +19,23 @@ from app.core.meal_categories import normalize_beverage_category
 
 class ApiModel(BaseModel):
     model_config = ConfigDict(from_attributes=True)
+
+
+class WeeklyPlanningUpdate(ApiModel):
+    mode: Literal["manual", "automatic"]
+    reset_day: int = Field(ge=0, le=6)
+    notify: bool
+    time_zone: str = Field(min_length=1, max_length=80)
+    initialize_only: bool = False
+
+    @field_validator("time_zone")
+    @classmethod
+    def valid_time_zone(cls, value: str) -> str:
+        try:
+            ZoneInfo(value)
+        except (ZoneInfoNotFoundError, ValueError) as exc:
+            raise ValueError("Choose a valid IANA time zone.") from exc
+        return value
 
 
 class TokenPair(ApiModel):
