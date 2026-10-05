@@ -3,8 +3,8 @@
 ## Scope
 
 Client-only changes. No API schema, database migration, or billing configuration
-change. Prepared for web deployment and standalone Android preview APK 19;
-release verification is recorded below once complete.
+change. Web deployed on 2026-10-05; standalone Android preview APK 19 is verified.
+See the [release record](android-preview-uat.md#build-19-update).
 
 ## Behavior
 
@@ -72,6 +72,5 @@ release verification is recorded below once complete.
 6. Open summary days with the Android keyboard visible and verify the helper,
    input, validation message, and Apply button remain accessible.
 
-Physical Android keyboard and connectivity checks remain pending until a new
-APK is built and installed. A separate release must push the code, deploy the
-web client, and build/verify a new APK; no backend deployment is required.
+Physical Android keyboard and connectivity checks remain pending until APK 19
+is installed. No backend deployment is required.

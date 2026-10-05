@@ -1,6 +1,67 @@
 # Android Preview UAT
 
-Updated 2026-10-04 for Android preview build 18.
+Updated 2026-10-05 for Android preview build 19.
+
+## Build 19 Update
+
+- Source `7e33e49` pushed. [CI 37252009584](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/37252009584)
+  passed backend, frontend, and Docker jobs.
+- Normal grocery sync is silent. An unresolved offline/outbox state shows a
+  notice after 10 seconds; conflicts and storage errors remain immediate.
+- Profile > Account > Account Settings > Measurement units saves independent
+  g/oz choices for protein, carbs, fat, fiber, and ingredient weights to the
+  account. Forms and displays follow these choices automatically; nutrition
+  payloads and exports remain in grams. The inline "As added" selector is gone.
+- Weight conversions preserve original grocery/pantry storage units. Counts,
+  cups, fluid ounces, and other volume units are not converted by guessing density.
+- Summary help reads: "Choose how many days to show, including today. Enter 1
+  for today only." Existing summary persistence and range limits are unchanged.
+- Local checks passed: 168 mobile tests in 29 suites, lint, TypeScript, and web
+  export. Candidate and deployed browser checks passed at 320x720, 390x844, and
+  1280x720, covering unit persistence, connection-failure retry, canonical
+  payloads, pantry keyboard-height scrolling, and existing scrolling/drag flows.
+- Web image `eefd1105538a` is live at `https://dinner.dcss.dev`. Public HTML and
+  JavaScript match the deployed image; health and anonymous route protection
+  checks passed. Browser fixtures intercepted all API calls; no customer writes
+  or billing tests were made.
+- Rollback archive: `backups/releases/20261005T013936Z_preview19`, including the
+  previous static site, source commit, environment fingerprint, and container
+  records. Retained image: `dinner-swipe-web:before-preview19` (`594de2568cc3`).
+- Only the web container changed. Dinner Swipe API/worker/Postgres, environment,
+  and all unrelated containers were verified unchanged. No migration or backend
+  deployment was necessary. The first candidate's restrictive asset permissions
+  were corrected before deployment; backups remain private.
+- EAS build `e38c9965-5b64-4eca-8cc1-8ffd3c8f2749` finished on October 5 at
+  01:45 UTC from `7e33e49`. Standalone preview version `0.1.0`, package
+  `dev.dcss.dinnerswipe`, Android version code `19`; no Metro server is required.
+- Download length, ZIP integrity, embedded package/version, production API URL,
+  and bundled feature checks passed. The signing certificate matches build 18.
+  Size 79,606,238 bytes; SHA-256:
+  `05a446498a694569323a8cf644c7e0511847d052331b3f8be716ba1961f57134`.
+  The direct download link is shared privately. Install over build 18 to preserve
+  local session data. Physical-phone installation and UAT remain pending.
+
+### Build 19 Phone Checks
+
+1. Install over build 18 without uninstalling; confirm the saved session remains.
+2. Check groceries on a normal connection: no sync banner should flash. Hold an
+   unsynced edit for more than 10 seconds, reconnect, and verify notice recovery.
+3. Set protein to oz and carbs to g in Account Settings. Check recipe creation,
+   recipe-based logging, targets, and macro displays. Calories should not change.
+4. Enter partial pantry stock in oz for a gram-based item. Check the remainder;
+   counted items and cups should remain unchanged. Reopen to verify preferences.
+5. Open summary days with the Android keyboard visible and check the helper,
+   validation, and Apply button. Recheck biometrics and weekly drag ordering.
+
+### Build 19 Web Rollback
+
+No database restore is needed. Do not replace current customer data or restart
+API/worker/Postgres for a web rollback.
+
+```bash
+docker tag dinner-swipe-web:before-preview19 dinner-swipe-dinner-swipe-web
+docker compose --profile production up -d --no-deps --no-build --wait dinner-swipe-web
+```
 
 ## Build 18 Update
 
