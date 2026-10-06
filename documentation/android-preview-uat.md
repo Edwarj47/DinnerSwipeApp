@@ -1,6 +1,53 @@
 # Android Preview UAT
 
-Updated 2026-10-05 for Android preview build 20.
+Updated 2026-10-06 for Android preview build 21.
+
+## Build 21 Update
+
+- Source `cc41224` pushed. [CI 37395246990](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/37395246990)
+  passed backend, frontend, and Docker jobs.
+- All five tabs have tighter spacing, restrained headings, full-size touch
+  targets, and centered desktop content. Empty weekdays remain visible.
+- Collapsed weekly meals retain just Edit. Duplicate appears only beside the
+  serving controls in the expanded editor, with weekdays and Unscheduled as
+  destinations. Copies preserve portions and do not copy consumption or locks.
+- The unused meal-type selector and Keep controls are gone. Existing legacy
+  values are preserved. Ate/Skipped/Remove collapse after successful saving;
+  success feedback lasts five seconds, while errors remain for retry.
+- API add-slot accepts optional servings from 1 through 30. Older clients that
+  omit the field retain their existing default. No migration is required.
+- Local checks passed: 153 backend tests with one existing skip, 194 mobile
+  tests in 31 suites with a cold transform cache, lint, mypy, TypeScript, web
+  export, whitespace checks, and a private-environment secret scan.
+- A fresh backup was restored into isolated PostgreSQL. All 1,469 original
+  rows across 41 tables remained unchanged during fixture tests of duplication,
+  grocery scaling, invalid requests, old clients, and meal-log preservation.
+- Candidate and live browser checks passed at 320x720, 390x844, 768x1024,
+  1280x800, and enlarged phone text. Checks covered all tabs, recipes, pantry,
+  invites, tour callouts, drag/reordering, duplication, feedback, and scrolling.
+  API calls were intercepted; no customer fixture writes were made.
+- API/worker image `110ea3873a8f` and web image `8ff9892fa777` are live at
+  `https://dinner.dcss.dev`. Served assets match the image; health, anonymous
+  route protection, and the live optional-servings contract passed.
+- Read-only account snapshots verified the weekly plan, portions, order, locks,
+  nutrition, and swipe history unchanged. Postgres, environment, and unrelated
+  containers stayed unchanged; no billing or provider configuration changed.
+- Private rollback archive: `backups/releases/20261006T004045Z_preview21`.
+  Database/media checksum checks passed. Prior image tags retained:
+  `dinner-swipe-api:before-preview21`, `dinner-swipe-worker:before-preview21`,
+  and `dinner-swipe-web:before-preview21`. Application rollback restores only
+  these images, not the database over new customer writes.
+- EAS build `628c2747-ecae-4b41-91d1-00528fef6f83` finished October 6 at
+  00:51 UTC from `cc41224`. Standalone preview version `0.1.0`, package
+  `dev.dcss.dinnerswipe`, Android version code `21`; no Metro server is needed.
+- Download length, ZIP integrity, embedded configuration, production API URL,
+  and bundled feature checks passed. Certificate matches build 20.
+  Size 79,669,479 bytes; SHA-256:
+  `e2292ac59510a04eb7c2afdda42ce56b899fbc927216082085ccb9fdb3ab812f`.
+  Direct link shared privately. Install over build 20 to retain the local session.
+  Physical-phone installation and native gesture UAT remain pending.
+
+Phone checklist and detailed release evidence: [UI cleanup UAT](ui-cleanup-uat.md).
 
 ## Build 20 Update
 
