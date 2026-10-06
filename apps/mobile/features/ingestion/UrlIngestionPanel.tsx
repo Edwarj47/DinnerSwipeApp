@@ -1,6 +1,5 @@
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
-import { Image } from "expo-image";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
@@ -8,6 +7,8 @@ import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors } from "@/components/theme";
 import { MacroChoice } from "@/features/premium/MacroChoice";
 import { formatCandidateStatus } from "@/features/recipes/recipeDisplay";
+import { RecipePhoto } from "@/features/recipes/RecipePhoto";
+import { appendRecipeImage, RecipeImage, RecipePhotoPicker } from "@/features/recipes/RecipePhotoPicker";
 import { apiFetch } from "@/services/api";
 import { normalizeRecipeCategory, recipeCategoryOptions } from "@/services/mealCategories";
 
@@ -30,6 +31,7 @@ export function UrlIngestionPanel() {
   const [url, setUrl] = useState("");
   const [candidate, setCandidate] = useState<Candidate | null>(null);
   const [busy, setBusy] = useState(false);
+  const [photoBusy, setPhotoBusy] = useState(false);
   const running = useRef(false);
   const [error, setError] = useState("");
   const [status, setStatus] = useTransientMessage(busy);
@@ -148,6 +150,16 @@ export function UrlIngestionPanel() {
     await queryClient.invalidateQueries({ queryKey: ["url-ingestion-recycle-bin"] });
   }
 
+  async function uploadPhoto(image: RecipeImage) {
+    setPhotoBusy(true);
+    try {
+      const form = new FormData();
+      appendRecipeImage(form, "file", image);
+      const result = await apiFetch<{ photo_url: string }>("/api/v1/recipes/photo-upload", { method: "POST", body: form });
+      setEditPhoto(result.photo_url);
+    } finally { setPhotoBusy(false); }
+  }
+
   const warnings = friendlyWarnings(candidate?.validation_warnings ?? []);
   const canApprove = Boolean(candidate && editName.trim().length > 1 && candidate.status !== "approved" && candidate.status !== "rejected");
 
@@ -158,20 +170,21 @@ export function UrlIngestionPanel() {
         <Text style={styles.badge}>Review required</Text>
       </View>
       <TextInput accessibilityLabel="Recipe URL" value={url} onChangeText={setUrl} placeholder="Paste a recipe link" autoCapitalize="none" style={styles.input} />
-      <Button label={busy ? "Working..." : "Fetch recipe"} disabled={busy || !url.trim()} icon="link" variant="primary" onPress={() => void run(submit)} />
+      <Button label={busy ? "Working..." : "Fetch recipe"} disabled={busy || photoBusy || !url.trim()} icon="link" variant="primary" onPress={() => void run(submit)} />
       {candidate ? (
         <View style={styles.review}>
           <View style={styles.reviewHeader}>
             <Text style={styles.reviewTitle}>Review recipe</Text>
             <Text style={[styles.statusPill, candidate.status === "approved" ? styles.approvedPill : ["rejected", "recycled"].includes(candidate.status) ? styles.rejectedPill : null]}>{formatCandidateStatus(candidate.status)}</Text>
           </View>
-          {editPhoto ? <Image source={{ uri: editPhoto }} style={styles.photo} contentFit="cover" /> : <View style={styles.emptyPhoto}><Text style={styles.emptyPhotoText}>Photo required or approve placeholder</Text></View>}
+          <RecipePhoto photoUrl={editPhoto || null} accessibilityLabel="Recipe photo preview" style={styles.photo} />
           <Text style={styles.inputLabel}>Name</Text>
           <TextInput accessibilityLabel="Review recipe name" value={editName} onChangeText={setEditName} style={styles.input} />
           <Text style={styles.inputLabel}>Meal type</Text>
           <MacroChoice label="Review meal type" value={editMealType} onChange={setEditMealType} options={recipeCategoryOptions(editMealType)} disabled={busy} />
           <Text style={styles.inputLabel}>Photo</Text>
-          <TextInput accessibilityLabel="Review recipe photo URL" value={editPhoto} onChangeText={setEditPhoto} autoCapitalize="none" style={styles.input} />
+          <RecipePhotoPicker onSelect={uploadPhoto} disabled={busy || !canApprove} />
+          {editPhoto && canApprove ? <Button label="Remove photo" icon="close" disabled={busy || photoBusy} onPress={() => setEditPhoto("")} /> : null}
           <Text style={styles.meta}>{candidate.source_url}</Text>
           <View style={styles.metrics}>
             <Metric label="Ingredients" value={String(splitReviewLines(editIngredients).length)} />
@@ -188,9 +201,9 @@ export function UrlIngestionPanel() {
           <Text style={styles.inputLabel}>Instructions</Text>
           <TextInput accessibilityLabel="Review instructions" value={editInstructions} onChangeText={setEditInstructions} multiline style={[styles.input, styles.area]} />
           <View style={styles.reviewActions}>
-            <Button label="Approve" icon="checkmark-circle" variant="primary" disabled={busy || !canApprove} onPress={() => void run(approve)} />
-            <Button label="Re-fetch" disabled={busy} icon="refresh" onPress={() => void run(submit)} />
-            <Button label="Reject" icon="close-circle" variant="danger" disabled={busy || !candidate || candidate.status === "rejected" || candidate.status === "approved"} onPress={() => void run(reject)} />
+            <Button label="Approve" icon="checkmark-circle" variant="primary" disabled={busy || photoBusy || !canApprove} onPress={() => void run(approve)} />
+            <Button label="Re-fetch" disabled={busy || photoBusy} icon="refresh" onPress={() => void run(submit)} />
+            <Button label="Reject" icon="close-circle" variant="danger" disabled={busy || photoBusy || !candidate || candidate.status === "rejected" || candidate.status === "approved"} onPress={() => void run(reject)} />
           </View>
         </View>
       ) : null}
@@ -203,7 +216,7 @@ export function UrlIngestionPanel() {
                 <Text style={styles.historyName}>{item.recipe_name ?? "Untitled draft"}</Text>
                 <Text style={styles.meta}>{formatCandidateStatus(item.status)} • {friendlyWarnings(item.warnings ?? []).length} note{friendlyWarnings(item.warnings ?? []).length === 1 ? "" : "s"}</Text>
               </View>
-              <Button label="Open" disabled={busy} icon="open" onPress={() => void run(() => openCandidate(item.id))} />
+              <Button label="Open" disabled={busy || photoBusy} icon="open" onPress={() => void run(() => openCandidate(item.id))} />
             </View>
           ))}
         </View>

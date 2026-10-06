@@ -23,6 +23,7 @@ from app.models.entities import (
     RecipeMacroProfile,
     RecipeTag,
     User,
+    UserProfile,
     WeeklyPlan,
     WeeklyPlanSlot,
 )
@@ -37,6 +38,7 @@ from app.services.retailers import WalmartSearchLinkAdapter
 from app.services.validation import validate_recipe_payload
 
 IGNORED_FEEDBACK_KEY = "ignored_recipe_feedback"
+COMPLETED_FEEDBACK_KEY = "completed_recipe_feedback"
 
 
 def recipe_feedback_fingerprint(recipe: Recipe) -> str:
@@ -49,12 +51,41 @@ def recipe_feedback_fingerprint(recipe: Recipe) -> str:
     return sha256(json.dumps(value, sort_keys=True).encode()).hexdigest()
 
 
+def set_recipe_feedback(db: Session, user_id: str, recipes: list[Recipe], action: str) -> None:
+    profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if not profile:
+        raise HTTPException(404, "Profile not found")
+    preferences = dict(profile.notification_preferences or {})
+    for key, active_action in (
+        (IGNORED_FEEDBACK_KEY, "ignore"),
+        (COMPLETED_FEEDBACK_KEY, "complete"),
+    ):
+        stored = preferences.get(key, {})
+        feedback = dict(stored) if isinstance(stored, dict) else {}
+        for recipe in recipes:
+            if action == active_action:
+                feedback[recipe.id] = recipe_feedback_fingerprint(recipe)
+            else:
+                feedback.pop(recipe.id, None)
+        if len(feedback) > 2000:
+            raise HTTPException(422, "Return some feedback to review before updating more recipes.")
+        preferences[key] = feedback
+    profile.notification_preferences = preferences
+    db.commit()
+
+
 def serialize_recipe(
     recipe: Recipe, user_id: str | None = None, db: Session | None = None
 ) -> dict[str, Any]:
     favorite = False
     hidden = False
     feedback_ignored = False
+    feedback_completed = False
     nutrition = None
     if db:
         profile = db.scalar(
@@ -73,6 +104,14 @@ def serialize_recipe(
             else {}
         )
         feedback_ignored = isinstance(ignored, dict) and ignored.get(
+            recipe.id
+        ) == recipe_feedback_fingerprint(recipe)
+        completed = (
+            (user.profile.notification_preferences or {}).get(COMPLETED_FEEDBACK_KEY, {})
+            if user and user.profile
+            else {}
+        )
+        feedback_completed = isinstance(completed, dict) and completed.get(
             recipe.id
         ) == recipe_feedback_fingerprint(recipe)
         favorite_count = db.scalar(
@@ -95,7 +134,7 @@ def serialize_recipe(
         "servings": recipe.servings,
         "prep_minutes": recipe.prep_minutes,
         "cook_minutes": recipe.cook_minutes,
-        "total_minutes": recipe.total_minutes,
+        "total_minutes": recipe_total_minutes(recipe),
         "difficulty": recipe.difficulty,
         "cuisine": recipe.cuisine,
         "meal_type": recipe.meal_type,
@@ -138,7 +177,14 @@ def serialize_recipe(
         "nutrition": nutrition,
         "last_selected_date": None,
         "feedback_ignored": feedback_ignored,
+        "feedback_completed": feedback_completed,
     }
+
+
+def recipe_total_minutes(recipe: Recipe) -> int | None:
+    if recipe.prep_minutes is not None or recipe.cook_minutes is not None:
+        return (recipe.prep_minutes or 0) + (recipe.cook_minutes or 0)
+    return recipe.total_minutes
 
 
 def recipe_children(payload: RecipeCreate) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
@@ -470,7 +516,7 @@ def serialize_plan(db: Session, plan: WeeklyPlan) -> dict[str, Any]:
         return {
             "recipe_name": recipe.name if recipe else None,
             "recipe_photo_url": recipe.photo_url if recipe else None,
-            "recipe_total_minutes": recipe.total_minutes if recipe else None,
+            "recipe_total_minutes": recipe_total_minutes(recipe) if recipe else None,
             "recipe_difficulty": recipe.difficulty if recipe else None,
         }
 

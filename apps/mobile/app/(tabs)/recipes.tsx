@@ -14,7 +14,7 @@ import { UrlRecycleBinPanel } from "@/features/ingestion/UrlRecycleBinPanel";
 import { ManualRecipePanel } from "@/features/recipes/ManualRecipePanel";
 import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
 import { RecipeLibrarySection } from "@/features/recipes/RecipeLibrarySection";
-import { RecipeFeedbackSection } from "@/features/recipes/RecipeFeedbackSection";
+import { FeedbackAction, RecipeFeedbackSection } from "@/features/recipes/RecipeFeedbackSection";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
@@ -33,6 +33,7 @@ export default function RecipesScreen() {
   const [quickActionRecipe, setQuickActionRecipe] = useState<Recipe | null>(null);
   const [actionStatus, setActionStatus] = useState("");
   const [feedbackStatus, setFeedbackStatus] = useTransientMessage();
+  const [selectedFeedbackIds, setSelectedFeedbackIds] = useState<string[]>([]);
   useEffect(() => {
     if (params.mode === "add") {
       setPageMode("add");
@@ -48,9 +49,16 @@ export default function RecipesScreen() {
     enabled: pageMode === "review"
   });
   const feedback = useMutation({
-    mutationFn: (recipe: Recipe) => apiFetch<Recipe>(`/api/v1/recipes/${recipe.id}/feedback-preference`, { method: "PUT", body: JSON.stringify({ ignored: !recipe.feedback_ignored }) }),
-    onSuccess: async (_, recipe) => {
-      setFeedbackStatus(recipe.feedback_ignored ? "Feedback returned for review." : "Feedback ignored. Recipe stays in your library.");
+    mutationFn: async ({ ids, action }: { ids: string[]; action: FeedbackAction }) => {
+      if (ids.length === 1 && action !== "complete") {
+        return [await apiFetch<Recipe>(`/api/v1/recipes/${ids[0]}/feedback-preference`, { method: "PUT", body: JSON.stringify({ ignored: action === "ignore" }) })];
+      }
+      return apiFetch<Recipe[]>("/api/v1/recipes/feedback-preferences", { method: "PUT", body: JSON.stringify({ recipe_ids: ids, action }) });
+    },
+    onMutate: () => setFeedbackStatus(""),
+    onSuccess: async (_, { action }) => {
+      setSelectedFeedbackIds([]);
+      setFeedbackStatus(action === "complete" ? "Review completed." : action === "review" ? "Feedback returned for review." : "Feedback ignored. Recipes stay in your library.");
       await queryClient.invalidateQueries({ queryKey: ["recipes"] });
     }
   });
@@ -102,6 +110,11 @@ export default function RecipesScreen() {
     recipe.duplicate_status !== "new" ||
     ["requires_review", "missing", "rejected"].includes(recipe.image_status)
   );
+  const attentionRecipes = reviewRecipes.filter(recipe => !recipe.feedback_ignored && !recipe.feedback_completed);
+  const selectedIds = selectedFeedbackIds.filter(id => attentionRecipes.some(recipe => recipe.id === id));
+  function toggleFeedbackSelection(recipe: Recipe) {
+    setSelectedFeedbackIds(current => current.includes(recipe.id) ? current.filter(id => id !== recipe.id) : current.length < 100 ? [...current, recipe.id] : current);
+  }
 
   return (
     <Screen contentWidth={960}>
@@ -145,7 +158,7 @@ export default function RecipesScreen() {
       {pageMode === "review" ? <UrlRecycleBinPanel /> : null}
       {pageMode !== "add" ? (
         <>
-          <TextInput accessibilityLabel="Search recipes" value={q} onChangeText={setQ} placeholder="Search saved recipes" style={styles.search} />
+          <TextInput accessibilityLabel="Search recipes" value={q} onChangeText={value => { setQ(value); setSelectedFeedbackIds([]); }} placeholder="Search saved recipes" style={styles.search} />
         </>
       ) : null}
       {pageMode === "library" ? (["library", "hidden", "archived"] as const).map(collection => <RecipeLibrarySection
@@ -155,7 +168,17 @@ export default function RecipesScreen() {
         {review.isError ? <Button label="Retry feedback" icon="refresh" onPress={() => { void review.refetch(); }} /> : null}
         {feedbackStatus ? <Text style={{ color: Colors.basil, marginBottom: 10 }}>{feedbackStatus}</Text> : null}
         {feedback.isError ? <Text accessibilityRole="alert" style={styles.warning}>{feedback.error.message}</Text> : null}
-        {[false, true].map(ignored => <RecipeFeedbackSection key={String(ignored)} ignored={ignored} recipes={reviewRecipes.filter(recipe => Boolean(recipe.feedback_ignored) === ignored)} pending={feedback.isPending} onOpen={setSelectedRecipe} onToggle={recipe => feedback.mutate(recipe)} />)}
+        {attentionRecipes.length ? <View style={styles.feedbackActions}>
+          <Button label={selectedIds.length ? "Clear selection" : attentionRecipes.length > 100 ? "Select first 100" : "Select shown"} icon={selectedIds.length ? "close" : "checkbox-outline"} disabled={feedback.isPending} onPress={() => setSelectedFeedbackIds(selectedIds.length ? [] : attentionRecipes.slice(0, 100).map(recipe => recipe.id))} />
+          {selectedIds.length ? <>
+            <Button label={`Complete (${selectedIds.length})`} icon="checkmark" variant="primary" disabled={feedback.isPending} onPress={() => feedback.mutate({ ids: selectedIds, action: "complete" })} />
+            <Button label="Ignore selected" icon="eye-off-outline" disabled={feedback.isPending} onPress={() => feedback.mutate({ ids: selectedIds, action: "ignore" })} />
+          </> : null}
+        </View> : null}
+        {(["review", "completed", "ignored"] as const).map(section => <RecipeFeedbackSection key={section} section={section}
+          recipes={section === "review" ? attentionRecipes : reviewRecipes.filter(recipe => section === "completed" ? recipe.feedback_completed : recipe.feedback_ignored)}
+          selectedIds={selectedIds} onSelect={toggleFeedbackSelection} pending={feedback.isPending} onOpen={setSelectedRecipe}
+          onAction={(recipe, action) => feedback.mutate({ ids: [recipe.id], action })} />)}
         {review.hasNextPage ? <Button label="More feedback" icon="chevron-down" disabled={review.isFetchingNextPage} onPress={() => { void review.fetchNextPage(); }} /> : null}
       </> : null}
       <RecipeDetailSheet recipe={selectedRecipe} visible={!!selectedRecipe} onClose={() => setSelectedRecipe(null)} onUpdated={setSelectedRecipe} />
@@ -252,5 +275,6 @@ const styles = StyleSheet.create({
   quickTitle: { color: Colors.ink, fontWeight: "900", fontSize: 22, lineHeight: 27 },
   quickCopy: { color: Colors.muted, lineHeight: 20 },
   quickActions: { gap: 8 },
+  feedbackActions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, marginBottom: 8 },
   quickStatus: { color: Colors.danger, fontWeight: "700", lineHeight: 20 }
 });

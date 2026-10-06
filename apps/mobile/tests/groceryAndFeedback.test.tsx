@@ -107,6 +107,60 @@ test("manual recipe can save with only its title and default servings", async ()
   } finally { screen.close(); }
 });
 
+test("multiple reviews complete together, retain feedback, and can be reopened", async () => {
+  const recipes: Recipe[] = ["Soup", "Shake"].map((name, index) => ({ id: String(index), name,
+    servings: 1, meal_type: "snack", difficulty: "easy", source_type: "manual", validation_status: "approved",
+    validation_warnings: ["Photo missing; placeholder accepted"], duplicate_status: "new", image_status: "missing",
+    ingredients: [], instructions: [], tags: [], is_favorite: false, is_hidden: false }));
+  request.mockImplementation(async (path, init) => {
+    if (path.endsWith("/feedback-preferences")) {
+      const payload = JSON.parse(String(init?.body));
+      recipes.filter(recipe => payload.recipe_ids.includes(recipe.id)).forEach(recipe => { recipe.feedback_completed = payload.action === "complete"; recipe.feedback_ignored = payload.action === "ignore"; });
+      return recipes.map(recipe => ({ ...recipe }));
+    }
+    if (path.endsWith("/feedback-preference")) { recipes[0].feedback_completed = false; return { ...recipes[0] }; }
+    if (path.startsWith("/api/v1/recipes?")) return recipes.map(recipe => ({ ...recipe }));
+    return [];
+  });
+  const screen = mount(<RecipesScreen />);
+  try {
+    await screen.findByLabelText("Select Soup");
+    fireEvent.press(screen.getByLabelText("Select Soup"));
+    fireEvent.press(screen.getByLabelText("Select Shake"));
+    expect(screen.getByLabelText("Select Soup").props.accessibilityState.checked).toBe(true);
+    fireEvent.press(screen.getByLabelText("Complete (2)"));
+    await screen.findByText("Review completed.");
+    await waitFor(() => expect(screen.queryByLabelText("Select Soup")).toBeNull());
+    const call = request.mock.calls.find(([path]) => path.endsWith("/feedback-preferences"))!;
+    expect(JSON.parse(String(call[1]?.body))).toEqual({ recipe_ids: ["0", "1"], action: "complete" });
+    expect(screen.getByLabelText("Completed reviews").props.accessibilityState.expanded).toBe(false);
+    expect(screen.queryByText("Photo missing; placeholder accepted")).toBeNull();
+    fireEvent.press(screen.getByLabelText("Completed reviews"));
+    expect(screen.getAllByText("Photo missing; placeholder accepted")).toHaveLength(2);
+    fireEvent.press(screen.getByLabelText("Review again Soup"));
+    await screen.findByLabelText("Select Soup");
+  } finally { screen.close(); }
+});
+
+test("failed bulk review preserves selection and search clears it", async () => {
+  const recipe = { id: "one", name: "Soup", validation_status: "approved", validation_warnings: ["Missing photo"], duplicate_status: "new", image_status: "missing" };
+  request.mockImplementation(async path => {
+    if (path.endsWith("/feedback-preferences")) throw new Error("Please retry review");
+    if (path.startsWith("/api/v1/recipes?")) return [recipe];
+    return [];
+  });
+  const screen = mount(<RecipesScreen />);
+  try {
+    await screen.findByLabelText("Select shown");
+    fireEvent.press(screen.getByLabelText("Select shown"));
+    fireEvent.press(screen.getByLabelText("Complete (1)"));
+    await screen.findByText("Please retry review");
+    expect(screen.getByLabelText("Select Soup").props.accessibilityState.checked).toBe(true);
+    fireEvent.changeText(screen.getByLabelText("Search recipes"), "Soup");
+    await waitFor(() => expect(screen.queryByLabelText("Complete (1)")).toBeNull());
+  } finally { screen.close(); }
+});
+
 test("partial pantry coverage sends an explicit amount and never assumes full coverage", async () => {
   request.mockResolvedValue({ id: "pantry" });
   const saved = jest.fn();

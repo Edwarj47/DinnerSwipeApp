@@ -343,6 +343,15 @@ class RecipeCreate(ApiModel):
             raise ValueError("Recipe name must contain at least two characters")
         return name
 
+    @model_validator(mode="after")
+    def aggregate_minutes(self) -> RecipeCreate:
+        if self.prep_minutes is not None or self.cook_minutes is not None:
+            total = (self.prep_minutes or 0) + (self.cook_minutes or 0)
+            if total > 1440:
+                raise ValueError("Prep and cook time together cannot exceed 1440 minutes")
+            self.total_minutes = total
+        return self
+
 
 class RecipeOut(ApiModel):
     id: str
@@ -375,10 +384,16 @@ class RecipeOut(ApiModel):
     nutrition: RecipeNutrition | None = None
     last_selected_date: date | None = None
     feedback_ignored: bool = False
+    feedback_completed: bool = False
 
 
 class RecipeFeedbackPreference(ApiModel):
     ignored: bool
+
+
+class RecipeFeedbackBatch(ApiModel):
+    recipe_ids: list[str] = Field(min_length=1, max_length=100)
+    action: Literal["complete", "ignore", "review"]
 
 
 class SwipeRequest(ApiModel):

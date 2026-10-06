@@ -15,6 +15,7 @@ import { saveProfilePreferences } from "@/services/profilePreferences";
 import { useOfflineStatus } from "@/services/offlineStore";
 import { MealLabel, MEAL_LABEL_OPTIONS, normalizeMealLabel } from "@/services/mealCategories";
 import { formatMealType } from "@/features/recipes/recipeDisplay";
+import { parseNutrition } from "@/features/recipes/recipeNutrition";
 import { MacroChoice } from "./MacroChoice";
 import { SummaryPeriod, summaryDays } from "./SummaryPeriod";
 import { RecipeMacroLogger } from "@/features/recipes/RecipeMacroLogger";
@@ -28,6 +29,7 @@ import {
   MacroSummary,
   MacroTarget,
   PremiumStatus,
+  Recipe,
   UserProfile
 } from "@/services/types";
 
@@ -37,6 +39,7 @@ export function PremiumMacroPanel() {
   const units = useMeasurementUnits();
   const unit = units.protein_g;
   const pendingMacros = useOfflineStatus(state => state.edits.some(edit => edit.kind.startsWith("macro_")));
+  const offline = useOfflineStatus(state => state.offline);
   const queryClient = useQueryClient();
   const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
   const setStatus = (message: string) => setNotice({ message, error: false });
@@ -59,6 +62,11 @@ export function PremiumMacroPanel() {
   const [entryFat, setEntryFat] = useState("");
   const [entryFiber, setEntryFiber] = useState("");
   const [entryNotes, setEntryNotes] = useState("");
+  const [savedRecipeFingerprint, setSavedRecipeFingerprint] = useState<string | null>(null);
+  const recipeDraft = { name: entryName.trim(), description: entryNotes.trim() || null, servings: 1,
+    meal_type: mealLabel, source_type: "manual", nutrition: { calories: entryCalories, protein_g: entryProtein,
+      carbs_g: entryCarbs, fat_g: entryFat, fiber_g: entryFiber } };
+  const recipeFingerprint = JSON.stringify(recipeDraft);
   const [recipeLog, setRecipeLog] = useState<MacroConfirmation | "new" | null>(null);
   const [summarySelection, setSummarySelection] = useState<number | null>(null);
   const profile = useQuery({ queryKey: ["profile"], queryFn: () => apiFetch<UserProfile>("/api/v1/profile") });
@@ -194,6 +202,19 @@ export function PremiumMacroPanel() {
     onError: (error) => setError(error instanceof Error ? error.message : "Unable to remove macro entry.")
   });
 
+  const saveAsRecipe = useMutation({
+    mutationFn: (draft: typeof recipeDraft) => apiFetch<Recipe>("/api/v1/recipes", {
+      method: "POST", body: JSON.stringify({ ...draft, nutrition: parseNutrition(draft.nutrition) })
+    }),
+    onMutate: () => setNotice(null),
+    onSuccess: async (_, draft) => {
+      setSavedRecipeFingerprint(JSON.stringify(draft));
+      setStatus("Recipe saved with nutrition for one serving.");
+      await queryClient.invalidateQueries({ queryKey: ["recipes"] });
+    },
+    onError: error => setError(error instanceof Error ? error.message : "Unable to save recipe. Try again.")
+  });
+
   const exportMacros = useMutation({
     mutationFn: () => apiFetch<MacroExport>(`/api/v1/macros/export?${macroRangeQuery(trendRange)}`),
     onSuccess: async (data) => {
@@ -321,7 +342,10 @@ export function PremiumMacroPanel() {
               entryNotes={entryNotes}
               setEntryNotes={setEntryNotes}
               editingEntryId={editingEntryId}
-              savePending={saveEntry.isPending || !isISODate(selectedDate)}
+              savePending={saveEntry.isPending || saveAsRecipe.isPending || !isISODate(selectedDate)}
+              recipeSaveDisabled={offline || saveEntry.isPending || saveAsRecipe.isPending || entryName.trim().length < 2 || savedRecipeFingerprint === recipeFingerprint}
+              recipeSaved={savedRecipeFingerprint === recipeFingerprint}
+              onSaveRecipe={() => saveAsRecipe.mutate(recipeDraft)}
               deletePending={deleteEntry.isPending}
               onSave={() => saveEntry.mutate()}
               onClear={clearEntryForm}
@@ -381,6 +405,9 @@ function DayMacroView({
   setEntryNotes,
   editingEntryId,
   savePending,
+  recipeSaveDisabled,
+  recipeSaved,
+  onSaveRecipe,
   deletePending,
   onSave,
   onClear,
@@ -409,6 +436,9 @@ function DayMacroView({
   setEntryNotes: (value: string) => void;
   editingEntryId: string | null;
   savePending: boolean;
+  recipeSaveDisabled: boolean;
+  recipeSaved: boolean;
+  onSaveRecipe: () => void;
   deletePending: boolean;
   onSave: () => void;
   onClear: () => void;
@@ -451,6 +481,7 @@ function DayMacroView({
         <View style={styles.actions}>
           <Button label={editingEntryId ? "Update" : "Add"} icon={editingEntryId ? "save" : "add-circle"} variant="primary" disabled={savePending || !entryName.trim()} onPress={onSave} />
           <Button label="Clear" icon="close" onPress={onClear} />
+          <Button label={recipeSaved ? "Recipe saved" : "Save as recipe"} icon="book-outline" disabled={recipeSaveDisabled} onPress={onSaveRecipe} />
           {editingEntryId ? <Button label="Delete" icon="trash" variant="danger" disabled={deletePending} onPress={onDelete} /> : null}
         </View>
       </View>

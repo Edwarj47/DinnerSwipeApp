@@ -7,25 +7,32 @@ import { Colors } from "@/components/theme";
 import { Recipe } from "@/services/types";
 import { RecipePhoto } from "./RecipePhoto";
 
-export function RecipeFeedbackSection({ ignored, recipes, pending, onOpen, onToggle }: {
-  ignored: boolean;
+export type FeedbackAction = "complete" | "ignore" | "review";
+
+export function RecipeFeedbackSection({ section, recipes, pending, selectedIds, onSelect, onOpen, onAction }: {
+  section: "review" | "ignored" | "completed";
   recipes: Recipe[];
   pending: boolean;
+  selectedIds: string[];
+  onSelect: (recipe: Recipe) => void;
   onOpen: (recipe: Recipe) => void;
-  onToggle: (recipe: Recipe) => void;
+  onAction: (recipe: Recipe, action: FeedbackAction) => void;
 }) {
-  const [expanded, setExpanded] = useState(!ignored);
-  const title = ignored ? "Ignored feedback" : "Recipes needing attention";
+  const [expanded, setExpanded] = useState(section === "review");
+  const title = section === "ignored" ? "Ignored feedback" : section === "completed" ? "Completed reviews" : "Recipes needing attention";
   return <View style={styles.section}>
     <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)} style={styles.heading}>
-      <Ionicons name={ignored ? "checkmark-done-outline" : "information-circle-outline"} color={Colors.basil} size={22} />
+      <Ionicons name={section === "review" ? "information-circle-outline" : "checkmark-done-outline"} color={Colors.basil} size={22} />
       <Text style={styles.title}>{title}</Text>
       <Text style={styles.count}>{recipes.length}</Text>
       <Ionicons name={expanded ? "chevron-up" : "chevron-down"} color={Colors.muted} size={22} />
     </Pressable>
     {expanded ? <>
-      {!recipes.length ? <Text style={styles.empty}>{ignored ? "No ignored feedback." : "Nothing needs attention."}</Text> : null}
+      {!recipes.length ? <Text style={styles.empty}>{section === "review" ? "Nothing needs attention." : "No recipes here yet."}</Text> : null}
       {recipes.map(recipe => <View key={recipe.id} style={styles.row}>
+        {section === "review" ? <Pressable accessibilityRole="checkbox" accessibilityLabel={`Select ${recipe.name}`} accessibilityState={{ checked: selectedIds.includes(recipe.id), disabled: pending || (selectedIds.length >= 100 && !selectedIds.includes(recipe.id)) }} disabled={pending || (selectedIds.length >= 100 && !selectedIds.includes(recipe.id))} style={styles.checkbox} onPress={() => onSelect(recipe)}>
+          <Ionicons name={selectedIds.includes(recipe.id) ? "checkbox" : "square-outline"} size={24} color={Colors.tomato} />
+        </Pressable> : null}
         <Pressable accessibilityRole="button" accessibilityLabel={`Open ${recipe.name}`} style={styles.open} onPress={() => onOpen(recipe)}>
           <View style={styles.summary}>
             <RecipePhoto photoUrl={recipe.photo_url} accessibilityLabel={`${recipe.name} photo`} style={styles.photo} />
@@ -33,7 +40,10 @@ export function RecipeFeedbackSection({ ignored, recipes, pending, onOpen, onTog
           </View>
           {(recipe.validation_warnings.length ? recipe.validation_warnings : [recipe.duplicate_status !== "new" ? "Possible duplicate recipe" : "Recipe details need review"]).map((warning, index) => <Text key={index} style={styles.warning}>{warning}</Text>)}
         </Pressable>
-        <Button label={ignored ? "Review again" : "Ignore"} accessibilityLabel={`${ignored ? "Review again" : "Ignore feedback for"} ${recipe.name}`} icon={ignored ? "arrow-undo-outline" : "checkmark-done-outline"} disabled={pending} onPress={() => onToggle(recipe)} />
+        <View style={styles.actions}>
+          {section !== "completed" ? <Button label="Complete" accessibilityLabel={`Complete review for ${recipe.name}`} icon="checkmark" disabled={pending} onPress={() => onAction(recipe, "complete")} /> : null}
+          <Button label={section === "review" ? "Ignore" : "Review again"} accessibilityLabel={`${section === "review" ? "Ignore feedback for" : "Review again"} ${recipe.name}`} icon={section === "review" ? "eye-off-outline" : "arrow-undo-outline"} disabled={pending} onPress={() => onAction(recipe, section === "review" ? "ignore" : "review")} />
+        </View>
       </View>)}
     </> : null}
   </View>;
@@ -46,6 +56,8 @@ const styles = StyleSheet.create({
   count: { color: Colors.muted, fontWeight: "700" },
   row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderColor: Colors.border },
   open: { flex: 1, minWidth: 160, gap: 6 },
+  checkbox: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
+  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   summary: { flexDirection: "row", alignItems: "center", gap: 8 },
   photo: { width: 44, height: 44, borderRadius: 6 },
   name: { flex: 1, color: Colors.ink, fontSize: 17, fontWeight: "800" },

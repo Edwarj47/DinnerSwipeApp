@@ -14,7 +14,7 @@ from app.services.planning import (
     planning_settings,
     update_planning_settings,
 )
-from app.services.recipes import IGNORED_FEEDBACK_KEY
+from app.services.recipes import COMPLETED_FEEDBACK_KEY, IGNORED_FEEDBACK_KEY
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
@@ -58,7 +58,12 @@ def update_profile(
     for key, value in payload.model_dump().items():
         if key == "notification_preferences":
             value = dict(value)
-            for protected in (IGNORED_FEEDBACK_KEY, SETTINGS_KEY, CURSOR_KEY):
+            for protected in (
+                IGNORED_FEEDBACK_KEY,
+                COMPLETED_FEEDBACK_KEY,
+                SETTINGS_KEY,
+                CURSOR_KEY,
+            ):
                 stored = (profile.notification_preferences or {}).get(protected)
                 if stored is not None:
                     value[protected] = stored

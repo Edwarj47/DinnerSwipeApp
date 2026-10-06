@@ -5,6 +5,7 @@ import { AiRecipePanel } from "@/features/recipes/AiRecipePanel";
 import { AiRecipeJob } from "@/features/recipes/aiRecipeTypes";
 import { ManualRecipePanel } from "@/features/recipes/ManualRecipePanel";
 import { RecipePhotoEditor } from "@/features/recipes/RecipePhotoEditor";
+import { UrlIngestionPanel } from "@/features/ingestion/UrlIngestionPanel";
 import { privacySections, termsSections } from "@/features/legal/legalContent";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
@@ -67,6 +68,51 @@ test("whole-container totals normalize while old drafts remain empty", async () 
   const old = mount(<ManualRecipePanel initialDraft={{ ...draft, draft: { ...draft.draft!, nutrition: undefined } }} />);
   try { expect(old.getByLabelText("Calories").props.value).toBe(""); }
   finally { old.close(); }
+});
+
+test("manual photos stay internal and saving waits for the upload", async () => {
+  let finish!: (value: { photo_url: string }) => void;
+  request.mockImplementation(async path => path.endsWith("photo-upload")
+    ? new Promise(resolve => { finish = resolve; }) : { id: "saved" });
+  const screen = mount(<ManualRecipePanel />);
+  try {
+    fireEvent.changeText(screen.getByLabelText("Recipe name"), "My shake");
+    fireEvent.press(screen.getByLabelText("Take photo"));
+    await waitFor(() => expect(request.mock.calls.some(([path]) => path.endsWith("photo-upload"))).toBe(true));
+    expect(screen.getByLabelText("Save recipe").props.accessibilityState.disabled).toBe(true);
+    await act(async () => { finish({ photo_url: "https://example.test/media/private-photo.jpg" }); });
+    await screen.findByText("Photo attached.");
+    expect(screen.queryByLabelText("Photo URL")).toBeNull();
+    expect(screen.queryByText(/private-photo/)).toBeNull();
+    fireEvent.press(screen.getByLabelText("Save recipe"));
+    await waitFor(() => expect(request.mock.calls.some(([path]) => path === "/api/v1/recipes")).toBe(true));
+    const call = request.mock.calls.find(([path]) => path === "/api/v1/recipes")!;
+    expect(JSON.parse(String(call[1]?.body)).photo_url).toBe("https://example.test/media/private-photo.jpg");
+  } finally { screen.close(); }
+});
+
+test("web review accepts camera photos without a URL input", async () => {
+  const candidate = { id: "web", status: "requires_review", source_url: "https://example.test/shake", extracted_data: { ...draft.draft, ingredients: [], instructions: [] } };
+  request.mockImplementation(async (path, init) => {
+    if (path.endsWith("photo-upload")) return { photo_url: "https://example.test/media/new-photo.jpg" };
+    if (path.endsWith("url-ingestion") && init?.method === "POST") return { candidates: [candidate] };
+    if (path.endsWith("url-ingestion")) return [];
+    return candidate;
+  });
+  const screen = mount(<UrlIngestionPanel />);
+  try {
+    fireEvent.changeText(screen.getByLabelText("Recipe URL"), candidate.source_url);
+    fireEvent.press(screen.getByLabelText("Fetch recipe"));
+    await screen.findByText("Review recipe");
+    fireEvent.press(screen.getByLabelText("Take photo"));
+    await screen.findByLabelText("Remove photo");
+    expect(screen.queryByLabelText("Review recipe photo URL")).toBeNull();
+    expect(screen.queryByText(/new-photo/)).toBeNull();
+    fireEvent.press(screen.getByLabelText("Approve"));
+    await waitFor(() => expect(request.mock.calls.some(([path]) => path.endsWith("approve"))).toBe(true));
+    const call = request.mock.calls.find(([path]) => path.endsWith("approve"))!;
+    expect(JSON.parse(String(call[1]?.body)).edits.photo_url).toBe("https://example.test/media/new-photo.jpg");
+  } finally { screen.close(); }
 });
 
 test("OpenAI disclosure is in Privacy and Terms, not the AI input screen", async () => {

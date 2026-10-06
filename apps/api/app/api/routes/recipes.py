@@ -13,12 +13,12 @@ from app.models.entities import (
     HiddenRecipe,
     MealSwipe,
     Recipe,
-    UserProfile,
     WeeklyPlan,
     WeeklyPlanSlot,
 )
 from app.schemas.common import (
     RecipeCreate,
+    RecipeFeedbackBatch,
     RecipeFeedbackPreference,
     RecipeNutrition,
     RecipeOut,
@@ -27,16 +27,15 @@ from app.schemas.common import (
 from app.services.media_storage import get_media_storage
 from app.services.planning import planning_settings, week_bounds
 from app.services.recipes import (
-    IGNORED_FEEDBACK_KEY,
     accessible_recipes_query,
     clear_plan_slot,
     create_recipe,
     current_week_start,
     get_or_create_current_plan,
-    recipe_feedback_fingerprint,
     record_swipe,
     save_recipe_nutrition,
     serialize_recipe,
+    set_recipe_feedback,
     update_recipe,
 )
 
@@ -137,6 +136,26 @@ async def upload_recipe_photo(file: UploadFile, current_user: BasicUser) -> dict
     return {"photo_url": stored.url, "image_status": "validated", "storage_backend": stored.backend}
 
 
+@router.put("/feedback-preferences", response_model=list[RecipeOut])
+def update_feedback_batch(
+    payload: RecipeFeedbackBatch, db: DbDep, current_user: BasicUser
+) -> list[dict[str, object]]:
+    recipe_ids = list(dict.fromkeys(payload.recipe_ids))
+    recipes = list(
+        db.scalars(
+            accessible_recipes_query(current_user, include_archived=True).where(
+                Recipe.id.in_(recipe_ids)
+            )
+        )
+        .unique()
+        .all()
+    )
+    if len(recipes) != len(recipe_ids):
+        raise HTTPException(404, "One or more recipes are unavailable. Refresh and try again.")
+    set_recipe_feedback(db, current_user.id, recipes, payload.action)
+    return [serialize_recipe(recipe, current_user.id, db) for recipe in recipes]
+
+
 @router.get("/{recipe_id}", response_model=RecipeOut)
 def get_recipe(recipe_id: str, db: DbDep, current_user: BasicUser) -> dict[str, object]:
     recipe = db.scalar(
@@ -179,25 +198,7 @@ def update_feedback_preference(
     )
     if not recipe:
         raise HTTPException(404, "Recipe not found")
-    profile = db.scalar(
-        select(UserProfile)
-        .where(UserProfile.user_id == current_user.id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    if not profile:
-        raise HTTPException(404, "Profile not found")
-    preferences = dict(profile.notification_preferences or {})
-    stored = preferences.get(IGNORED_FEEDBACK_KEY, {})
-    ignored = dict(stored) if isinstance(stored, dict) else {}
-    if payload.ignored:
-        if recipe_id not in ignored and len(ignored) >= 2000:
-            raise HTTPException(422, "Restore some ignored feedback before ignoring more recipes.")
-        ignored[recipe_id] = recipe_feedback_fingerprint(recipe)
-    else:
-        ignored.pop(recipe_id, None)
-    profile.notification_preferences = preferences | {IGNORED_FEEDBACK_KEY: ignored}
-    db.commit()
+    set_recipe_feedback(db, current_user.id, [recipe], "ignore" if payload.ignored else "review")
     return serialize_recipe(recipe, current_user.id, db)
 
 

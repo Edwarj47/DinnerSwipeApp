@@ -5,6 +5,7 @@ import { ManualRecipePanel } from "@/features/recipes/ManualRecipePanel";
 import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
+import { StyleSheet } from "react-native";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-image", () => ({ Image: () => null }));
@@ -65,7 +66,8 @@ test("owner edit loads all fields, preserves structured metadata and uses PUT", 
   const screen = mount(<ManualRecipePanel initialRecipe={recipe} onSaved={saved} />);
   try {
     expect(screen.getByLabelText("Calories").props.value).toBe("100");
-    expect(screen.getByLabelText("Cuisine").props.value).toBe("Italian");
+    expect(screen.queryByLabelText("Cuisine")).toBeNull();
+    expect(screen.queryByLabelText("Photo URL")).toBeNull();
     fireEvent.changeText(screen.getByLabelText("Recipe name"), "My soup");
     fireEvent.press(screen.getByLabelText("Save recipe"));
     await waitFor(() => expect(saved).toHaveBeenCalledWith(expect.objectContaining({ name: "My soup" })));
@@ -75,6 +77,7 @@ test("owner edit loads all fields, preserves structured metadata and uses PUT", 
     expect(payload.instructions[0].timer_minutes).toBe(10);
     expect(payload.ingredients[0].preparation_note).toBe("chopped");
     expect(payload.nutrition).toEqual(recipe.nutrition);
+    expect(payload.cuisine).toBe("Italian");
   } finally { screen.close(); }
 });
 
@@ -133,10 +136,50 @@ test.each(["Approve", "Reject"])("web %s collapses review immediately after succ
     fireEvent.changeText(screen.getByLabelText("Recipe URL"), candidate.source_url);
     fireEvent.press(screen.getByLabelText("Fetch recipe"));
     await screen.findByText("Review recipe");
+    expect(screen.queryByLabelText("Review recipe photo URL")).toBeNull();
     await waitFor(() => expect(screen.getByLabelText(action).props.accessibilityState.disabled).toBe(false));
     fireEvent.press(screen.getByLabelText(action));
     await waitFor(() => expect(screen.queryByText("Review recipe")).toBeNull());
     expect(screen.getByText("Recent web drafts")).toBeTruthy();
+  } finally { screen.close(); }
+});
+
+test("total minutes is derived, validates the combined time and preserves legacy total-only recipes", async () => {
+  const screen = mount(<ManualRecipePanel initialRecipe={{ ...recipe, prep_minutes: null, cook_minutes: null, total_minutes: 45 }} />);
+  try {
+    expect(screen.getByLabelText("Total minutes").props.children).toBe("45");
+    fireEvent.press(screen.getByLabelText("Save recipe"));
+    await waitFor(() => expect(request).toHaveBeenCalled());
+    expect(JSON.parse(String(request.mock.calls[0][1]?.body)).total_minutes).toBe(45);
+    await screen.findByText("Recipe updated.");
+    fireEvent.changeText(screen.getByLabelText("Prep minutes"), "10");
+    fireEvent.changeText(screen.getByLabelText("Cook minutes"), "20");
+    expect(screen.getByLabelText("Total minutes").props.children).toBe("30");
+    fireEvent.changeText(screen.getByLabelText("Cook minutes"), "1440");
+    expect(screen.getByLabelText("Save recipe").props.accessibilityState.disabled).toBe(true);
+    fireEvent.changeText(screen.getByLabelText("Prep minutes"), "");
+    fireEvent.changeText(screen.getByLabelText("Cook minutes"), "");
+    expect(screen.getByLabelText("Total minutes").props.children).toBe("Not entered");
+    fireEvent.changeText(screen.getByLabelText("Prep minutes"), "0");
+    expect(screen.getByLabelText("Total minutes").props.children).toBe("0");
+    fireEvent.changeText(screen.getByLabelText("Prep minutes"), "1.5");
+    expect(screen.getByLabelText("Save recipe").props.accessibilityState.disabled).toBe(true);
+    fireEvent.changeText(screen.getByLabelText("Prep minutes"), " ");
+    fireEvent.changeText(screen.getByLabelText("Cook minutes"), " ");
+    expect(screen.getByLabelText("Total minutes").props.children).toBe("Not entered");
+    fireEvent.press(screen.getByLabelText("Save recipe"));
+    await waitFor(() => expect(request.mock.calls).toHaveLength(2));
+    expect(JSON.parse(String(request.mock.calls[1][1]?.body))).toMatchObject({ prep_minutes: null, cook_minutes: null, total_minutes: null });
+  } finally { screen.close(); }
+});
+
+test("step numbers use a centered badge without fixed text height", () => {
+  const screen = mount(<RecipeDetailSheet recipe={{ ...recipe, instructions: [{ text: "Finish the soup.", step_number: 12 }] }} visible onClose={jest.fn()} />);
+  try {
+    expect(StyleSheet.flatten(screen.getByTestId("recipe-step-badge").props.style)).toMatchObject({ alignItems: "center", justifyContent: "center", minHeight: 32, flexShrink: 0 });
+    const style = StyleSheet.flatten(screen.getByText("12").props.style);
+    expect(style.height).toBeUndefined();
+    expect(style.lineHeight).toBeUndefined();
   } finally { screen.close(); }
 });
 

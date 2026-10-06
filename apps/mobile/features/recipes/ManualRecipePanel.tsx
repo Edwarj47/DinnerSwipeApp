@@ -1,5 +1,4 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { Image } from "expo-image";
 import { useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -14,6 +13,7 @@ import { MacroChoice } from "@/features/premium/MacroChoice";
 import { AiRecipeJob } from "./aiRecipeTypes";
 import { appendRecipeImage, RecipeImage, RecipePhotoPicker } from "./RecipePhotoPicker";
 import { NutritionFields } from "./NutritionFields";
+import { RecipePhoto } from "./RecipePhoto";
 import { EMPTY_NUTRITION, nutritionInputs, parseNutrition } from "./recipeNutrition";
 
 function splitLines(value: string) {
@@ -40,27 +40,35 @@ export function ManualRecipePanel({ initialDraft, initialRecipe, onSaved, onCanc
   const [servings, setServings] = useState(String(initial?.servings ?? 4));
   const [prepMinutes, setPrepMinutes] = useState(initial?.prep_minutes != null ? String(initial.prep_minutes) : "");
   const [cookMinutes, setCookMinutes] = useState(initial?.cook_minutes != null ? String(initial.cook_minutes) : "");
-  const [totalMinutes, setTotalMinutes] = useState(initial?.total_minutes != null ? String(initial.total_minutes) : "");
-  const [cuisine, setCuisine] = useState(initialRecipe?.cuisine ?? "");
+  const [timingEdited, setTimingEdited] = useState(false);
   const [sourceUrl, setSourceUrl] = useState(initialRecipe?.source_url ?? "");
   const [sourceTitle, setSourceTitle] = useState(initialRecipe?.source_title ?? "");
   const [tags, setTags] = useState(initialRecipe?.tags.join(", ") ?? "");
   const [ingredients, setIngredients] = useState(initialRecipe?.ingredients.map(item => item.original_text).join("\n") ?? draft?.ingredients.join("\n") ?? "");
   const [instructions, setInstructions] = useState(initialRecipe?.instructions.map(item => item.text).join("\n") ?? draft?.instructions.join("\n") ?? "");
   const [status, setStatus] = useTransientMessage();
+  const [photoBusy, setPhotoBusy] = useState(false);
   const [nutrition, setNutrition] = useState(() => nutritionInputs(initial?.nutrition));
   const [nutritionBasis, setNutritionBasis] = useState<"serving" | "recipe">(draft?.nutrition_basis ?? "serving");
   const ingredientRows = splitLines(ingredients);
   const instructionRows = splitLines(instructions);
   const hasRequiredFields = name.trim().length > 1 && Number.isInteger(Number(servings)) && Number(servings) >= 1 && Number(servings) <= 30;
   const editingOwned = Boolean(initialRecipe?.can_edit);
+  const validTiming = [prepMinutes, cookMinutes].every(value => !value.trim() ||
+    (Number.isInteger(Number(value)) && Number(value) >= 0 && Number(value) <= 1440));
+  const totalMinutes = prepMinutes.trim() || cookMinutes.trim()
+    ? Number(prepMinutes) + Number(cookMinutes)
+    : timingEdited ? null : initial?.total_minutes ?? null;
 
   async function uploadPhoto(image: RecipeImage) {
-    const form = new FormData();
-    appendRecipeImage(form, "file", image);
-    const data = await apiFetch<{ photo_url: string }>("/api/v1/recipes/photo-upload", { method: "POST", body: form });
-    setPhotoUrl(data.photo_url);
-    setStatus("Photo attached.");
+    setPhotoBusy(true);
+    try {
+      const form = new FormData();
+      appendRecipeImage(form, "file", image);
+      const data = await apiFetch<{ photo_url: string }>("/api/v1/recipes/photo-upload", { method: "POST", body: form });
+      setPhotoUrl(data.photo_url);
+      setStatus("Photo attached.");
+    } finally { setPhotoBusy(false); }
   }
 
   const create = useMutation({
@@ -73,12 +81,12 @@ export function ManualRecipePanel({ initialDraft, initialRecipe, onSaved, onCanc
           description: description || null,
           photo_url: photoUrl || null,
           servings: Number(servings),
-          prep_minutes: prepMinutes ? Number(prepMinutes) : null,
-          cook_minutes: cookMinutes ? Number(cookMinutes) : null,
-          total_minutes: totalMinutes ? Number(totalMinutes) : null,
+          prep_minutes: prepMinutes.trim() ? Number(prepMinutes) : null,
+          cook_minutes: cookMinutes.trim() ? Number(cookMinutes) : null,
+          total_minutes: totalMinutes,
           difficulty,
           meal_type: mealType,
-          cuisine: cuisine || null,
+          cuisine: initialRecipe?.cuisine ?? null,
           source_url: sourceUrl || null,
           source_title: sourceTitle || null,
           tags: listFromText(tags),
@@ -116,9 +124,8 @@ export function ManualRecipePanel({ initialDraft, initialRecipe, onSaved, onCanc
       setServings("4");
       setPrepMinutes("");
       setCookMinutes("");
-      setTotalMinutes("");
+      setTimingEdited(true);
       setTags("");
-      setCuisine("");
       setSourceUrl("");
       setSourceTitle("");
       setIngredients("");
@@ -132,7 +139,7 @@ export function ManualRecipePanel({ initialDraft, initialRecipe, onSaved, onCanc
     onMutate: () => setStatus(""),
     onError: () => setStatus("")
   });
-  const canSave = hasRequiredFields && !create.isPending;
+  const canSave = hasRequiredFields && validTiming && (totalMinutes ?? 0) <= 1440 && !create.isPending && !photoBusy;
 
   return (
     <View style={styles.panel}>
@@ -146,24 +153,28 @@ export function ManualRecipePanel({ initialDraft, initialRecipe, onSaved, onCanc
       <TextInput accessibilityLabel="Recipe description" value={description} onChangeText={setDescription} placeholder="Short description" multiline style={[styles.input, styles.area]} />
       <Text style={styles.fieldLabel}>Recipe photo</Text>
       <RecipePhotoPicker onSelect={uploadPhoto} disabled={create.isPending} />
-      <TextInput accessibilityLabel="Photo URL" value={photoUrl} onChangeText={setPhotoUrl} placeholder="Photo URL or upload result" autoCapitalize="none" style={styles.input} />
-      {photoUrl ? <Image source={{ uri: photoUrl }} style={styles.preview} contentFit="contain" /> : null}
+      {photoUrl ? <>
+        <RecipePhoto photoUrl={photoUrl} accessibilityLabel="Recipe photo preview" style={styles.preview} contentFit="contain" />
+        <Button label="Remove photo" icon="close" disabled={create.isPending || photoBusy} onPress={() => setPhotoUrl("")} />
+      </> : null}
       <Text style={styles.fieldLabel}>Meal type</Text>
       <MacroChoice label="Meal type" value={mealType} onChange={setMealType} options={recipeCategoryOptions(mealType)} disabled={create.isPending} />
       <View style={styles.grid}>
         {([
           ["Servings", servings, setServings, true],
-          ["Difficulty", difficulty, setDifficulty, false], ["Prep minutes", prepMinutes, setPrepMinutes, true],
-          ["Cook minutes", cookMinutes, setCookMinutes, true], ["Total minutes", totalMinutes, setTotalMinutes, true]
+          ["Difficulty", difficulty, setDifficulty, false],
+          ["Prep minutes", prepMinutes, (value: string) => { setTimingEdited(true); setPrepMinutes(value); }, true],
+          ["Cook minutes", cookMinutes, (value: string) => { setTimingEdited(true); setCookMinutes(value); }, true]
         ] as const).map(([label, value, setter, numeric]) => <View key={label} style={styles.gridInput}>
           <Text style={styles.fieldLabel}>{label}</Text>
           <TextInput accessibilityLabel={label} value={value} onChangeText={setter} keyboardType={numeric ? "number-pad" : "default"} style={styles.input} />
         </View>)}
       </View>
+      <Text style={styles.fieldLabel}>Total minutes</Text>
+      <Text accessibilityLabel="Total minutes" style={styles.total}>{validTiming && totalMinutes != null ? String(totalMinutes) : "Not entered"}</Text>
+      {!validTiming || (totalMinutes ?? 0) > 1440 ? <Text style={styles.warning}>Use whole minutes, up to 1440 in total.</Text> : null}
       <Text style={styles.fieldLabel}>Tags</Text>
       <TextInput accessibilityLabel="Tags" value={tags} onChangeText={setTags} placeholder="Tags, comma separated" style={styles.input} />
-      <Text style={styles.fieldLabel}>Cuisine</Text>
-      <TextInput accessibilityLabel="Cuisine" value={cuisine} onChangeText={setCuisine} placeholder="Cuisine (optional)" style={styles.input} />
       {initialRecipe ? <>
         <Text style={styles.fieldLabel}>Source link</Text>
         <TextInput accessibilityLabel="Source URL" value={sourceUrl} onChangeText={setSourceUrl} autoCapitalize="none" style={styles.input} />
@@ -203,6 +214,7 @@ const styles = StyleSheet.create({
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   gridInput: { minWidth: 110, flexBasis: 124, flexGrow: 1, gap: 6 },
   fieldLabel: { color: Colors.ink, fontWeight: "700" },
+  total: { color: Colors.ink, fontWeight: "700", paddingVertical: 6 },
   area: { minHeight: 96, paddingTop: 12, textAlignVertical: "top" },
   preview: { width: "100%", height: 220, borderRadius: 8, backgroundColor: Colors.border },
   summary: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 10, gap: 4 },

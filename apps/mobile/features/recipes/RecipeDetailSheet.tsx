@@ -214,7 +214,9 @@ export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, on
             <RecipeSection title="Steps">
               {recipe.instructions.map((step) => (
                 <View key={`${step.step_number}-${step.text}`} style={styles.stepRow}>
-                  <Text style={styles.stepNumber}>{step.step_number}</Text>
+                  <View style={styles.stepBadge} testID="recipe-step-badge">
+                    <Text style={styles.stepNumber}>{step.step_number}</Text>
+                  </View>
                   <Text style={styles.rowText}>{step.text}</Text>
                 </View>
               ))}
@@ -338,7 +340,8 @@ const styles = StyleSheet.create({
   ingredientRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   check: { width: 22, height: 22, borderRadius: 6, borderColor: Colors.border, borderWidth: 2, marginTop: 1 },
   stepRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
-  stepNumber: { width: 26, height: 26, borderRadius: 13, backgroundColor: Colors.tomato, color: "#fff", fontWeight: "900", textAlign: "center", lineHeight: 26 },
+  stepBadge: { minWidth: 32, minHeight: 32, borderRadius: 8, backgroundColor: Colors.softRed, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, paddingVertical: 4, flexShrink: 0 },
+  stepNumber: { color: Colors.tomato, fontWeight: "900", fontSize: 14, textAlign: "center", includeFontPadding: false },
   rowText: { color: Colors.ink, fontSize: 16, lineHeight: 23, flex: 1 },
   ingredientEquivalent: { color: Colors.muted, fontSize: 14, lineHeight: 20 },
   tags: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

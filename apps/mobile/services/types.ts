@@ -55,6 +55,7 @@ export type Recipe = {
   nutrition?: RecipeNutrition | null;
   last_selected_date?: string | null;
   feedback_ignored?: boolean;
+  feedback_completed?: boolean;
 };
 
 export type Household = {

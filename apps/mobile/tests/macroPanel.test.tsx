@@ -5,6 +5,7 @@ import { PremiumMacroPanel } from "@/features/premium/PremiumMacroPanel";
 import { todayISO } from "@/features/premium/macroDates";
 import { apiFetch } from "@/services/api";
 import { GRAMS_PER_OUNCE } from "@/services/weightUnits";
+import { useOfflineStatus } from "@/services/offlineStore";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-linking", () => ({ openURL: jest.fn() }));
@@ -22,6 +23,7 @@ const analytics = { days: 30, start_date: "2026-09-01", end_date: "2026-09-30", 
   ] };
 
 beforeEach(() => {
+  useOfflineStatus.setState({ offline: false });
   request.mockReset().mockImplementation(async (path, init) => {
     if (path.includes("subscription/status")) return { premium_active: true, current_tier: "premium", plans: [] };
     if (path.includes("/summary")) return { start_date: "2026-09-22", end_date: "2026-09-28", eaten_meals: 1, totals };
@@ -31,6 +33,51 @@ beforeEach(() => {
     if (path.includes("/entries")) return init?.method === "POST" ? { id: "new-entry" } : [];
     return {};
   });
+});
+
+test("Save as recipe preserves the form, canonical grams and zero values without logging twice", async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init) => path === "/api/v1/profile"
+    ? { notification_preferences: { protein_unit: "oz" } } : original(path, init));
+  const screen = mount();
+  try {
+    await screen.findByLabelText("Protein ounces");
+    expect(screen.getByLabelText("Save as recipe").props.accessibilityState.disabled).toBe(true);
+    fireEvent.changeText(screen.getByLabelText("Entry name"), "Protein shake");
+    fireEvent.press(screen.getByText("Beverages", { exact: true }));
+    fireEvent.changeText(screen.getByLabelText("Calories"), "160");
+    fireEvent.changeText(screen.getByLabelText("Protein ounces"), "1");
+    fireEvent.changeText(screen.getByLabelText("Fat grams"), "0");
+    fireEvent.changeText(screen.getByLabelText("Entry notes"), "My shake");
+    fireEvent.press(screen.getByLabelText("Save as recipe"));
+    await screen.findByText("Recipe saved with nutrition for one serving.");
+    const call = request.mock.calls.find(([path, init]) => path === "/api/v1/recipes" && init?.method === "POST")!;
+    expect(JSON.parse(String(call[1]?.body))).toMatchObject({ name: "Protein shake", description: "My shake", servings: 1,
+      meal_type: "beverage", nutrition: { calories: 160, protein_g: 28.35, fat_g: 0, carbs_g: null, fiber_g: null } });
+    expect(request.mock.calls.some(([path, init]) => path.endsWith("/entries") && init?.method === "POST")).toBe(false);
+    expect(screen.getByLabelText("Entry name").props.value).toBe("Protein shake");
+    expect(screen.getByLabelText("Recipe saved").props.accessibilityState.disabled).toBe(true);
+    fireEvent.changeText(screen.getByLabelText("Entry name"), "Protein smoothie");
+    expect(screen.getByLabelText("Save as recipe").props.accessibilityState.disabled).toBe(false);
+  } finally { screen.close(); }
+});
+
+test("recipe-save errors preserve the form and offline recipe creation is disabled", async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init) => {
+    if (path === "/api/v1/recipes") throw new Error("Recipe save failed");
+    return original(path, init);
+  });
+  const screen = mount();
+  try {
+    await screen.findByLabelText("Entry name");
+    fireEvent.changeText(screen.getByLabelText("Entry name"), "My soup");
+    fireEvent.press(screen.getByLabelText("Save as recipe"));
+    await screen.findByText("Recipe save failed");
+    expect(screen.getByLabelText("Entry name").props.value).toBe("My soup");
+    act(() => useOfflineStatus.setState({ offline: true }));
+    expect(screen.getByLabelText("Save as recipe").props.accessibilityState.disabled).toBe(true);
+  } finally { screen.close(); useOfflineStatus.setState({ offline: false }); }
 });
 afterEach(() => { jest.restoreAllMocks(); jest.useRealTimers(); });
 
