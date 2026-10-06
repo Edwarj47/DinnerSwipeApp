@@ -37,9 +37,9 @@
 - `feedback_completed` is added to recipe responses. Completion fingerprints
   use the existing profile JSON, protected against stale general profile saves.
   No schema migration is required; deploy the API before releasing the client.
-- Preview build 22 is being released after the checks below. Production rollout
-  deploys the API before the client; no customer-data maintenance is required.
-  Android bundle export is not an APK; release results are recorded separately.
+- The API, worker, and web release is live. Android preview build 22 is queued
+  on EAS; the client release remains pending artifact verification. No database
+  migration or customer-data maintenance was required.
 
 ## Verification (2026-10-06)
 
@@ -59,6 +59,47 @@
   `/tmp/dinner-recipe-frontend-checks.log`, and
   `/tmp/dinner-recipe-review-browser.log`.
 - Local static preview: `http://127.0.0.1:19011`.
+
+## Production Deployment
+
+- Source commit: `9383c86cfe22584215cd1266cec03f7ad49aa18e`, pushed to `main`.
+  [GitHub CI](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/37509333646)
+  passed the backend, frontend, and Docker jobs.
+- Release checks passed all 165 API tests and 202 mobile tests, plus lint,
+  type checking, cold Jest transforms, and the private-environment secret scan.
+  One optional integration test was skipped; separate restored-Postgres smoke
+  checks passed below.
+- A fresh backup was restored into disposable, internal-network PostgreSQL.
+  All 1,487 original rows across 41 tables remained unchanged while fixture
+  requests verified bulk review actions, protected profile preferences,
+  one-serving recipe creation without duplicate macro logging, aggregate
+  minutes, weekly duplication, grocery scaling, and legacy client compatibility.
+- API/worker image: `0d19cb2b49e0`; web image: `0ea3ea2e59ec`.
+  Public API and web health checks passed. The new feedback endpoint requires
+  authentication, and its live OpenAPI contract matches the tested API.
+- Candidate and live fixture-only Playwright checks passed phone, desktop,
+  tablet, and enlarged-text layouts, including the weekly-card regressions.
+  Served HTML and JavaScript match the web image exactly. No live fixture
+  writes were made.
+- Read-only account snapshots confirmed weekly selections, portions, ordering,
+  locks, macro entries, and swipe history were unchanged by deployment. Dinner
+  Swipe Postgres, the environment, and all unrelated containers were unchanged.
+- Private backup: `backups/releases/20261006T181104Z_preview22`. The database,
+  media, environment, and verification records are retained privately.
+  Rollback images: `dinner-swipe-api:before-preview22`,
+  `dinner-swipe-worker:before-preview22`, and
+  `dinner-swipe-web:before-preview22`. Roll back only these application images
+  with scoped Compose recreation, not a database restore over new user writes.
+
+## Android Build
+
+- EAS build `faf1b66f-14b9-4798-ae70-a8c4f48d6580` was queued October 6 at
+  18:11 UTC from source commit `9383c86`. Standalone preview `0.1.0`, Android
+  package `dev.dcss.dinnerswipe`, version code `22`.
+- Build completion, APK download integrity, bundled features, and signing
+  compatibility have not yet been verified. No installable APK link is confirmed
+  at this stage. Android bundle export alone is not an APK.
+- [Build status](https://expo.dev/accounts/data-centric-software-solutions/projects/dinner-swipe/builds/faf1b66f-14b9-4798-ae70-a8c4f48d6580).
 
 ## Device UAT
 
