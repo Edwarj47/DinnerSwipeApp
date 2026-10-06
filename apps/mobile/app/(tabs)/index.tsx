@@ -118,19 +118,21 @@ export default function DiscoverScreen() {
   }
 
   return (
-    <Screen scroll={Platform.OS === "web" || Boolean(tour?.expanded && tour.step.id === "discover")}>
+    <Screen contentWidth={960} scroll={Platform.OS === "web" || Boolean(tour?.expanded && tour.step.id === "discover")}>
       <View style={styles.header}>
         <View style={styles.brand}>
           <BrandLogo size={46} />
           <View style={styles.brandText}>
-            <Text numberOfLines={1} style={styles.eyebrow}>{progressText}</Text>
-            <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.82} style={styles.title}>{headline}</Text>
+            <Text style={styles.eyebrow}>{progressText}</Text>
+            <Text style={styles.title}>{headline}</Text>
           </View>
         </View>
         {!isReplacingSlot ? (
           <Button
-            label="Undo"
+            label=""
+            accessibilityLabel="Undo"
             icon="arrow-undo"
+            variant="quiet"
             disabled={!canUndoPlannedMeal}
             onPress={() => {
               if (lastAction?.action !== "add" || !lastAction.requestId) return;
@@ -185,12 +187,12 @@ export default function DiscoverScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 16, gap: 10 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8 },
   brand: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 },
   brandText: { flex: 1, minWidth: 0 },
   eyebrow: { color: Colors.basil, fontWeight: "800", textTransform: "uppercase", fontSize: 12 },
-  title: { color: Colors.ink, fontSize: 32, fontWeight: "900" },
-  status: { color: Colors.basil, fontWeight: "800", marginBottom: 10 },
+  title: { color: Colors.ink, fontSize: 28, fontWeight: "900" },
+  status: { color: Colors.basil, fontWeight: "800", marginBottom: 8 },
   empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
   emptyCopy: { color: Colors.muted, textAlign: "center", lineHeight: 22, maxWidth: 360 },
   emptyActions: { width: "100%", maxWidth: 320, gap: 10 },

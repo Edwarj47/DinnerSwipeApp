@@ -104,7 +104,7 @@ export default function RecipesScreen() {
   );
 
   return (
-    <Screen>
+    <Screen contentWidth={960}>
       <View style={styles.header}>
         <BrandLogo size={54} framed />
         <View style={{ flex: 1 }}>
@@ -215,23 +215,23 @@ export default function RecipesScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", gap: 12, alignItems: "center", marginBottom: 14 },
+  header: { flexDirection: "row", gap: 12, alignItems: "center", marginBottom: 12 },
   kicker: { color: Colors.basil, fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
-  title: { color: Colors.ink, fontSize: 32, fontWeight: "900", lineHeight: 36 },
+  title: { color: Colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 },
   subtitle: { color: Colors.muted, lineHeight: 20 },
   addSegment: { marginTop: 12 },
-  search: { minHeight: 48, backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, paddingHorizontal: 12, marginVertical: 14 },
+  search: { minHeight: 48, backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, paddingHorizontal: 12, marginVertical: 12 },
   listHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  sectionTitle: { fontSize: 20, fontWeight: "900", color: Colors.ink },
+  sectionTitle: { fontSize: 18, fontWeight: "900", color: Colors.ink },
   count: { color: Colors.tomato, fontWeight: "900" },
-  row: { flexDirection: "row", gap: 12, padding: 10, backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, marginBottom: 10 },
-  thumb: { width: 76, height: 76, borderRadius: 8, backgroundColor: Colors.border },
-  body: { flex: 1, justifyContent: "center" },
-  name: { fontSize: 17, fontWeight: "900", color: Colors.ink },
-  meta: { color: Colors.muted, marginTop: 3 },
-  warning: { color: Colors.danger, marginTop: 4 },
+  row: { flexDirection: "row", gap: 12, padding: 12, backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, marginBottom: 8 },
+  thumb: { width: 64, height: 64, borderRadius: 8, backgroundColor: Colors.border },
+  body: { flex: 1, minWidth: 0, justifyContent: "center" },
+  name: { fontSize: 17, fontWeight: "900", color: Colors.ink, lineHeight: 22 },
+  meta: { color: Colors.muted, marginTop: 2, lineHeight: 20 },
+  warning: { color: Colors.danger, marginTop: 4, lineHeight: 20 },
   rowSelected: { borderColor: Colors.tomato, backgroundColor: Colors.softRed },
-  emptyPanel: { alignItems: "center", paddingVertical: 34, gap: 6 },
+  emptyPanel: { alignItems: "center", paddingVertical: 24, gap: 8 },
   emptyTitle: { color: Colors.ink, fontWeight: "900", fontSize: 20 },
   empty: { color: Colors.muted, textAlign: "center", lineHeight: 20 },
   quickBackdrop: {

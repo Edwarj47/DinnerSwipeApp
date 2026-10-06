@@ -50,7 +50,7 @@ const styles = StyleSheet.create({
   segment: { flexDirection: "row", backgroundColor: Colors.softRed, borderRadius: 8, padding: 4, gap: 4 },
   wrap: { flexWrap: "wrap" },
   wrapButton: { flexBasis: 124, minWidth: 124, flexGrow: 1 },
-  button: { flex: 1, minHeight: 42, flexDirection: "row", gap: 4, alignItems: "center", justifyContent: "center", borderRadius: 7, paddingHorizontal: 8 },
+  button: { flex: 1, minHeight: 44, flexDirection: "row", gap: 4, alignItems: "center", justifyContent: "center", borderRadius: 7, paddingHorizontal: 8, paddingVertical: 8 },
   active: { backgroundColor: Colors.surface },
   label: { color: Colors.muted, fontWeight: "900" },
   activeLabel: { color: Colors.tomato }

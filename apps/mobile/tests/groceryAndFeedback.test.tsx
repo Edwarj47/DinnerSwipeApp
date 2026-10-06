@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { StyleSheet } from "react-native";
 
 import GroceryScreen from "@/app/(tabs)/grocery";
 import RecipesScreen from "@/app/(tabs)/recipes";
@@ -57,6 +58,7 @@ test("grocery groups start expanded, collapse individually and share checks and 
     expect(screen.queryByText("For recipe: 2")).toBeNull();
     expect(screen.getByText("For recipe: 1")).toBeTruthy();
     fireEvent.press(screen.getByLabelText("Expand Tacos"));
+    expect(StyleSheet.flatten(screen.getAllByRole("checkbox")[0].props.style)).toMatchObject({ width: 44, minHeight: 44 });
     fireEvent.press(screen.getAllByRole("checkbox")[0]);
     await waitFor(() => expect(screen.getAllByRole("checkbox").every(item => item.props.accessibilityState.checked)).toBe(true));
     fireEvent.press(screen.getAllByLabelText("Put Red onion in pantry")[1]);

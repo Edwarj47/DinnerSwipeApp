@@ -283,10 +283,10 @@ function ActionTile({
     >
       <Ionicons name={icon} size={19} color={isPrimary ? "#fff" : Colors.ink} />
       <View style={{ flex: 1, minWidth: 0 }}>
-        <Text numberOfLines={1} style={[styles.actionTileTitle, isPrimary ? styles.actionTileTitleLight : null]}>
+        <Text style={[styles.actionTileTitle, isPrimary ? styles.actionTileTitleLight : null]}>
           {title}
         </Text>
-        <Text numberOfLines={1} style={[styles.actionTileSubtitle, isPrimary ? styles.actionTileSubtitleLight : null]}>
+        <Text style={[styles.actionTileSubtitle, isPrimary ? styles.actionTileSubtitleLight : null]}>
           {subtitle}
         </Text>
       </View>
@@ -305,11 +305,11 @@ function RecipeSection({ title, children }: { title: string; children: ReactNode
 
 const styles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.32)", justifyContent: "flex-end" },
-  sheet: { maxHeight: "92%", backgroundColor: Colors.background, borderTopLeftRadius: 18, borderTopRightRadius: 18, overflow: "hidden", ...shadow },
+  sheet: { width: "100%", maxWidth: 960, alignSelf: "center", maxHeight: "92%", backgroundColor: Colors.background, borderTopLeftRadius: 18, borderTopRightRadius: 18, overflow: "hidden", ...shadow },
   dragHandle: { minHeight: 28, alignItems: "center", justifyContent: "center" },
   grabber: { width: 42, height: 5, borderRadius: 999, backgroundColor: Colors.border },
   close: { position: "absolute", top: 14, right: 14, zIndex: 2, width: 44, height: 44, borderRadius: 22, backgroundColor: "rgba(255,255,255,0.9)", alignItems: "center", justifyContent: "center" },
-  content: { padding: 16, paddingBottom: 30, gap: 14 },
+  content: { padding: 16, paddingBottom: 30, gap: 16 },
   titleRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   kicker: { color: Colors.basil, fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
   title: { color: Colors.ink, fontSize: 28, lineHeight: 33, fontWeight: "900" },
@@ -320,7 +320,7 @@ const styles = StyleSheet.create({
   stat: { width: "48%", minHeight: 64, backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 10, justifyContent: "center" },
   statValue: { color: Colors.ink, fontWeight: "900", fontSize: 17, textTransform: "capitalize" },
   statLabel: { color: Colors.muted, fontWeight: "800", fontSize: 11, textTransform: "uppercase", marginTop: 2 },
-  actionPanel: { backgroundColor: Colors.surface, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, padding: 12, gap: 10 },
+  actionPanel: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 16, gap: 8 },
   actionTitle: { color: Colors.ink, fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
   actionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   actionTile: { width: "48%", minHeight: 62, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, backgroundColor: Colors.surface, paddingHorizontal: 11, paddingVertical: 9 },
@@ -333,7 +333,7 @@ const styles = StyleSheet.create({
   actionTileSubtitleLight: { color: "rgba(255,255,255,0.82)" },
   votePanel: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 10 },
   voteActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  section: { backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 14, gap: 10 },
+  section: { borderTopColor: Colors.border, borderTopWidth: 1, paddingTop: 16, gap: 8 },
   sectionTitle: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
   ingredientRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   check: { width: 22, height: 22, borderRadius: 6, borderColor: Colors.border, borderWidth: 2, marginTop: 1 },

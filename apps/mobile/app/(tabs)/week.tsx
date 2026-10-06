@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
 
 import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
@@ -20,25 +20,22 @@ import { RecipePhoto } from "@/features/recipes/RecipePhoto";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { useCurrentWeek } from "@/features/planner/useCurrentWeek";
 import { TourTarget } from "@/features/onboarding/TourTarget";
+import { todayISO } from "@/features/premium/macroDates";
 
 type WeeklySlot = WeeklyPlan["slots"][number];
 type SlotPatch = Partial<Omit<WeeklySlot, "id" | "recipe_name" | "recipe_photo_url" | "recipe_total_minutes" | "recipe_difficulty">>;
 
-const SLOT_TYPES: { label: string; value: WeeklySlot["slot_type"] }[] = [
-  { label: "Meal", value: "meal" },
-  { label: "Leftovers", value: "leftovers" },
-  { label: "Out", value: "dining_out" },
-  { label: "Flex", value: "flexible" }
-];
-
 export default function WeekScreen() {
   const router = useRouter();
+  const { width, fontScale } = useWindowDimensions();
+  const compact = width < 360 || (width < 480 && fontScale > 1.2);
   const queryClient = useQueryClient();
   const [statusIsError, setStatusIsError] = useState(false);
   const [status, setStatus] = useTransientMessage(statusIsError);
   const [expandedSlotId, setExpandedSlotId] = useState<string | null>(null);
   const [resetScope, setResetScope] = useState<{ date: string | null; label: string } | null>(null);
   const [addDay, setAddDay] = useState<{ iso: string; label: string } | null>(null);
+  const [duplicateSlot, setDuplicateSlot] = useState<WeeklySlot | null>(null);
   const { data, isLoading, error, refetch } = useCurrentWeek();
   const profile = useQuery({ queryKey: ["profile"], queryFn: () => apiFetch<UserProfile>("/api/v1/profile"), retry: false });
   const subscription = useQuery({ queryKey: ["subscription-status"], queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status"), retry: false });
@@ -64,6 +61,21 @@ export default function WeekScreen() {
     },
     onError: showError
   });
+  const duplicateMeal = useMutation({
+    mutationFn: ({ slot, date }: { slot: WeeklySlot; date: string | null }) => apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current/slots", {
+      method: "POST", body: JSON.stringify({ recipe_id: slot.recipe_id, slot_date: date, servings: slot.servings })
+    }),
+    onSuccess: async (plan, { date }) => {
+      queryClient.setQueryData(["weekly-plan"], plan);
+      setDuplicateSlot(null);
+      setExpandedSlotId(null);
+      setStatusIsError(false);
+      const day = dayOptions.find(day => day.iso === date);
+      setStatus(day ? `Meal duplicated to ${day.label}.` : "Meal duplicated to Unscheduled.");
+      await invalidatePlan(queryClient);
+    },
+    onError: showError
+  });
   const reset = useMutation({
     mutationFn: (scope: { date: string | null; label: string }) => apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current/reset", {
       method: "POST", body: JSON.stringify({ slot_date: scope.date })
@@ -81,10 +93,12 @@ export default function WeekScreen() {
     onError: showError
   });
   const remove = useMutation({
-    mutationFn: (id: string) => apiFetch(`/api/v1/weekly-plans/current/slots/${id}`, { method: "DELETE" }),
-    onSuccess: async (_, id) => {
+    mutationFn: (id: string) => apiFetch<WeeklyPlan>(`/api/v1/weekly-plans/current/slots/${id}`, { method: "DELETE" }),
+    onSuccess: async (plan, id) => {
       const recipeId = data?.slots.find((slot: WeeklySlot) => slot.id === id)?.recipe_id;
       if (recipeId) usePlannerStore.getState().returnToDiscover([recipeId]);
+      queryClient.setQueryData(["weekly-plan"], plan);
+      setExpandedSlotId(null);
       setStatusIsError(false);
       setStatus("Meal removed.");
       await invalidatePlan(queryClient);
@@ -109,14 +123,18 @@ export default function WeekScreen() {
         body: JSON.stringify({
           recipe_id: slot.recipe_id,
           weekly_plan_slot_id: slot.id,
-          meal_date: slot.slot_date,
+          meal_date: slot.slot_date ?? todayISO(),
           status: mealStatus,
           servings_consumed: slot.servings
         })
       }),
-    onSuccess: async () => {
+    onSuccess: async (_, { slot, mealStatus }) => {
+      setExpandedSlotId(null);
       setStatusIsError(false);
-      setStatus("Meal logged.");
+      const day = dayOptions.find(day => day.iso === slot.slot_date);
+      setStatus(mealStatus === "ate"
+        ? day ? `Added to ${day.label}'s macro entries.` : "Added to today's macro entries."
+        : "Logged as skipped. No nutrition added.");
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: ["macro-summary"] }),
         queryClient.invalidateQueries({ queryKey: ["macro-entries"] }),
@@ -152,7 +170,7 @@ export default function WeekScreen() {
     },
     onError: async error => { showError(error); await refetch(); }
   });
-  const busy = reset.isPending || update.isPending || remove.isPending || addMeal.isPending || reorder.isPending;
+  const busy = reset.isPending || update.isPending || remove.isPending || addMeal.isPending || reorder.isPending || confirmMeal.isPending || duplicateMeal.isPending;
 
   function requestReset(scope: { date: string | null; label: string }) {
     if (busy) return;
@@ -161,7 +179,7 @@ export default function WeekScreen() {
   }
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} contentWidth={960}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>This Week</Text>
@@ -169,7 +187,7 @@ export default function WeekScreen() {
         </View>
         <Button label="Reset" icon="refresh" disabled={!data || busy} onPress={() => requestReset({ date: null, label: "This week" })} />
       </View>
-      {status ? <Text accessibilityRole={statusIsError ? "alert" : undefined} style={[styles.status, statusIsError && styles.error]}>{status}</Text> : null}
+      {status ? <Text accessibilityLiveRegion="polite" accessibilityRole={statusIsError ? "alert" : undefined} style={[styles.status, statusIsError && styles.error]}>{status}</Text> : null}
       {error ? <Button label="Retry loading week" icon="refresh" onPress={() => { void refetch(); }} /> : null}
       {!premiumActive ? (
         <View style={styles.premiumBanner}>
@@ -205,7 +223,7 @@ export default function WeekScreen() {
           <WeekDropDay key={group.iso} day={group.iso}>
             <TourTarget id={group.iso === dayOptions[0]?.iso ? "week" : `week-${group.iso}`}>
             <View style={styles.groupHeader}>
-              <View style={{ flex: 1 }}><Text style={styles.groupTitle}>{group.label}</Text><Text style={styles.meta}>{group.short}</Text></View>
+              <View style={styles.dayHeading}><Text style={styles.groupTitle}>{group.label}</Text><Text style={styles.dayDate}>{group.short}</Text></View>
               {group.iso && group.slots.some(slot => slot.recipe_id || slot.slot_type !== "flexible") ? (
                 <Pressable accessibilityRole="button" accessibilityLabel={`Reset ${group.label}`} disabled={busy} onPress={() => requestReset({ date: group.iso, label: group.label })} style={styles.resetDay}>
                   <Ionicons name="refresh" color={Colors.muted} size={20} />
@@ -223,17 +241,20 @@ export default function WeekScreen() {
             <WeekDropMeal key={slot.id} id={slot.id} day={group.iso}>
             <View style={[styles.row, isExpanded ? styles.rowExpanded : null]}>
               <View style={styles.cardTop}>
-                <WeekDragHandle id={slot.id} label={slot.recipe_name ?? slotLabel(slot.slot_type)} disabled={busy} />
-                {slot.recipe_id ? <RecipePhoto photoUrl={slot.recipe_photo_url} accessibilityLabel={`${slot.recipe_name ?? "Meal"} photo`} style={styles.thumb} /> : null}
+                <View style={[styles.identity, compact && styles.compactIdentity]}>
+                  <WeekDragHandle id={slot.id} label={slot.recipe_name ?? slotLabel(slot.slot_type)} disabled={busy} />
+                  {slot.recipe_id ? <RecipePhoto photoUrl={slot.recipe_photo_url} accessibilityLabel={`${slot.recipe_name ?? "Meal"} photo`} style={styles.thumb} /> : null}
+                </View>
                 <View style={styles.slotMain}>
                   <Text style={styles.meal}>{slot.recipe_name ?? slotLabel(slot.slot_type)}</Text>
                   <Text style={styles.meta}>
-                    Serves {slot.servings} - {slot.is_locked ? "kept" : "open to changes"}
+                    Serves {slot.servings}
                     {slot.recipe_total_minutes ? ` - ${slot.recipe_total_minutes} min` : ""}
                   </Text>
                 </View>
                 <Button
-                  label={isExpanded ? "Done" : "Edit"}
+                  label={isExpanded ? (compact ? "" : "Done") : "Edit"}
+                  accessibilityLabel={isExpanded ? "Done" : "Edit"}
                   icon={isExpanded ? "checkmark" : "create"}
                   disabled={busy}
                   onPress={() => {
@@ -245,34 +266,23 @@ export default function WeekScreen() {
                 <>
                   <DaySelection days={dayOptions} value={slot.slot_date} disabled={busy}
                     onChange={date => update.mutate({ slot, patch: { slot_date: date } })} />
-                  <View style={styles.typeRow}>
-                    {SLOT_TYPES.map((item) => (
-                      <Pressable key={item.value} accessibilityRole="button" onPress={() => update.mutate({ slot, patch: { slot_type: item.value } })} style={[styles.typeButton, slot.slot_type === item.value && styles.typeActive]}>
-                        <Text style={[styles.typeText, slot.slot_type === item.value && styles.typeTextActive]}>{item.label}</Text>
-                      </Pressable>
-                    ))}
-                  </View>
                   <View style={styles.controls}>
                     <View style={styles.stepper}>
-                      <Button label="" icon="remove" accessibilityLabel="Decrease servings" disabled={busy || slot.servings <= 1} onPress={() => update.mutate({ slot, patch: { servings: slot.servings - 1 } })} />
+                      <Button label="" icon="remove" variant="quiet" accessibilityLabel="Decrease servings" disabled={busy || slot.servings <= 1} onPress={() => update.mutate({ slot, patch: { servings: slot.servings - 1 } })} />
                       <Text style={styles.servings}>{slot.servings}</Text>
-                      <Button label="" icon="add" accessibilityLabel="Increase servings" disabled={busy || slot.servings >= 30} onPress={() => update.mutate({ slot, patch: { servings: slot.servings + 1 } })} />
+                      <Button label="" icon="add" variant="quiet" accessibilityLabel="Increase servings" disabled={busy || slot.servings >= 30} onPress={() => update.mutate({ slot, patch: { servings: slot.servings + 1 } })} />
                     </View>
-                    <Button label={slot.is_locked ? "Unlock" : "Keep"} icon={slot.is_locked ? "lock-open" : "lock-closed"} onPress={() => update.mutate({ slot, patch: { is_locked: !slot.is_locked } })} />
+                    {slot.recipe_id ? <Button label="Duplicate" icon="copy-outline" variant="quiet" accessibilityLabel={`Duplicate ${slot.recipe_name ?? "meal"}`} disabled={busy}
+                      onPress={() => { duplicateMeal.reset(); setDuplicateSlot(slot); }} /> : null}
                   </View>
-                  <Text style={styles.lockHint}>
-                    {slot.is_locked
-                      ? "Kept meals stay fixed for future auto-pick or group-match replacement tools."
-                      : "Open meals can be changed now and by future auto-pick tools."}
-                  </Text>
                   <View style={styles.actions}>
                     {slot.recipe_id && premiumActive ? (
                       <>
-                        <Button label="Ate" icon="checkmark-circle" variant="primary" disabled={confirmMeal.isPending} onPress={() => confirmMeal.mutate({ slot, mealStatus: "ate" })} />
-                        <Button label="Skipped" icon="close-circle" disabled={confirmMeal.isPending} onPress={() => confirmMeal.mutate({ slot, mealStatus: "skipped" })} />
+                        <Button label="Ate" icon="checkmark-circle" variant="primary" disabled={busy} onPress={() => confirmMeal.mutate({ slot, mealStatus: "ate" })} />
+                        <Button label="Skipped" icon="close-circle" variant="quiet" disabled={busy} onPress={() => confirmMeal.mutate({ slot, mealStatus: "skipped" })} />
                       </>
                     ) : null}
-                    {slot.recipe_id ? <Button label="Remove" icon="trash" variant="danger" disabled={busy} onPress={() => remove.mutate(slot.id)} /> : null}
+                    <View style={styles.removeAction}><Button label="" icon="trash-outline" variant="quiet-danger" accessibilityLabel={`Remove ${slot.recipe_name ?? slotLabel(slot.slot_type)}`} disabled={busy} onPress={() => remove.mutate(slot.id)} /></View>
                   </View>
                 </>
               ) : null}
@@ -285,6 +295,26 @@ export default function WeekScreen() {
       </WeekDrag>
       <RecipePicker weeklyChoices title={`Add to ${addDay?.label ?? "day"}`} visible={!!addDay} busy={addMeal.isPending} error={addMeal.error instanceof Error ? addMeal.error.message : undefined}
         onClose={() => setAddDay(null)} onSelect={recipe => { if (addDay) addMeal.mutate({ recipeId: recipe.id, date: addDay.iso || null }); }} />
+      <Modal visible={!!duplicateSlot} transparent animationType="fade" onRequestClose={() => { if (!duplicateMeal.isPending) setDuplicateSlot(null); }}>
+        <View style={styles.modalBackdrop}>
+          <View style={[styles.modalPanel, styles.duplicatePanel]} accessibilityViewIsModal>
+            <View style={styles.duplicateHeader}>
+              <Text style={[styles.groupTitle, styles.slotMain]}>Duplicate meal</Text>
+              <Button label="" icon="close" accessibilityLabel="Close duplicate meal" disabled={duplicateMeal.isPending} onPress={() => setDuplicateSlot(null)} />
+            </View>
+            <Text style={styles.modalCopy}>{duplicateSlot?.recipe_name}</Text>
+            <ScrollView>
+              {[...dayOptions, { iso: "", label: "Unscheduled", short: "" }].map(day => <Pressable key={day.iso} accessibilityRole="button"
+                accessibilityLabel={`Duplicate meal to ${day.label}${day.short ? `, ${day.short}` : ""}`} accessibilityState={{ disabled: busy }} disabled={busy}
+                onPress={() => { if (duplicateSlot && !busy) duplicateMeal.mutate({ slot: duplicateSlot, date: day.iso || null }); }} style={styles.duplicateDay}>
+                <Text style={[styles.meal, styles.slotMain]}>{day.label}{day.short ? `, ${day.short}` : ""}</Text>
+                <Ionicons name="copy-outline" size={20} color={Colors.tomato} />
+              </Pressable>)}
+            </ScrollView>
+            {duplicateMeal.isError ? <Text accessibilityRole="alert" style={styles.error}>{duplicateMeal.error instanceof Error ? duplicateMeal.error.message : "Unable to duplicate meal. Try again."}</Text> : null}
+          </View>
+        </View>
+      </Modal>
       <Modal visible={!!resetScope} transparent animationType="fade" onRequestClose={() => { if (!reset.isPending) setResetScope(null); }}>
         <View style={styles.modalBackdrop}>
           <View style={styles.modalPanel}>
@@ -329,28 +359,33 @@ function slotLabel(type: WeeklySlot["slot_type"]) {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: 10, marginBottom: 10 },
-  title: { fontSize: 32, fontWeight: "900", color: Colors.ink },
+  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  title: { fontSize: 28, fontWeight: "900", color: Colors.ink },
   subtitle: { color: Colors.muted },
-  status: { color: Colors.basil, fontWeight: "800", marginBottom: 10 },
+  status: { color: Colors.basil, fontWeight: "800", marginBottom: 8 },
   premiumBanner: { flexDirection: "row", gap: 10, alignItems: "center", backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 12, marginBottom: 10 },
   premiumTitle: { color: Colors.ink, fontWeight: "900" },
   premiumNote: { color: Colors.muted, lineHeight: 19, fontSize: 13, marginTop: 3 },
-  list: { gap: 18, paddingBottom: 20 },
-  group: { gap: 8 },
-  groupHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", minHeight: 44 },
+  groupHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 4, minHeight: 44 },
+  dayHeading: { flex: 1, minWidth: 0, flexDirection: "row", flexWrap: "wrap", alignItems: "baseline", columnGap: 8, rowGap: 2 },
+  dayDate: { color: Colors.muted, fontSize: 13 },
   groupTitle: { color: Colors.ink, fontWeight: "800", fontSize: 18 },
   resetDay: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   addDay: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44, paddingHorizontal: 8 },
   addLabel: { color: Colors.tomato, fontWeight: "800" },
-  emptyDay: { color: Colors.muted, paddingBottom: 12, borderBottomWidth: 1, borderColor: Colors.border },
+  emptyDay: { color: Colors.muted },
   error: { color: Colors.danger },
   modalBackdrop: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)", padding: 20 },
   modalPanel: { maxWidth: 420, width: "100%", padding: 20, gap: 16, backgroundColor: Colors.surface, borderRadius: 8 },
   modalCopy: { color: Colors.muted, lineHeight: 22 },
   row: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 12, gap: 12 },
   rowExpanded: { borderColor: "#f0b6b2" },
-  cardTop: { flexDirection: "row", gap: 10, alignItems: "center" },
+  cardTop: { flexDirection: "row", gap: 8, alignItems: "center" },
+  identity: { flexDirection: "row", gap: 8, alignItems: "center" },
+  compactIdentity: { flexDirection: "column-reverse", gap: 0 },
+  duplicatePanel: { maxHeight: "90%" },
+  duplicateHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
+  duplicateDay: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 48, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
   slotBadge: { width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.tomato, alignItems: "center", justifyContent: "center" },
   slotBadgeText: { color: "#fff", fontWeight: "900" },
   thumb: { width: 44, height: 44, borderRadius: 6, backgroundColor: Colors.border },
@@ -359,14 +394,9 @@ const styles = StyleSheet.create({
   day: { color: Colors.basil, fontWeight: "800", fontSize: 12, textTransform: "uppercase" },
   meal: { color: Colors.ink, fontSize: 18, fontWeight: "800", textTransform: "capitalize" },
   meta: { color: Colors.muted, marginTop: 2 },
-  typeRow: { flexDirection: "row", flexWrap: "wrap", gap: 6, backgroundColor: Colors.softRed, borderRadius: 8, padding: 4 },
-  typeButton: { flexGrow: 1, minHeight: 38, borderRadius: 7, alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
-  typeActive: { backgroundColor: Colors.surface },
-  typeText: { color: Colors.muted, fontWeight: "900" },
-  typeTextActive: { color: Colors.tomato },
   controls: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
-  stepper: { flexDirection: "row", alignItems: "center", gap: 8 },
-  servings: { minWidth: 28, textAlign: "center", color: Colors.ink, fontWeight: "900", fontSize: 18 },
-  lockHint: { color: Colors.muted, lineHeight: 19, fontSize: 13 },
-  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 }
+  stepper: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: Colors.border, borderRadius: 8 },
+  servings: { minWidth: 24, textAlign: "center", color: Colors.ink, fontWeight: "900", fontSize: 18 },
+  actions: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8 },
+  removeAction: { marginLeft: "auto" }
 });

@@ -120,7 +120,7 @@ export default function GroceryScreen() {
   });
   const error = [loadError, regen.error, patchItem.error, deleteItem.error, addManual.error, deletePantry.error].find(Boolean);
   return (
-    <Screen>
+    <Screen contentWidth={960}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Grocery List</Text>
@@ -193,8 +193,8 @@ export default function GroceryScreen() {
             return (
             <View key={item.id} style={[styles.item, isExpanded ? styles.itemExpanded : null]}>
               <View style={styles.itemTop}>
-              <Pressable accessibilityRole="checkbox" accessibilityLabel={item.display_name} aria-checked={item.is_checked} accessibilityState={{ checked: item.is_checked }} onPress={() => patchItem.mutate({ item, patch: { is_checked: !item.is_checked } })} style={[styles.checkbox, item.is_checked && styles.checkboxChecked]}>
-                {item.is_checked ? <Ionicons name="checkmark" size={19} color="#fff" /> : null}
+              <Pressable accessibilityRole="checkbox" accessibilityLabel={item.display_name} aria-checked={item.is_checked} accessibilityState={{ checked: item.is_checked }} onPress={() => patchItem.mutate({ item, patch: { is_checked: !item.is_checked } })} style={styles.checkboxTarget}>
+                <View style={[styles.checkbox, item.is_checked && styles.checkboxChecked]}>{item.is_checked ? <Ionicons name="checkmark" size={19} color="#fff" /> : null}</View>
               </Pressable>
               <View style={styles.itemBody}>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${item.display_name}`} onPress={() => setExpandedItemId(isExpanded ? null : item.id)} style={styles.itemSummary}>
@@ -265,14 +265,14 @@ function retailerUrl(item: GroceryItem) {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", flexWrap: "wrap", gap: 10, justifyContent: "space-between", alignItems: "center", marginBottom: 14 },
-  title: { fontSize: 32, fontWeight: "900", color: Colors.ink },
+  header: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  title: { fontSize: 28, fontWeight: "900", color: Colors.ink },
   subtitle: { color: Colors.muted },
-  status: { color: Colors.basil, fontWeight: "800", marginBottom: 10 },
+  status: { color: Colors.basil, fontWeight: "800", marginBottom: 8 },
   panel: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 10, marginTop: 12, marginBottom: 12 },
   sectionTitle: { color: Colors.ink, fontSize: 18, fontWeight: "900" },
   inputRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
-  input: { minHeight: 46, flex: 1, minWidth: 130, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, backgroundColor: Colors.surface },
+  input: { minHeight: 48, flex: 1, minWidth: 130, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, backgroundColor: Colors.surface },
   smallInput: { minWidth: 74, flex: 0.5 },
   chips: { gap: 8 },
   pantryRow: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 56, borderBottomWidth: 1, borderColor: Colors.border, paddingVertical: 8 },
@@ -280,23 +280,24 @@ const styles = StyleSheet.create({
   pantryChip: { flexDirection: "row", gap: 7, alignItems: "center", borderRadius: 999, backgroundColor: Colors.softRed, paddingHorizontal: 10, minHeight: 34 },
   pantryText: { color: Colors.tomatoDark, fontWeight: "800", textTransform: "capitalize" },
   pantryRemove: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 16 },
-  group: { marginTop: 12, marginBottom: 2, gap: 8 },
-  groupHeader: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 52, borderBottomWidth: 1, borderBottomColor: Colors.border },
+  group: { marginTop: 16, gap: 8 },
+  groupHeader: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
   groupName: { flex: 1, fontSize: 18, fontWeight: "900", color: Colors.ink },
   item: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 8 },
-  itemTop: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
+  itemTop: { flexDirection: "row", alignItems: "flex-start", gap: 8 },
   pantryAction: { minHeight: 44, width: 68, alignItems: "center", justifyContent: "center", gap: 3 },
   pantryActionText: { fontSize: 12, fontWeight: "800", color: Colors.basil },
   itemExpanded: { borderColor: "#f0b6b2" },
-  checkbox: { width: 30, height: 30, borderRadius: 8, borderWidth: 2, borderColor: Colors.border, alignItems: "center", justifyContent: "center", marginTop: 2 },
+  checkboxTarget: { width: 44, minHeight: 44, flexShrink: 0, alignItems: "center", justifyContent: "center" },
+  checkbox: { width: 26, height: 26, borderRadius: 6, borderWidth: 2, borderColor: Colors.border, alignItems: "center", justifyContent: "center" },
   checkboxChecked: { backgroundColor: Colors.basil, borderColor: Colors.basil },
-  itemBody: { flex: 1, gap: 1 },
-  itemSummary: { gap: 1 },
+  itemBody: { flex: 1, minWidth: 0, gap: 1 },
+  itemSummary: { minHeight: 44, gap: 1 },
   name: { fontSize: 17, fontWeight: "800", color: Colors.ink },
   checked: { textDecorationLine: "line-through", color: Colors.muted },
   meta: { color: Colors.muted, marginTop: 2 },
-  itemControls: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 10 },
-  emptyPanel: { alignItems: "center", paddingVertical: 36, gap: 6 },
+  itemControls: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 4 },
+  emptyPanel: { alignItems: "center", paddingVertical: 24, gap: 8 },
   emptyTitle: { color: Colors.ink, fontWeight: "900", fontSize: 20 },
   empty: { color: Colors.muted, textAlign: "center" }
 });

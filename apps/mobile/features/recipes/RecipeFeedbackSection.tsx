@@ -41,10 +41,10 @@ export function RecipeFeedbackSection({ ignored, recipes, pending, onOpen, onTog
 
 const styles = StyleSheet.create({
   section: { borderTopWidth: 1, borderColor: Colors.border, paddingVertical: 8, gap: 8 },
-  heading: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 52 },
-  title: { flex: 1, color: Colors.ink, fontSize: 20, fontWeight: "800" },
+  heading: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44 },
+  title: { flex: 1, color: Colors.ink, fontSize: 18, fontWeight: "800" },
   count: { color: Colors.muted, fontWeight: "700" },
-  row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 10, paddingVertical: 12, borderBottomWidth: 1, borderColor: Colors.border },
+  row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderColor: Colors.border },
   open: { flex: 1, minWidth: 160, gap: 6 },
   summary: { flexDirection: "row", alignItems: "center", gap: 8 },
   photo: { width: 44, height: 44, borderRadius: 6 },

@@ -209,7 +209,7 @@ function tierSummary(currentTier: string, trialDays: number) {
 }
 
 const styles = StyleSheet.create({
-  panel: { gap: 16, marginBottom: 12 },
+  panel: { gap: 12, marginTop: 16, marginBottom: 12 },
   header: { flexDirection: "row", justifyContent: "space-between", gap: 10, alignItems: "center" },
   section: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
   meta: { color: Colors.muted, lineHeight: 20 },
@@ -219,7 +219,7 @@ const styles = StyleSheet.create({
   statusText: { fontWeight: "900", textTransform: "capitalize" },
   activeText: { color: Colors.basil },
   lockedText: { color: Colors.tomatoDark },
-  planList: { gap: 10 },
+  planList: { gap: 8 },
   planCard: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 10 },
   planCardActive: { borderColor: Colors.tomato, backgroundColor: Colors.softRed },
   planTop: { flexDirection: "row", gap: 12 },
@@ -232,6 +232,6 @@ const styles = StyleSheet.create({
   planBadge: { color: Colors.basil, fontWeight: "900", flex: 1 },
   codeBox: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 8 },
   codeTitle: { color: Colors.ink, fontWeight: "900" },
-  actions: { flexDirection: "row", gap: 10, flexWrap: "wrap", alignItems: "center" },
+  actions: { flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center" },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, backgroundColor: Colors.surface, flex: 1, color: Colors.ink },
 });

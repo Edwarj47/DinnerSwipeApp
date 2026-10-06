@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
-import { StyleSheet, Text } from "react-native";
+import { Dimensions, StyleSheet, Text } from "react-native";
 
 import WeekScreen from "@/app/(tabs)/week";
 import GroceryScreen from "@/app/(tabs)/grocery";
 import { Button } from "@/components/Button";
 import { apiFetch } from "@/services/api";
+import { todayISO } from "@/features/premium/macroDates";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: ({ name }: { name: string }) => {
   const { View } = jest.requireActual("react-native");
@@ -34,16 +35,35 @@ const initialSlot = { id: "slot", slot_date: "2026-09-28" as string | null, slot
 let slot = { ...initialSlot };
 let quantity = 1;
 let failUpdate = false;
-const plan = () => ({ id: "week", week_start: "2026-09-28", slots: [{ ...slot }] });
+let failAction = false;
+let extraSlots: typeof slot[] = [];
+let removed = false;
+const plan = () => ({ id: "week", week_start: "2026-09-28", slots: [...(removed ? [] : [{ ...slot }]), ...extraSlots] });
 
 beforeEach(() => {
   slot = { ...initialSlot };
   quantity = 1;
   failUpdate = false;
+  failAction = false;
+  extraSlots = [];
+  removed = false;
   request.mockReset().mockImplementation(async (path, options) => {
     if (path === "/api/v1/weekly-plans/current/slots/slot" && options?.method === "PUT") {
       if (failUpdate) throw new Error("Unable to save day. Try again.");
       Object.assign(slot, JSON.parse(String(options.body)));
+    }
+    if (path === "/api/v1/weekly-plans/current/slots" && options?.method === "POST") {
+      if (failAction) throw new Error("Unable to duplicate meal. Try again.");
+      const body = JSON.parse(String(options.body));
+      extraSlots.push({ ...slot, ...body, id: "copy", sort_order: 1 });
+    }
+    if (path === "/api/v1/weekly-plans/current/slots/slot" && options?.method === "DELETE") {
+      if (failAction) throw new Error("Unable to remove meal. Try again.");
+      removed = true;
+    }
+    if (path === "/api/v1/macros/confirmations") {
+      if (failAction) throw new Error("Unable to log meal. Try again.");
+      return { id: "log", ...JSON.parse(String(options?.body)) };
     }
     if (path.includes("weekly-plans")) return plan();
     if (path === "/api/v1/profile") return { notification_preferences: {} };
@@ -64,6 +84,11 @@ const writes = () => request.mock.calls.filter(([, options]) => options?.method 
 async function openEditor(screen: ReturnType<typeof mount>) {
   fireEvent.press(await screen.findByLabelText("Edit"));
   fireEvent.press(screen.getByLabelText("Day selection: Monday, 9/28"));
+}
+
+async function openDuplicate(screen: ReturnType<typeof mount>) {
+  fireEvent.press(await screen.findByLabelText("Edit"));
+  fireEvent.press(screen.getByLabelText("Duplicate Ground Beef"));
 }
 
 test("day menu has the full week, closes without changing a meal, and replaces the chip and Replace controls", async () => {
@@ -120,6 +145,7 @@ test("day and serving controls are disabled while a save is pending", async () =
     await waitFor(() => expect(screen.getByLabelText("Day selection: Monday, 9/28").props.accessibilityState.disabled).toBe(true));
     expect(screen.getByLabelText("Increase servings").props.accessibilityState.disabled).toBe(true);
     expect(screen.getByLabelText("Decrease servings").props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByLabelText("Duplicate Ground Beef").props.accessibilityState.disabled).toBe(true);
     await act(async () => { resolve(plan()); });
     await waitFor(() => expect(screen.getByLabelText("Increase servings").props.accessibilityState.disabled).toBe(false));
   } finally { screen.close(); }
@@ -143,11 +169,157 @@ test("single-icon serving buttons still increase and decrease the portion count"
     expect(screen.queryByText("+")).toBeNull();
     expect(screen.queryByText("-")).toBeNull();
     fireEvent.press(screen.getByLabelText("Increase servings"));
-    await screen.findByText("Serves 3 - open to changes");
+    await screen.findByText("Serves 3");
     await waitFor(() => expect(screen.getByLabelText("Decrease servings").props.accessibilityState.disabled).toBe(false));
     fireEvent.press(screen.getByLabelText("Decrease servings"));
-    await screen.findByText("Serves 2 - open to changes");
+    await screen.findByText("Serves 2");
     expect(writes().map(([, options]) => JSON.parse(String(options?.body)))).toEqual([{ servings: 3 }, { servings: 2 }]);
+  } finally { screen.close(); }
+});
+
+test("the collapsed card has only Edit; the editor offers Duplicate without the unused menu or lock", async () => {
+  const screen = mount(<WeekScreen />);
+  try {
+    const edit = await screen.findByLabelText("Edit");
+    expect(screen.queryByLabelText("Duplicate Ground Beef")).toBeNull();
+    fireEvent.press(edit);
+    expect(screen.getAllByLabelText("Duplicate Ground Beef")).toHaveLength(1);
+    for (const label of ["Meal", "Leftovers", "Out", "Flex", "Keep", "Unlock"]) {
+      expect(screen.queryByLabelText(label)).toBeNull();
+    }
+    expect(screen.queryByText(/open to changes|future auto-pick/)).toBeNull();
+    expect(screen.getByLabelText("Day selection: Monday, 9/28")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Done"));
+    expect(screen.getByLabelText("Edit")).toBeTruthy();
+    expect(screen.queryByLabelText("Duplicate Ground Beef")).toBeNull();
+  } finally { screen.close(); }
+});
+
+test.each([[320, 1], [390, 1.3]])("editors at width %s and font scale %s keep a full-size Done icon and Duplicate out of the header", async (width, fontScale) => {
+  const window = Dimensions.get("window"), deviceScreen = Dimensions.get("screen");
+  act(() => Dimensions.set({ window: { ...window, width, fontScale, height: 720 } }));
+  const screen = mount(<WeekScreen />);
+  try {
+    fireEvent.press(await screen.findByLabelText("Edit"));
+    expect(screen.queryByText("Done")).toBeNull();
+    expect(StyleSheet.flatten(screen.getByLabelText("Done").props.style)).toMatchObject({ width: 44, height: 44 });
+    expect(screen.getAllByLabelText("Duplicate Ground Beef")).toHaveLength(1);
+    fireEvent.press(screen.getByLabelText("Done"));
+    expect(screen.getByText("Edit")).toBeTruthy();
+    expect(screen.queryByLabelText("Duplicate Ground Beef")).toBeNull();
+  } finally {
+    screen.close();
+    act(() => Dimensions.set({ window, screen: deviceScreen }));
+  }
+});
+
+test.each([["Sunday, 10/4", "2026-10-04", "Sunday"], ["Monday, 9/28", "2026-09-28", "Monday"], ["Unscheduled", null, "Unscheduled"]])("duplicates a meal to %s, preserving servings without logging consumption", async (label, date, day) => {
+  const screen = mount(<WeekScreen />);
+  try {
+    await openDuplicate(screen);
+    expect(screen.getAllByRole("button", { name: /^Duplicate meal to / })).toHaveLength(8);
+    fireEvent.press(screen.getByLabelText(`Duplicate meal to ${label}`));
+    await screen.findByText(`Meal duplicated to ${day}.`);
+    expect(request).toHaveBeenCalledWith("/api/v1/weekly-plans/current/slots", {
+      method: "POST", body: JSON.stringify({ recipe_id: "beef", slot_date: date, servings: 2 })
+    });
+    expect(slot).toEqual(initialSlot);
+    expect(extraSlots).toHaveLength(1);
+    expect(screen.queryByText("Duplicate meal")).toBeNull();
+    expect(screen.getAllByLabelText("Edit")).toHaveLength(2);
+    expect(request.mock.calls.some(([path]) => path === "/api/v1/macros/confirmations")).toBe(false);
+  } finally { screen.close(); }
+});
+
+test("a cancelled duplicate makes no changes; a failed copy stays open for retry", async () => {
+  const screen = mount(<WeekScreen />);
+  try {
+    await openDuplicate(screen);
+    fireEvent.press(screen.getByLabelText("Close duplicate meal"));
+    expect(extraSlots).toHaveLength(0);
+    expect(request.mock.calls.some(([, options]) => options?.method === "POST")).toBe(false);
+    failAction = true;
+    fireEvent.press(screen.getByLabelText("Duplicate Ground Beef"));
+    fireEvent.press(screen.getByLabelText("Duplicate meal to Sunday, 10/4"));
+    await waitFor(() => expect(screen.getAllByText("Unable to duplicate meal. Try again.").length).toBeGreaterThan(0));
+    expect(screen.getByText("Duplicate meal")).toBeTruthy();
+    expect(extraSlots).toHaveLength(0);
+    expect(slot).toEqual(initialSlot);
+    failAction = false;
+    fireEvent.press(screen.getByLabelText("Duplicate meal to Sunday, 10/4"));
+    await screen.findByText("Meal duplicated to Sunday.");
+  } finally { screen.close(); }
+});
+
+test.each([
+  ["Ate", "ate", "Added to Monday's macro entries."],
+  ["Skipped", "skipped", "Logged as skipped. No nutrition added."]
+])("%s collapses the editor only after saving and reports the right outcome", async (label, status, message) => {
+  const screen = mount(<WeekScreen />);
+  try {
+    fireEvent.press(await screen.findByLabelText("Edit"));
+    fireEvent.press(screen.getByLabelText(label));
+    await screen.findByText(message);
+    expect(request).toHaveBeenCalledWith("/api/v1/macros/confirmations", {
+      method: "POST", body: JSON.stringify({ recipe_id: "beef", weekly_plan_slot_id: "slot", meal_date: "2026-09-28", status, servings_consumed: 2 })
+    });
+    expect(screen.getByLabelText("Edit")).toBeTruthy();
+    expect(screen.queryByLabelText("Done")).toBeNull();
+    expect(screen.queryByLabelText("Day selection: Monday, 9/28")).toBeNull();
+    expect(slot).toEqual(initialSlot);
+  } finally { screen.close(); }
+});
+
+test("unscheduled meals log against the device's current date, and success feedback expires", async () => {
+  jest.useFakeTimers();
+  slot.slot_date = null;
+  const screen = mount(<WeekScreen />);
+  try {
+    fireEvent.press(await screen.findByLabelText("Edit"));
+    fireEvent.press(screen.getByLabelText("Ate"));
+    await act(async () => { await jest.advanceTimersByTimeAsync(0); });
+    expect(screen.getByText("Added to today's macro entries.")).toBeTruthy();
+    const body = request.mock.calls.find(([path]) => path === "/api/v1/macros/confirmations")![1]!.body;
+    expect(JSON.parse(String(body)).meal_date).toBe(todayISO());
+    await act(async () => { await jest.advanceTimersByTimeAsync(4999); });
+    expect(screen.getByText("Added to today's macro entries.")).toBeTruthy();
+    await act(async () => { await jest.advanceTimersByTimeAsync(1); });
+    expect(screen.queryByText("Added to today's macro entries.")).toBeNull();
+  } finally { screen.close(); jest.useRealTimers(); }
+});
+
+test("pending or failed meal logging cannot discard the editor or change other controls", async () => {
+  const screen = mount(<WeekScreen />);
+  let reject!: (reason: Error) => void;
+  try {
+    fireEvent.press(await screen.findByLabelText("Edit"));
+    request.mockImplementationOnce(() => new Promise((_, fail) => { reject = fail; }));
+    fireEvent.press(screen.getByLabelText("Ate"));
+    await waitFor(() => expect(screen.getByLabelText("Done").props.accessibilityState.disabled).toBe(true));
+    for (const label of ["Ate", "Skipped", "Remove Ground Beef", "Increase servings", "Decrease servings", "Duplicate Ground Beef", "Day selection: Monday, 9/28"]) {
+      expect(screen.getByLabelText(label).props.accessibilityState.disabled).toBe(true);
+    }
+    await act(async () => { reject(new Error("Unable to log meal. Try again.")); });
+    await screen.findByText("Unable to log meal. Try again.");
+    expect(screen.getByLabelText("Done")).toBeTruthy();
+    expect(screen.getByLabelText("Ate").props.accessibilityState.disabled).toBe(false);
+    expect(slot).toEqual(initialSlot);
+  } finally { screen.close(); }
+});
+
+test("Remove clears the planned card without calling the nutrition deletion endpoint", async () => {
+  const screen = mount(<WeekScreen />);
+  try {
+    fireEvent.press(await screen.findByLabelText("Edit"));
+    const remove = screen.getByLabelText("Remove Ground Beef");
+    expect(screen.queryByText("Remove")).toBeNull();
+    expect(StyleSheet.flatten(remove.props.style)).toMatchObject({ width: 44, height: 44 });
+    fireEvent.press(remove);
+    await screen.findByText("Meal removed.");
+    expect(screen.queryByText("Ground Beef")).toBeNull();
+    expect(screen.queryByLabelText("Done")).toBeNull();
+    expect(request).toHaveBeenCalledWith("/api/v1/weekly-plans/current/slots/slot", { method: "DELETE" });
+    expect(request.mock.calls.some(([path]) => path.startsWith("/api/v1/macros/"))).toBe(false);
   } finally { screen.close(); }
 });
 

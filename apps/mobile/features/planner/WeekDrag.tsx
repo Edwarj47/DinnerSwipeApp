@@ -131,7 +131,7 @@ export function WeekDrag({ days, disabled, onAssign, onReorder, children }: {
             onContentSizeChange={(_, height) => { contentHeight.current = height; measure(); }}
             onScroll={event => { offset.current = event.nativeEvent.contentOffset.y; if (active.current) measure(); }} scrollEventThrottle={16}>
             <TourScrollContext.Provider value={revealTour}>
-              <View ref={tourContent} collapsable={false} style={{ gap: 18 }}>{children}</View>
+              <View ref={tourContent} collapsable={false} style={{ gap: 12 }}>{children}</View>
             </TourScrollContext.Provider>
           </ScrollView>
           {drag ? (
@@ -202,10 +202,10 @@ const styles = StyleSheet.create({
   scroll: { flex: 1, minHeight: 0 },
   insertion: { position: "absolute", top: -5, left: 0, right: 0, height: 3, backgroundColor: Colors.basil },
   endInsertion: { position: "absolute", bottom: 0, left: 4, right: 4, height: 3, backgroundColor: Colors.basil },
-  list: { gap: 18, paddingBottom: 24 },
-  day: { gap: 8, padding: 4, borderWidth: 1, borderColor: "transparent", borderBottomColor: Colors.border, minHeight: 112 },
+  list: { gap: 12, paddingBottom: 24 },
+  day: { gap: 8, padding: 4, paddingBottom: 12, borderWidth: 1, borderColor: "transparent", borderBottomColor: Colors.border, minHeight: 80 },
   over: { borderColor: Colors.basil, backgroundColor: "#edf6ef" },
-  handle: { width: 32, minHeight: 48, alignItems: "center", justifyContent: "center" },
+  handle: { width: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
   ghost: { position: "absolute", width: 220, zIndex: 100, backgroundColor: Colors.surface, borderColor: Colors.tomato, borderWidth: 2, borderRadius: 8, padding: 12, flexDirection: "row", gap: 8 },
   ghostText: { flex: 1, fontWeight: "800", color: Colors.ink },
   backdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20, backgroundColor: "rgba(0,0,0,0.45)" },

@@ -278,7 +278,7 @@ function majorityText(result: VoteResult) {
 }
 
 const styles = StyleSheet.create({
-  panel: { gap: 10, marginBottom: 12 },
+  panel: { gap: 12, marginTop: 16, marginBottom: 12 },
   backdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20, backgroundColor: "rgba(0,0,0,0.45)" },
   confirm: { width: "100%", maxWidth: 420, backgroundColor: Colors.surface, borderRadius: 8, padding: 20, gap: 14 },
   title: { fontSize: 19, fontWeight: "900", color: Colors.ink },
@@ -291,7 +291,7 @@ const styles = StyleSheet.create({
   filterRow: { gap: 6 },
   match: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12 },
   matchName: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 18 },
-  ownerDashboard: { borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 10, gap: 10 },
+  ownerDashboard: { borderTopColor: Colors.border, borderTopWidth: 1, paddingTop: 16, gap: 12 },
   ownerMetrics: { flexDirection: "row", gap: 8 },
   ownerMetric: { flex: 1, backgroundColor: Colors.softRed, borderRadius: 8, minHeight: 58, alignItems: "center", justifyContent: "center" },
   ownerMetricValue: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 18 },
@@ -302,7 +302,7 @@ const styles = StyleSheet.create({
   modeBlock: { gap: 6 },
   modeLabel: { color: Colors.ink, fontWeight: "800" },
   modeRow: { flexDirection: "row", gap: 6 },
-  modeButton: { flex: 1, minHeight: 40, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center", backgroundColor: Colors.surface },
+  modeButton: { flex: 1, minHeight: 44, paddingVertical: 8, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center", backgroundColor: Colors.surface },
   modeActive: { backgroundColor: Colors.tomato, borderColor: Colors.tomato },
   modeDisabled: { opacity: 0.5 },
   modeButtonText: { color: Colors.ink, fontWeight: "800" },

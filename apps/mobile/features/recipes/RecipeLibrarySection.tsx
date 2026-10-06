@@ -55,10 +55,10 @@ export function RecipeLibrarySection({ collection, q, onOpen, onActions }: {
 }
 const styles = StyleSheet.create({
   section: { borderTopWidth: 1, borderColor: Colors.border, paddingVertical: 8, gap: 8 },
-  heading: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 52 }, title: { flex: 1, color: Colors.ink, fontSize: 20, fontWeight: "800" },
-  row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingVertical: 10, borderBottomWidth: 1, borderColor: Colors.border },
+  heading: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44 }, title: { flex: 1, color: Colors.ink, fontSize: 18, fontWeight: "800" },
+  row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderColor: Colors.border },
   open: { flexDirection: "row", flex: 1, minWidth: 170, gap: 10, alignItems: "center" }, body: { flex: 1, minWidth: 0 },
-  photo: { width: 54, height: 54, borderRadius: 6, backgroundColor: Colors.border }, name: { color: Colors.ink, fontSize: 16, fontWeight: "700" },
-  meta: { color: Colors.muted, marginTop: 4 }, empty: { color: Colors.muted, paddingVertical: 16 },
+  photo: { width: 64, height: 64, borderRadius: 6, backgroundColor: Colors.border }, name: { color: Colors.ink, fontSize: 16, fontWeight: "700", lineHeight: 22 },
+  meta: { color: Colors.muted, marginTop: 2 }, empty: { color: Colors.muted, paddingVertical: 16 },
   icon: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }, error: { color: Colors.danger }
 });

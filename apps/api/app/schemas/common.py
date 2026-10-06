@@ -409,6 +409,7 @@ class WeeklySlotUpdate(ApiModel):
 class WeeklySlotCreate(ApiModel):
     slot_date: date | None = None
     recipe_id: str = Field(min_length=1, max_length=36)
+    servings: int | None = Field(default=None, ge=1, le=30)
 
 
 class WeeklyPlanOut(ApiModel):

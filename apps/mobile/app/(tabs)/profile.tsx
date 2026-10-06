@@ -230,7 +230,7 @@ export default function ProfileScreen() {
     setStatus(enabled ? "Biometrics enabled." : "Biometrics disabled.");
   }
   return (
-    <Screen>
+    <Screen contentWidth={960}>
       <Text style={styles.title}>Profile</Text>
       <SegmentedControl
         accessibilityLabel="Profile sections"
@@ -275,13 +275,13 @@ export default function ProfileScreen() {
               </>
             )}
             <View style={styles.divider} />
-            <View style={styles.sectionHeader}>
-              {accountAction !== "overview" ? <Button label="Back" icon="arrow-back" onPress={() => {
+            {accountAction !== "overview" ? <View style={styles.sectionHeader}>
+              <Button label="Back" icon="arrow-back" variant="quiet" onPress={() => {
                 setDeletePassword("");
                 setDeleteConfirmation("");
                 setAccountAction(accountAction === "delete" ? "data" : "overview");
-              }} /> : null}
-            </View>
+              }} />
+            </View> : null}
             {accountAction === "overview" ? (
               <View style={styles.toolGrid}>
                 <Button label="Reset password" icon="mail-open" onPress={() => setAccountAction("reset")} />
@@ -535,19 +535,19 @@ async function deliverAccountExport(data: Record<string, unknown>) {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 32, fontWeight: "900", color: Colors.ink },
-  panel: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 14, gap: 10, marginTop: 12 },
+  title: { fontSize: 28, fontWeight: "900", color: Colors.ink, marginBottom: 12 },
+  panel: { borderTopColor: Colors.border, borderTopWidth: 1, paddingTop: 16, gap: 12, marginTop: 16 },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12 },
   timeoutOptions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   timeoutOption: { flexGrow: 1, minHeight: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.border },
   timeoutSelected: { borderColor: Colors.tomato, backgroundColor: Colors.softRed },
   timeoutSelectedText: { color: Colors.tomato, fontWeight: "800" },
-  actions: { flexDirection: "row", gap: 10, flexWrap: "wrap" },
-  sectionHeader: { flexDirection: "row", gap: 10, alignItems: "center" },
-  toolGrid: { gap: 9 },
-  flowBox: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 10 },
+  actions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
+  sectionHeader: { flexDirection: "row", gap: 8, alignItems: "center" },
+  toolGrid: { gap: 8 },
+  flowBox: { gap: 12 },
   flowTitle: { color: Colors.ink, fontWeight: "900", fontSize: 16 },
-  securityBox: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 6 },
+  securityBox: { gap: 8 },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 4 },
   deleteBox: { borderWidth: 1, borderColor: "#f0b6b2", backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 9 },
   deleteTitle: { color: Colors.danger, fontWeight: "900" },
@@ -558,7 +558,7 @@ const styles = StyleSheet.create({
   tagInput: { flex: 1 },
   chipRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   chip: {
-    minHeight: 36,
+    minHeight: 44,
     borderRadius: 999,
     backgroundColor: Colors.softRed,
     borderColor: "#f4c4c0",
@@ -573,7 +573,7 @@ const styles = StyleSheet.create({
   chipRemove: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 18, lineHeight: 20 },
   tagHint: { color: Colors.muted, lineHeight: 19, fontSize: 13 },
   tagError: { color: Colors.danger, lineHeight: 19, fontSize: 13, fontWeight: "700" },
-  toggleRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 14 },
+  toggleRow: { flexDirection: "row", minHeight: 44, alignItems: "center", justifyContent: "space-between", gap: 12 },
   toggleCopy: { flex: 1, gap: 4 },
   toggleTitle: { color: Colors.ink, fontWeight: "900", fontSize: 16 },
   status: { color: Colors.basil, fontWeight: "700" },

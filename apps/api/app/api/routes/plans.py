@@ -154,7 +154,9 @@ def add_slot(payload: WeeklySlotCreate, db: DbDep, current_user: BasicUser) -> d
     slot.slot_date = payload.slot_date
     slot.recipe_id = recipe.id
     slot.slot_type = "meal"
-    slot.servings = current_user.profile.household_size if current_user.profile else 4
+    slot.servings = payload.servings or (
+        current_user.profile.household_size if current_user.profile else 4
+    )
     db.flush()
     regenerate_grocery_list(db, current_user, plan, preserve_edits=True)
     return serialize_plan(db, plan)

@@ -9,15 +9,16 @@ import { revealTourTarget, TourScrollContext, useGuidedTour } from "@/features/o
 type Props = {
   children: ReactNode;
   scroll?: boolean;
+  contentWidth?: number;
 };
 
-export function Screen({ children, scroll = true }: Props) {
+export function Screen({ children, scroll = true, contentWidth }: Props) {
   const tour = useGuidedTour();
   const contentRef = useRef<View>(null);
   const scrollRef = useRef<ScrollView>(null);
   const canScroll = scroll;
   const reveal = useCallback((node: View) => revealTourTarget(node, contentRef.current, scrollRef.current), []);
-  const content = <View ref={contentRef} collapsable={false} style={[styles.content, !canScroll && { flex: 1, minHeight: 0, paddingBottom: 12 }]}>{children}</View>;
+  const content = <View ref={contentRef} testID="screen-content" collapsable={false} style={[styles.content, contentWidth !== undefined && { width: "100%", maxWidth: contentWidth, alignSelf: "center" }, !canScroll && { flex: 1, minHeight: 0, paddingBottom: 12 }]}>{children}</View>;
   return (
     <TourScrollContext.Provider value={reveal}>
       <SafeAreaView style={styles.root} edges={tour ? ["left", "right", "bottom"] : undefined}>
