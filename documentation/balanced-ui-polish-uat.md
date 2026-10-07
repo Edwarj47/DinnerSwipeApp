@@ -1,6 +1,6 @@
 # Balanced Mobile UI Polish
 
-Status: implemented and locally verified on 2026-10-07. Release 23 combines this
+Status: implemented, verified and deployed on 2026-10-07. Release 23 combines this
 UI pass with the earlier group-planning changes. Deployment and APK evidence is
 tracked in [the release record](group-ui-release-23.md).
 
@@ -68,12 +68,12 @@ Group and large-value logs: `/tmp/dinner-balanced-group-final.log` and
 
 ## Device UAT
 
-Browser text enlargement is not an Android emulator. Before release, check a
+Browser text enlargement is not an Android emulator. For device UAT, check a
 physical Android device with large system text, display scaling, gesture
 navigation, keyboard open, meal dragging and every dialog. Biometrics and
 notification delivery were not changed or device-tested in this pass.
 
-The local preview is `http://127.0.0.1:19011`. The new group API is not deployed,
-so the fixture-based group checks do not represent a live group environment.
-Release remains a separate step, following the backup and rollout procedure in
-`group-planning-uat.md`.
+The local preview is `http://127.0.0.1:19011`. The production API and web app are
+now deployed; the fixture-based checks do not establish physical-phone behavior
+or authenticated production writes. Release followed the backup and rollout
+procedure in `group-planning-uat.md`; the APK is still queued.

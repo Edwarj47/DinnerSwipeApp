@@ -1,12 +1,39 @@
 # Group Planning And Balanced UI Release 23
 
-Status: release preparation on 2026-10-07. Deployment and APK verification
-results will be recorded below after completion.
+Status: source pushed and API/worker/web deployed on 2026-10-07. Android preview
+build 23 is queued; APK verification is pending, not complete.
 
 Final release checks passed: 173 API tests, 222 mobile tests across 33 suites,
 API Ruff/mypy and frontend lint/TypeScript, plus both opt-in PostgreSQL tests.
 A fresh migration rehearsal preserved all 1,494 legacy rows across 40 tables.
 The environment-secret scan and whitespace checks passed.
+
+## Deployment Evidence
+
+- Source commit `dd5b288` is pushed. [CI 37635907204](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/37635907204)
+  passed backend, frontend and Docker jobs.
+- Live database revision is `a8f97b321c40`. During the brief API/worker pause,
+  a fresh quiescent backup was taken; the live migration preserved all 1,494
+  legacy rows across 40 tables. New group tables remained empty. No private
+  plans were copied into groups or enabled as group Discover choices.
+- API/worker image `1f9dedd52789` and web image `bb2761415865` are live at
+  `https://dinner.dcss.dev`. Public health, group and legacy route contracts,
+  anonymous route protection and served-asset/image matching passed.
+- Candidate and live browser checks passed at 320, 390 and 1280 pixel widths,
+  plus 200% text. Group curation/retry, explicit approval, kitchen switching,
+  member permissions, personal portions, scoped groceries, dialogs, labels,
+  navigation and mouse scrolling passed with intercepted fixture APIs.
+- Read-only customer snapshots confirmed all 10 personal planned meals,
+  portions, ordering, locks, nutrition and swipe history unchanged.
+- Dinner Swipe Postgres and all unrelated container IDs/images/start times
+  remained unchanged. Environment values, billing/provider settings and live
+  reverse-proxy configuration were not changed.
+- Private rollback archive: `backups/releases/20261007T142042Z_preview23`.
+  Database/media/environment backups are mode 0600 and Git-ignored. Retained
+  image tags are `dinner-swipe-{api,worker,web}:before-preview23`.
+
+Release checks, preflight and deployment logs are retained in that archive.
+Browser fixtures did not make authenticated writes to customer accounts.
 
 ## Scope
 

@@ -1,7 +1,7 @@
 # Group Planning
 
-Implementation status: complete and locally verified. Release 23 is now being
-prepared; deployment and artifact evidence is tracked in
+Implementation status: complete, pushed and deployed in release 23. The new
+Android APK is queued; deployment and artifact evidence is tracked in
 [the release record](group-ui-release-23.md).
 
 ## User Flow
@@ -95,8 +95,8 @@ that would replace database contents. A new APK is required for these UI changes
   approval, kitchen switching, member permissions/personal portions, scoped
   proposals, grocery selection, mouse-wheel scrolling and layout checks. Recipe
   fallback images loaded without browser errors. The local static UI preview is
-  on port 19011; the new group API is not deployed, so this is not a live group
-  planning environment.
+  on port 19011. These fixture checks did not exercise real account writes.
+  The API was subsequently deployed with release 23; see the release record.
 - Physical Android gesture handling and notifications remain device UAT checks.
 
 Local logs: `/tmp/dinner-group-api-final.log`, `/tmp/dinner-group-ui-final.log`,
