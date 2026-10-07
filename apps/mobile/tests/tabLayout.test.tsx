@@ -26,6 +26,7 @@ test("native navigation wraps enlarged labels, reports its height and retains sa
   const height = jest.fn();
   const screen = render(<BottomTabBarHeightCallbackContext.Provider value={height}><AdaptiveTabBar {...props() as unknown as BottomTabBarProps} /></BottomTabBarHeightCallbackContext.Provider>);
   expect(ReactNative.StyleSheet.flatten(screen.getByTestId("main-tab-bar").props.style)).toMatchObject({ flexWrap: "wrap", paddingBottom: 24 });
+  expect(screen.getByTestId("main-tab-bar").props.role).toBeUndefined();
   expect(ReactNative.StyleSheet.flatten(screen.getByLabelText("This Week").props.style).minWidth).toBe(128);
   fireEvent(screen.getByTestId("main-tab-bar"), "layout", { nativeEvent: { layout: { height: 168 } } });
   expect(height).toHaveBeenCalledWith(168);
@@ -36,6 +37,9 @@ test("web navigation uses whole-label intrinsic width and keeps all five destina
   jest.replaceProperty(ReactNative.Platform, "OS", "web");
   const screen = render(<AdaptiveTabBar {...props() as unknown as BottomTabBarProps} />);
   expect(ReactNative.StyleSheet.flatten(screen.getByLabelText("This Week").props.style).minWidth).toBe("max-content");
+  expect(screen.getByTestId("main-tab-bar").props.role).toBe("navigation");
+  expect(screen.getByLabelText("Discover").props["aria-current"]).toBe("page");
+  expect(screen.getByLabelText("This Week").props["aria-current"]).toBeUndefined();
   for (const label of ["Discover", "This Week", "Grocery", "Recipes", "Profile"]) expect(screen.getByLabelText(label)).toBeTruthy();
 });
 

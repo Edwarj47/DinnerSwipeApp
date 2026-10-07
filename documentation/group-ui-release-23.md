@@ -35,6 +35,23 @@ The environment-secret scan and whitespace checks passed.
 Release checks, preflight and deployment logs are retained in that archive.
 Browser fixtures did not make authenticated writes to customer accounts.
 
+## Follow-Up Checks
+
+- A documentation-only CI run failed once in the mobile test step. Its restricted
+  logs were not available here, and the cause was not confirmed. The source CI
+  and subsequent diagnostic CI passed, as did five additional full cold-cache
+  runs (222 tests each). CI now emits bounded structured failure annotations
+  without requiring job-log access. No tests were skipped or retried to hide a
+  failure.
+- Direct footer clicks navigated correctly. A follow-up found that web links
+  lacked a current-page accessibility marker. The web branch now exposes a
+  navigation landmark and `aria-current="page"`; native tab roles, selection,
+  navigation events and layout are unchanged. All 222 tests and candidate
+  browser checks passed, including every footer link at 320, 390 and 1280 pixel
+  widths and enlarged text. The web-only deployment is being prepared.
+- The Android build remains based on `dd5b288`. Later CI diagnostics and the
+  web-only accessibility metadata do not change Android runtime behavior.
+
 ## Scope
 
 This release combines the explicit group Discover choices, proposals, shared

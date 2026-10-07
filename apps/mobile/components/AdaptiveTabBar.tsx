@@ -9,7 +9,7 @@ export function AdaptiveTabBar({ state, descriptors, navigation, insets }: Botto
   const buildLink = useLinkBuilder();
   const reportHeight = useContext(BottomTabBarHeightCallbackContext);
   const sizing: ViewStyle = { minWidth: Platform.OS === "web" ? "max-content" as ViewStyle["minWidth"] : 64 * fontScale };
-  return <View testID="main-tab-bar" accessibilityRole="tablist" onLayout={event => reportHeight?.(event.nativeEvent.layout.height)}
+  return <View testID="main-tab-bar" role={Platform.OS === "web" ? "navigation" : undefined} accessibilityRole="tablist" onLayout={event => reportHeight?.(event.nativeEvent.layout.height)}
     style={[styles.bar, { paddingBottom: Math.max(10, insets.bottom), paddingLeft: insets.left, paddingRight: insets.right }]}>
     {state.routes.map((route, index) => {
       const options = descriptors[route.key].options;
@@ -23,7 +23,7 @@ export function AdaptiveTabBar({ state, descriptors, navigation, insets }: Botto
       const content = <><View style={styles.icon}>{options.tabBarIcon?.({ focused, color, size: 25 })}</View><Text style={[styles.label, { color }]}>{label}</Text></>;
       const shared = { accessibilityLabel: options.tabBarAccessibilityLabel ?? label, accessibilityState: { selected: focused }, testID: options.tabBarTestID, style: [styles.tab, sizing] };
       const to = buildLink(route.name, route.params);
-      return Platform.OS === "web" && to ? <Link key={route.key} {...shared} to={to} onPress={event => {
+      return Platform.OS === "web" && to ? <Link key={route.key} {...shared} aria-current={focused ? "page" : undefined} to={to} onPress={event => {
         if ("button" in event && (event.button !== 0 || event.metaKey || event.altKey || event.ctrlKey || event.shiftKey)) return;
         event.preventDefault(); select();
       }}>{content}</Link> : <Pressable key={route.key} {...shared} accessibilityRole={Platform.OS === "ios" ? "button" : "tab"} onPress={select}
