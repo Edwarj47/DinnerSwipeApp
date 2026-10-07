@@ -35,7 +35,27 @@ jobs:
       - run: npm run lint -w apps/mobile
       - run: npm run typecheck -w apps/mobile
       - name: Run mobile tests with a cold transform cache
-        run: npm test -w apps/mobile -- --runInBand --no-cache
+        run: npm test -w apps/mobile -- --runInBand --no-cache --json --outputFile="$RUNNER_TEMP/mobile-tests.json"
+      - name: Annotate mobile test failures
+        if: failure()
+        env:
+          TEST_RESULTS: ${{ runner.temp }}/mobile-tests.json
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          if (!fs.existsSync(process.env.TEST_RESULTS)) process.exit(0);
+          const results = JSON.parse(fs.readFileSync(process.env.TEST_RESULTS, 'utf8'));
+          const escape = value => value.replace(/%/g, '%25').replace(/\r/g, '%0D').replace(/\n/g, '%0A');
+          for (const suite of results.testResults) {
+            if (suite.status !== 'failed') continue;
+            const failures = suite.assertionResults.filter(test => test.status === 'failed');
+            const messages = failures.length ? failures.map(test => `${test.fullName}\n${test.failureMessages.join('\n')}`) : [suite.message];
+            for (const message of messages) {
+              const bounded = message.length > 6000 ? `${message.slice(0, 3000)}\n...\n${message.slice(-3000)}` : message;
+              console.log(`::error title=Mobile test failure::${escape(bounded)}`);
+            }
+          }
+          NODE
       - run: npm run build:web -w apps/mobile
 
   docker:
