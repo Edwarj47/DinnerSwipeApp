@@ -1,7 +1,7 @@
 # Group Planning
 
 Implementation status: complete, pushed and deployed in release 23. The new
-Android APK is queued; deployment and artifact evidence is tracked in
+Android APK is finished and artifact-verified; deployment evidence is tracked in
 [the release record](group-ui-release-23.md).
 
 ## User Flow
@@ -65,7 +65,8 @@ container and rehearses the upgrade. It fingerprints every original column/row
 and verifies preservation and empty new group tables. The disposable container
 is removed on completion. Backup artifacts are ignored by Git and use restrictive
 permissions. The rehearsal preserved 1,494 legacy rows across 40 tables on
-2026-10-07; production was not migrated.
+2026-10-07 before release. The authorized live migration later passed the same
+preservation checks; see the release record.
 
 Before an authorized release, take a new verified Dinner Swipe-only backup and
 retain the currently running API, worker and web images. Apply the additive
@@ -79,10 +80,12 @@ that would replace database contents. A new APK is required for these UI changes
 
 ## Verification
 
-- Final local checks on 2026-10-07: 173 API tests passed; the two opt-in
+- Group implementation checks on 2026-10-07, before the combined UI release:
+  173 API tests passed; the two opt-in
   PostgreSQL tests passed separately; 214 frontend tests passed across 32 suites.
   API Ruff/mypy and frontend lint/typecheck passed. The production web export
-  succeeded; no release image or APK was built.
+  succeeded. The combined release later passed 222 frontend tests and deployed
+  the API and web. Android build 23 is finished and artifact-verified.
 - API coverage includes default-disabled choices, shared-library/safety boundaries,
   idempotent member proposals, individual withdrawal, explicit approval, independent
   group reset/time-zone boundaries, personal reminders, ownership transfer, isolated

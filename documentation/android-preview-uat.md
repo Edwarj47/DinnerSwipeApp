@@ -1,6 +1,53 @@
 # Android Preview UAT
 
-Updated 2026-10-06 for Android preview build 21.
+Updated 2026-10-07 for Android preview build 23.
+
+## Build 23 Update
+
+- Native source `dd5b288` pushed. [CI 37635907204](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/37635907204)
+  passed backend, frontend and Docker jobs. The later web-only footer metadata
+  fix `afeb517` also passed all three [CI jobs](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/37649596206).
+  Native footer roles, selected state, navigation events and layout are unchanged
+  by that web-only fix.
+- Discover, This Week and Grocery share a searchable, persistent kitchen picker.
+  Owners explicitly curate group Discover choices; members propose meals for
+  owner approval. Group calendars, groceries and pantry remain isolated, while
+  macro logging stays personal. Existing groups start with no enabled choices.
+- Balanced layouts retain the current colors and branding, reflow large labels,
+  use persistent nutrition labels and a macro meal-type dropdown, fit the Discover
+  image around its content, and remove redundant footer padding. Collapsed weekly
+  meals still show only Edit; Duplicate stays beside expanded portion controls.
+- Release checks passed: 173 API tests plus two opt-in PostgreSQL tests, 222
+  mobile tests in 33 suites, lint/types, Node 20 web export and browser regressions
+  covering all five tabs, desktop scrolling/dragging and enlarged phone text.
+- API/worker image `1f9dedd52789` and web image `36bb60d1a09f` are deployed at
+  `https://dinner.dcss.dev`. Migration `a8f97b321c40` preserved 1,494 original
+  rows across 40 tables. All 10 personal planned meals and logged nutrition were
+  unchanged. Postgres, unrelated services, environment and billing were unchanged.
+- EAS build `f4437dd4-e201-425b-a724-0a03ed38e53f` finished October 7 at
+  16:13:36 UTC from `dd5b288`. Standalone preview version `0.1.0`, package
+  `dev.dcss.dinnerswipe`, Android version code `23`; no Metro server is needed.
+- Download length, ZIP integrity, embedded configuration, production API URL,
+  bundled feature markers and cryptographic APK signatures passed. Certificate
+  matches build 22. Size: 79,686,272 bytes; SHA-256:
+  `8839297e2eed48b7b444801249afccd5f2929841780a547f2a2649d72590e558`.
+  Direct link shared privately. Install over the existing app without uninstalling.
+  Physical-phone installation, gestures, biometrics and notification UAT remain
+  pending; artifact and browser checks do not establish device behavior.
+
+### Build 23 Phone Checks
+
+1. Install over build 22 and confirm the saved session and personal meals remain.
+2. Open all five tabs with standard and enlarged system text. Verify labels,
+   safe areas, dialogs, keyboard scrolling, Discover gestures and meal dragging.
+3. Switch between My Kitchen and joined groups in Discover, This Week and Grocery.
+   Confirm isolated meals, groceries and pantry stock, and persistent selection.
+4. As owner, choose group Discover recipes, approve a member proposal into a
+   selected day, and verify that members cannot edit the shared calendar.
+5. As a Premium member, log a shared meal using personal portions and confirm it
+   appears only in personal macros. Recheck reminder opt-out and biometrics.
+
+Detailed evidence and rollback: [Release 23](group-ui-release-23.md).
 
 ## Build 21 Update
 

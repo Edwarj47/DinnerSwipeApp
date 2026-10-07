@@ -55,8 +55,9 @@ tracked in [the release record](group-ui-release-23.md).
 - Native unit coverage checks enlarged navigation widths, measured footer height,
   safe-area spacing, tab selection/cancellation, macro dropdown values, persistent
   labels, canonical nutrition units, zero values and photo fallback sizing.
-- Production API and web health checks still return OK. Their containers and
-  unrelated VPS services were not restarted.
+- Production API and web health checks returned OK during the local UI pass;
+  that pass did not restart services. The subsequent authorized release changed
+  only Dinner Swipe API, worker and web. Unrelated services remained unchanged.
 
 Final browser log: `/tmp/dinner-balanced-browser-final.log`. Web export log:
 `/tmp/dinner-balanced-web-export.log`. Screenshots are under
@@ -76,4 +77,4 @@ notification delivery were not changed or device-tested in this pass.
 The local preview is `http://127.0.0.1:19011`. The production API and web app are
 now deployed; the fixture-based checks do not establish physical-phone behavior
 or authenticated production writes. Release followed the backup and rollout
-procedure in `group-planning-uat.md`; the APK is still queued.
+procedure in `group-planning-uat.md`; APK 23 is finished and artifact-verified.

@@ -1,7 +1,8 @@
 # Group Planning And Balanced UI Release 23
 
-Status: source pushed and API/worker/web deployed on 2026-10-07. Android preview
-build 23 is queued; APK verification is pending, not complete.
+Status: complete. Source is pushed, API/worker/web are deployed and Android
+preview build 23 is finished and artifact-verified on 2026-10-07. Physical-phone
+UAT remains pending.
 
 Final release checks passed: 173 API tests, 222 mobile tests across 33 suites,
 API Ruff/mypy and frontend lint/TypeScript, plus both opt-in PostgreSQL tests.
@@ -16,7 +17,7 @@ The environment-secret scan and whitespace checks passed.
   a fresh quiescent backup was taken; the live migration preserved all 1,494
   legacy rows across 40 tables. New group tables remained empty. No private
   plans were copied into groups or enabled as group Discover choices.
-- API/worker image `1f9dedd52789` and web image `bb2761415865` are live at
+- API/worker image `1f9dedd52789` and web image `36bb60d1a09f` are live at
   `https://dinner.dcss.dev`. Public health, group and legacy route contracts,
   anonymous route protection and served-asset/image matching passed.
 - Candidate and live browser checks passed at 320, 390 and 1280 pixel widths,
@@ -48,7 +49,12 @@ Browser fixtures did not make authenticated writes to customer accounts.
   navigation landmark and `aria-current="page"`; native tab roles, selection,
   navigation events and layout are unchanged. All 222 tests and candidate
   browser checks passed, including every footer link at 320, 390 and 1280 pixel
-  widths and enlarged text. The web-only deployment is being prepared.
+  widths and enlarged text. Source `afeb517` passed
+  [CI 37649596206](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/37649596206)
+  and the web-only deployment completed. Live footer/group checks passed at all
+  four sizes, and served assets match image `36bb60d1a09f`. Every non-web
+  container and the environment checksum remained unchanged. The prior web
+  image is retained as `dinner-swipe-web:before-preview23-footer`.
 - The Android build remains based on `dd5b288`. Later CI diagnostics and the
   web-only accessibility metadata do not change Android runtime behavior.
 
@@ -73,12 +79,19 @@ Swipe application services; leave Postgres and unrelated services/routes alone.
 Rollback restores the prior application images with the additive schema intact.
 Do not downgrade or restore an older database over new customer activity.
 
-## Android Checks
+## Android Artifact
 
-Build 23 must use the standalone preview profile, package
-`dev.dcss.dinnerswipe`, version `0.1.0` and the existing signing certificate.
-Verify the downloaded APK, embedded configuration, production API URL and group
-UI markers. Install over the previous build, without uninstalling.
+- EAS build `f4437dd4-e201-425b-a724-0a03ed38e53f` finished at 16:13:36 UTC
+  on 2026-10-07 from native source `dd5b288`. Standalone preview profile,
+  package `dev.dcss.dinnerswipe`, version `0.1.0`, Android version code `23`.
+- Download length, ZIP integrity, embedded package/version, production API URL
+  and group/UI feature markers passed. APK signature verification passed using
+  v1 and v2 schemes, and the certificate matches build 22.
+- Size: 79,686,272 bytes. SHA-256:
+  `8839297e2eed48b7b444801249afccd5f2929841780a547f2a2649d72590e558`.
+  The APK and verification logs are retained in the private release archive.
+  The direct download link is shared privately. Install over the previous build
+  without uninstalling to preserve the local session.
 
 Physical Android large-text, keyboard, safe-area, gestures, group permissions,
 notification delivery and biometrics remain device UAT; browser and mocked
