@@ -7,6 +7,7 @@ from app.api.routes import (
     auth,
     brand,
     grocery,
+    group_planning,
     groups,
     health,
     imports,
@@ -27,8 +28,11 @@ api_router.include_router(profile.router)
 api_router.include_router(recipes.router)
 api_router.include_router(plans.router)
 api_router.include_router(grocery.router)
+api_router.include_router(grocery.group_router)
 api_router.include_router(imports.router)
 api_router.include_router(ingestion.router)
 api_router.include_router(groups.router)
+api_router.include_router(group_planning.router)
+api_router.include_router(group_planning.reminder_router)
 api_router.include_router(premium.router)
 api_router.include_router(offline.router)

@@ -222,7 +222,16 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     } else if (owner && path === "/api/v1/subscription/status") {
       await remember(owner, data => { data.subscription = result as PremiumStatus; data.verifiedAt = Date.now(); });
     } else if (owner && method === "GET" && cacheable(path)) {
-      await remember(owner, data => { data.cache[path] = { data: result, at: Date.now() }; });
+      await remember(owner, data => {
+        data.cache[path] = { data: result, at: Date.now() };
+        if (path === "/api/v1/households" && Array.isArray(result)) {
+          const allowed = new Set((result as { id: string }[]).map(group => group.id));
+          for (const key of Object.keys(data.cache)) {
+            const groupId = key.match(/\/households\/([^/]+)\//)?.[1];
+            if (groupId && !allowed.has(groupId)) delete data.cache[key];
+          }
+        }
+      });
       const latest = await loadOffline(owner).catch(() => undefined);
       return overlay(path, result, latest?.edits ?? []) as T;
     }
@@ -306,13 +315,15 @@ function makeOfflineEdit(path: string, init: RequestInit, data: Awaited<ReturnTy
   const method = init.method?.toUpperCase();
   const values = typeof init.body === "string" ? JSON.parse(init.body) as Record<string, unknown> : {};
   const operation_id = Crypto.randomUUID();
-  if (method === "PATCH" && /^\/api\/v1\/grocery-lists\/items\/[^/]+$/.test(path)
+  if (method === "PATCH" && /^\/api\/v1\/(?:households\/[^/]+\/)?grocery-lists\/items\/[^/]+$/.test(path)
     && Object.keys(values).every(key => ["is_checked", "quantity"].includes(key))) {
     const target_id = path.split("/").pop()!;
-    const list = readOffline(data, "/api/v1/grocery-lists/current") as { items: { id: string; revision?: string; display_name: string }[] };
+    const household_id = path.match(/\/households\/([^/]+)\//)?.[1];
+    const listPath = `${household_id ? `/api/v1/households/${household_id}` : "/api/v1"}/grocery-lists/current`;
+    const list = readOffline(data, listPath) as { items: { id: string; revision?: string; display_name: string }[] };
     const item = list.items.find(row => row.id === target_id);
     if (!item?.revision) throw new Error("Reconnect to download this grocery item before editing.");
-    return { operation_id, kind: "grocery_update", target_id, revision: item.revision, values, label: item.display_name };
+    return { operation_id, kind: "grocery_update", target_id, revision: item.revision, values, label: item.display_name, ...(household_id ? { household_id } : {}) };
   }
   if (path === "/api/v1/macros/entries" && method === "POST" && !values.weekly_plan_slot_id) {
     if (!values.meal_date) throw new Error("Choose a date for this entry.");
@@ -342,16 +353,16 @@ export async function syncOffline(): Promise<void> {
         const edit = (await loadOffline(id)).edits[0];
         if (!edit || edit.issue) break;
         try {
-          const { operation_id, kind, target_id, revision, values } = edit;
+          const { operation_id, kind, target_id, revision, values, household_id } = edit;
           const response = await authorizedFetch<{ result: Record<string, unknown> }>("/api/v1/offline/sync", {
-            method: "POST", body: JSON.stringify({ operation_id, kind, target_id, revision, values })
+            method: "POST", body: JSON.stringify({ operation_id, kind, target_id, revision, values, ...(household_id ? { household_id } : {}) })
           }, true);
           if (epoch !== sessionEpoch) break;
           await changeOffline(id, data => {
             // Another PWA tab may already have acknowledged this operation.
             if (!data.edits.some(item => item.operation_id === edit.operation_id)) return;
             for (const [path, entry] of Object.entries(data.cache)) {
-              if (path === "/api/v1/grocery-lists/current" && edit.kind === "grocery_update") {
+              if (/\/grocery-lists\/current$/.test(path) && edit.kind === "grocery_update" && path.match(/\/households\/([^/]+)\//)?.[1] === edit.household_id) {
                 entry.data = overlay(path, entry.data, [edit]);
                 const item = (entry.data as { items: Record<string, unknown>[] }).items.find(row => row.id === edit.target_id);
                 if (item) Object.assign(item, response.result);

@@ -1,0 +1,52 @@
+import { Ionicons } from "@expo/vector-icons";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Colors } from "@/components/theme";
+import { apiFetch } from "@/services/api";
+import { Household } from "@/services/types";
+import { applyGroupChange } from "./groupAccess";
+import { useSpace } from "./useSpace";
+
+export function SpaceSelector({ label = "Planning for" }: { label?: string }) {
+  const client = useQueryClient();
+  const space = useSpace();
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const groups = useQuery<Household[]>({ queryKey: ["households"], queryFn: () => apiFetch<Household[]>("/api/v1/households"), enabled: open });
+  const change = useMutation({ mutationFn: (id: string) => apiFetch<Household>(`/api/v1/households/${id}/switch`, { method: "POST" }),
+    onSuccess: async group => { await applyGroupChange(client, group); setOpen(false); setSearch(""); } });
+  return <>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${space.groupId ? space.group?.name : "My Kitchen"}`} disabled={space.isLoading || change.isPending} onPress={() => setOpen(true)} style={styles.selector}>
+      <Ionicons name={space.groupId ? "people-outline" : "home-outline"} size={20} color={Colors.basil} />
+      <View style={styles.copy}><Text style={styles.label}>{label}</Text><Text style={styles.name}>{space.groupId ? space.group?.name : "My Kitchen"}</Text></View>
+      <Ionicons name="chevron-down" size={20} color={Colors.muted} />
+    </Pressable>
+    <Modal visible={open} transparent animationType="slide" onRequestClose={() => { if (!change.isPending) setOpen(false); }}>
+      <View style={styles.backdrop}><View style={styles.sheet} accessibilityViewIsModal>
+        <View style={styles.header}><Text style={styles.title}>Choose a kitchen</Text><Pressable accessibilityRole="button" accessibilityLabel="Close kitchen selection" disabled={change.isPending} onPress={() => setOpen(false)} style={styles.icon}><Ionicons name="close" size={24} color={Colors.ink} /></Pressable></View>
+        <TextInput accessibilityLabel="Search kitchens" placeholder="Search kitchens" value={search} onChangeText={setSearch} style={styles.input} />
+        <ScrollView keyboardShouldPersistTaps="handled" style={styles.list}>
+          {(Array.isArray(groups.data) ? groups.data : []).filter(g => (g.is_personal ? "My Kitchen" : g.name).toLowerCase().includes(search.toLowerCase())).map(g => <Pressable key={g.id} accessibilityRole="radio" accessibilityLabel={g.is_personal ? "My Kitchen" : g.name} accessibilityState={{ checked: g.id === space.group?.id }} aria-checked={g.id === space.group?.id} disabled={change.isPending} onPress={() => change.mutate(g.id)} style={styles.row}>
+            <Ionicons name={g.is_personal ? "home-outline" : "people-outline"} size={22} color={Colors.basil} />
+            <View style={styles.copy}><Text style={styles.name}>{g.is_personal ? "My Kitchen" : g.name}</Text><Text style={styles.label}>{g.is_personal ? "Personal" : g.current_user_role === "owner" ? "Owner" : "Member"}</Text></View>
+            {g.id === space.group?.id ? <Ionicons name="checkmark-circle" color={Colors.tomato} size={24} /> : null}
+          </Pressable>)}
+          {groups.isLoading ? <Text style={styles.label}>Loading kitchens...</Text> : null}
+          {!groups.isLoading && !groups.isError && Array.isArray(groups.data) && !groups.data.length ? <Text style={styles.label}>No kitchens found.</Text> : null}
+        </ScrollView>
+        {change.error || groups.error ? <Text accessibilityRole="alert" style={styles.error}>{(change.error ?? groups.error)?.message}</Text> : null}
+      </View></View>
+    </Modal>
+  </>;
+}
+
+const styles = StyleSheet.create({
+  selector: { borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 8 },
+  copy: { flex: 1, minWidth: 0 }, label: { color: Colors.muted, fontSize: 13, lineHeight: 20 }, name: { color: Colors.ink, fontWeight: "700", fontSize: 16 },
+  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end", alignItems: "center" },
+  sheet: { width: "100%", maxWidth: 600, maxHeight: "80%", backgroundColor: Colors.surface, padding: 20, borderTopLeftRadius: 8, borderTopRightRadius: 8, gap: 12 },
+  header: { flexDirection: "row", alignItems: "center", gap: 12 }, title: { flex: 1, fontSize: 22, fontWeight: "800", color: Colors.ink },
+  icon: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }, input: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, color: Colors.ink },
+  list: { flexGrow: 0 }, row: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.border }, error: { color: Colors.danger }
+});

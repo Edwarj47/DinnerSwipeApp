@@ -120,7 +120,13 @@ def pantry_adjusted_requirements(
 ) -> dict[tuple[str, str | None], dict[str, Any]]:
     pantry = {
         item.normalized_name: item
-        for item in db.scalars(select(PantryItem).where(PantryItem.user_id == user_id)).all()
+        for item in db.scalars(
+            select(PantryItem).where(
+                PantryItem.household_id == plan.household_id
+                if plan.household_id
+                else PantryItem.user_id == user_id
+            )
+        ).all()
     }
     remaining = {name: item.quantity or 0 for name, item in pantry.items()}
     result = {}
@@ -162,7 +168,13 @@ def update_manual_pantry(
 ) -> None:
     pantry = {
         item.normalized_name: item
-        for item in db.scalars(select(PantryItem).where(PantryItem.user_id == user_id)).all()
+        for item in db.scalars(
+            select(PantryItem).where(
+                PantryItem.household_id == plan.household_id
+                if plan.household_id
+                else PantryItem.user_id == user_id
+            )
+        ).all()
     }
     available = {
         name: max(

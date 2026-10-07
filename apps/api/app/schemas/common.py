@@ -397,6 +397,7 @@ class RecipeFeedbackBatch(ApiModel):
 
 
 class SwipeRequest(ApiModel):
+    household_id: str | None = None
     recipe_id: str
     action: Literal["add", "skip", "favorite", "hide"]
     session_id: str = Field(min_length=1, max_length=36)

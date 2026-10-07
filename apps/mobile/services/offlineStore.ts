@@ -8,6 +8,7 @@ export type OfflineEdit = {
   kind: "grocery_update" | "macro_create" | "macro_update" | "macro_delete";
   target_id?: string;
   revision?: string;
+  household_id?: string;
   values: Record<string, unknown>;
   before?: MacroConfirmation;
   label: string;
@@ -87,6 +88,8 @@ export function offlineAccess(data: OfflineData, premium = false) {
 export function cacheable(path: string) {
   const base = path.split("?")[0];
   return /^\/api\/v1\/recipes(?:\/[a-zA-Z0-9-]+)?$/.test(base)
+    || /^\/api\/v1\/households(?:\/current|\/[a-zA-Z0-9-]+\/(?:weekly-plans\/current|grocery-lists\/(?:current|pantry)|library))$/.test(base)
+    || base === "/api/v1/households"
     || ["/api/v1/profile", "/api/v1/weekly-plans/current", "/api/v1/grocery-lists/current", "/api/v1/grocery-lists/pantry",
       "/api/v1/macros/entries", "/api/v1/macros/targets", "/api/v1/macros/summary", "/api/v1/macros/analytics"].includes(base);
 }
@@ -134,7 +137,7 @@ export function readOffline(data: OfflineData, path: string): unknown {
     }
   }
   if (!cached) throw new Error("This information is not downloaded yet. Connect and try again.");
-  if ((path === "/api/v1/weekly-plans/current" || path === "/api/v1/grocery-lists/current") && weekStamp(cached.at) !== weekStamp(Date.now())) {
+  if (/\/(weekly-plans|grocery-lists)\/current$/.test(path) && weekStamp(cached.at) !== weekStamp(Date.now())) {
     throw new Error("Connect to download this week's plan and groceries. Last week's changes are still saved.");
   }
   return overlay(path, cached.data, data.edits);
@@ -158,8 +161,9 @@ export function macroAfter(edit: OfflineEdit): MacroConfirmation | undefined {
 
 export function overlay(path: string, input: unknown, edits: OfflineEdit[]): unknown {
   const data = JSON.parse(JSON.stringify(input));
-  if (path === "/api/v1/grocery-lists/current") {
-    for (const edit of edits.filter(item => item.kind === "grocery_update")) {
+  if (/\/grocery-lists\/current$/.test(path)) {
+    const householdId = path.match(/\/households\/([^/]+)\//)?.[1];
+    for (const edit of edits.filter(item => item.kind === "grocery_update" && item.household_id === householdId)) {
       const item = data.items.find((row: { id: string }) => row.id === edit.target_id);
       if (item) Object.assign(item, edit.values, { revision: `pending:${edit.operation_id}` });
     }

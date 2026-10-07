@@ -32,6 +32,7 @@ class OfflineEdit(BaseModel):
     target_id: UUID | None = None
     revision: str | None = Field(default=None, max_length=64)
     values: dict[str, object] = Field(default_factory=dict)
+    household_id: UUID | None = None
 
 
 class GroceryEdit(BaseModel):
@@ -48,13 +49,21 @@ def sync_edit(payload: OfflineEdit, db: DbDep, current_user: BasicUser) -> dict[
     db.execute(select(User.id).where(User.id == current_user.id).with_for_update()).one()
     request_hash = hashlib.sha256(
         json.dumps(
-            payload.model_dump(mode="json"),
+            payload.model_dump(
+                mode="json", exclude={"household_id"} if payload.household_id is None else set()
+            ),
             sort_keys=True,
             separators=(",", ":"),
         ).encode()
     ).hexdigest()
     if payload.kind.startswith("macro_"):
+        if payload.household_id:
+            raise HTTPException(422, "Macro entries are always personal.")
         require_premium(db, current_user)
+    if payload.household_id:
+        from app.services.group_planning import authorize
+
+        authorize(db, current_user, str(payload.household_id))
     existing = db.scalar(
         select(OfflineReceipt).where(
             OfflineReceipt.user_id == current_user.id,
@@ -112,7 +121,9 @@ def _apply(payload: OfflineEdit, db: DbDep, user: BasicUser) -> dict[str, object
         raise HTTPException(422, "Download this item before editing it offline.")
     target_id = str(payload.target_id)
     if payload.kind == "grocery_update":
-        item = _owned_grocery_item(db, user, target_id)
+        item = _owned_grocery_item(
+            db, user, target_id, str(payload.household_id) if payload.household_id else None
+        )
         if item.updated_at.isoformat() != payload.revision:
             raise HTTPException(
                 409,

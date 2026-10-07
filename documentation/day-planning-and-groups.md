@@ -1,5 +1,10 @@
 # Day Planning And Groups
 
+The locally implemented group-calendar redesign is documented in
+`group-planning-uat.md`. The release history below describes the older deployed
+workflow; its personal-calendar group behavior is superseded only when the new
+API and clients are released.
+
 Updated 2026-09-28. Android preview build 7 is available. The owner-approved
 production API/worker deployment and database migration are now complete through
 `d8126c4ab391`, including the day-specific Add meal endpoint needed by build 7.

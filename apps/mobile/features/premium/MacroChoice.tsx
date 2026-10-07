@@ -41,8 +41,8 @@ const styles = StyleSheet.create({
   label: { fontWeight: "700", color: Colors.ink, flexShrink: 1 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", padding: 18, alignItems: "center", justifyContent: "center" },
   menu: { width: "100%", maxWidth: 420, maxHeight: "80%", padding: 16, borderRadius: 8, backgroundColor: Colors.surface },
-  heading: { fontSize: 18, fontWeight: "800", color: Colors.ink },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  heading: { flex: 1, minWidth: 0, fontSize: 18, fontWeight: "800", color: Colors.ink },
+  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 8 },
   close: { width: 44, height: 44, justifyContent: "center", alignItems: "center" },
   option: { minHeight: 52, flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, borderBottomWidth: 1, borderBottomColor: Colors.border }
 });

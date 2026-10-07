@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
+from sqlalchemy.orm import Session
+from sqlalchemy.sql.elements import ColumnElement
 
 from app.api.deps import BasicUser, DbDep
-from app.models.entities import GroceryList, GroceryListItem, PantryItem, WeeklyPlan
+from app.models.entities import GroceryList, GroceryListItem, PantryItem, User, WeeklyPlan
 from app.schemas.common import GroceryManualItemIn, PantryCoverageIn, PantryItemIn
 from app.services.grocery_groups import recipe_grocery_groups
 from app.services.pantry import (
@@ -18,27 +20,61 @@ from app.services.recipes import category_for, get_or_create_current_plan, regen
 from app.services.retailers import WalmartSearchLinkAdapter, get_retailer_adapter
 
 router = APIRouter(prefix="/grocery-lists", tags=["grocery-lists"])
+group_router = APIRouter(
+    prefix="/households/{household_id}/grocery-lists", tags=["group-groceries"]
+)
+
+
+def _plan(
+    db: Session, user: User, household_id: str | None = None, *, lock: bool = False
+) -> WeeklyPlan:
+    if household_id:
+        from app.services.group_planning import current_plan
+
+        return current_plan(db, user, household_id)
+    return get_or_create_current_plan(db, user, lock=lock)
+
+
+def _scope(
+    model: type[GroceryList] | type[PantryItem], user: User, household_id: str | None
+) -> ColumnElement[bool]:
+    return model.household_id == household_id if household_id else model.user_id == user.id
 
 
 @router.post("/current/regenerate")
-def regenerate(db: DbDep, current_user: BasicUser) -> dict[str, object]:
-    plan = get_or_create_current_plan(db, current_user, lock=True)
+@group_router.post("/current/regenerate")
+def regenerate(
+    db: DbDep, current_user: BasicUser, household_id: str | None = None
+) -> dict[str, object]:
+    plan = _plan(db, current_user, household_id, lock=True)
     grocery = regenerate_grocery_list(db, current_user, plan, preserve_edits=True)
-    return list_current(db, current_user, grocery.id)
+    return list_current(db, current_user, grocery.id, household_id)
 
 
 @router.get("/current")
+@group_router.get("/current")
 def list_current(
-    db: DbDep, current_user: BasicUser, grocery_id: str | None = None
+    db: DbDep,
+    current_user: BasicUser,
+    grocery_id: str | None = None,
+    household_id: str | None = None,
 ) -> dict[str, object]:
-    plan = get_or_create_current_plan(db, current_user)
+    plan = _plan(db, current_user, household_id)
     grocery = db.get(GroceryList, grocery_id) if grocery_id else None
-    if grocery and (grocery.user_id != current_user.id or grocery.weekly_plan_id != plan.id):
+    if grocery and (
+        (
+            grocery.household_id != household_id
+            if household_id
+            else grocery.user_id != current_user.id
+        )
+        or grocery.weekly_plan_id != plan.id
+    ):
         raise HTTPException(404, "Grocery list not found")
     if not grocery:
         grocery = db.scalar(
             select(GroceryList).where(
-                GroceryList.user_id == current_user.id, GroceryList.weekly_plan_id == plan.id
+                _scope(GroceryList, current_user, household_id),
+                GroceryList.weekly_plan_id == plan.id,
             )
         )
     if not grocery:
@@ -69,8 +105,10 @@ def list_current(
         }
         for item in items
     ]
+    db.commit()
     return {
         "id": grocery.id,
+        "household_id": household_id,
         "weekly_plan_id": plan.id,
         "retailer_name": adapter.retailer_name,
         "retailer_display_name": adapter.display_name,
@@ -80,11 +118,17 @@ def list_current(
     }
 
 
-def _owned_grocery_item(db: DbDep, current_user: BasicUser, item_id: str) -> GroceryListItem:
+def _owned_grocery_item(
+    db: DbDep, current_user: BasicUser, item_id: str, household_id: str | None = None
+) -> GroceryListItem:
+    if household_id:
+        from app.services.group_planning import authorize
+
+        authorize(db, current_user, household_id)
     item = db.scalar(
         select(GroceryListItem)
         .join(GroceryList, GroceryList.id == GroceryListItem.grocery_list_id)
-        .where(GroceryListItem.id == item_id, GroceryList.user_id == current_user.id)
+        .where(GroceryListItem.id == item_id, _scope(GroceryList, current_user, household_id))
         .with_for_update(of=GroceryListItem)
     )
     if not item:
@@ -93,13 +137,17 @@ def _owned_grocery_item(db: DbDep, current_user: BasicUser, item_id: str) -> Gro
 
 
 @router.post("/current/items")
+@group_router.post("/current/items")
 def add_manual_item(
-    payload: GroceryManualItemIn, db: DbDep, current_user: BasicUser
+    payload: GroceryManualItemIn,
+    db: DbDep,
+    current_user: BasicUser,
+    household_id: str | None = None,
 ) -> dict[str, str]:
-    plan = get_or_create_current_plan(db, current_user, lock=True)
+    plan = _plan(db, current_user, household_id, lock=True)
     grocery = db.scalar(
         select(GroceryList).where(
-            GroceryList.user_id == current_user.id, GroceryList.weekly_plan_id == plan.id
+            _scope(GroceryList, current_user, household_id), GroceryList.weekly_plan_id == plan.id
         )
     )
     if not grocery:
@@ -130,10 +178,15 @@ def add_manual_item(
 
 
 @router.patch("/items/{item_id}")
+@group_router.patch("/items/{item_id}")
 def update_item(
-    item_id: str, payload: dict[str, object], db: DbDep, current_user: BasicUser
+    item_id: str,
+    payload: dict[str, object],
+    db: DbDep,
+    current_user: BasicUser,
+    household_id: str | None = None,
 ) -> dict[str, str]:
-    item = _owned_grocery_item(db, current_user, item_id)
+    item = _owned_grocery_item(db, current_user, item_id, household_id)
     allowed = {"is_checked", "quantity", "unit", "display_name", "notes"}
     for key, value in payload.items():
         if key in allowed:
@@ -143,18 +196,27 @@ def update_item(
 
 
 @router.delete("/items/{item_id}")
-def delete_item(item_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
-    item = _owned_grocery_item(db, current_user, item_id)
+@group_router.delete("/items/{item_id}")
+def delete_item(
+    item_id: str, db: DbDep, current_user: BasicUser, household_id: str | None = None
+) -> dict[str, str]:
+    item = _owned_grocery_item(db, current_user, item_id, household_id)
     db.delete(item)
     db.commit()
     return {"status": "deleted"}
 
 
 @router.get("/pantry")
-def pantry(db: DbDep, current_user: BasicUser) -> list[dict[str, object]]:
-    items = db.scalars(select(PantryItem).where(PantryItem.user_id == current_user.id)).all()
-    plan = get_or_create_current_plan(db, current_user)
+@group_router.get("/pantry")
+def pantry(
+    db: DbDep, current_user: BasicUser, household_id: str | None = None
+) -> list[dict[str, object]]:
+    plan = _plan(db, current_user, household_id)
+    items = db.scalars(
+        select(PantryItem).where(_scope(PantryItem, current_user, household_id))
+    ).all()
     requirements = grocery_requirements(db, plan)
+    db.commit()
     return [
         {
             "id": item.id,
@@ -176,11 +238,14 @@ def pantry(db: DbDep, current_user: BasicUser) -> list[dict[str, object]]:
 
 
 @router.post("/pantry")
-def add_pantry(payload: PantryItemIn, db: DbDep, current_user: BasicUser) -> dict[str, str]:
+@group_router.post("/pantry")
+def add_pantry(
+    payload: PantryItemIn, db: DbDep, current_user: BasicUser, household_id: str | None = None
+) -> dict[str, str]:
     normalized_name = normalize_name(payload.normalized_name)
     if not normalized_name:
         raise HTTPException(status_code=400, detail="Pantry item name is required")
-    plan = get_or_create_current_plan(db, current_user, lock=True)
+    plan = _plan(db, current_user, household_id, lock=True)
     item = _save_pantry(db, current_user, plan, normalized_name, payload.category, payload)
     db.commit()
     return {"id": item.id}
@@ -198,13 +263,16 @@ def _save_pantry(
         raise HTTPException(422, "Enter the amount available in your pantry")
     item = db.scalar(
         select(PantryItem).where(
-            PantryItem.user_id == current_user.id,
+            _scope(PantryItem, current_user, plan.household_id),
             PantryItem.normalized_name == normalized_name,
         )
     )
     if not item:
         item = PantryItem(
-            user_id=current_user.id, normalized_name=normalized_name, category=category
+            user_id=None if plan.household_id else current_user.id,
+            household_id=plan.household_id,
+            normalized_name=normalized_name,
+            category=category,
         )
         db.add(item)
     item.coverage_mode = payload.coverage_mode
@@ -222,11 +290,16 @@ def _save_pantry(
 
 
 @router.post("/items/{item_id}/pantry")
+@group_router.post("/items/{item_id}/pantry")
 def item_to_pantry(
-    item_id: str, db: DbDep, current_user: BasicUser, payload: PantryCoverageIn | None = None
+    item_id: str,
+    db: DbDep,
+    current_user: BasicUser,
+    payload: PantryCoverageIn | None = None,
+    household_id: str | None = None,
 ) -> dict[str, str]:
-    plan = get_or_create_current_plan(db, current_user, lock=True)
-    item = _owned_grocery_item(db, current_user, item_id)
+    plan = _plan(db, current_user, household_id, lock=True)
+    item = _owned_grocery_item(db, current_user, item_id, household_id)
     grocery = db.get(GroceryList, item.grocery_list_id)
     if not grocery or grocery.weekly_plan_id != plan.id:
         raise HTTPException(409, "Refresh this week's grocery list first")
@@ -238,10 +311,15 @@ def item_to_pantry(
 
 
 @router.delete("/pantry/{item_id}")
-def delete_pantry(item_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
-    plan = get_or_create_current_plan(db, current_user, lock=True)
+@group_router.delete("/pantry/{item_id}")
+def delete_pantry(
+    item_id: str, db: DbDep, current_user: BasicUser, household_id: str | None = None
+) -> dict[str, str]:
+    plan = _plan(db, current_user, household_id, lock=True)
     item = db.scalar(
-        select(PantryItem).where(PantryItem.id == item_id, PantryItem.user_id == current_user.id)
+        select(PantryItem).where(
+            PantryItem.id == item_id, _scope(PantryItem, current_user, household_id)
+        )
     )
     if not item:
         raise HTTPException(status_code=404, detail="Pantry item not found")
@@ -261,7 +339,8 @@ def _refresh_pantry_list(
 ) -> None:
     grocery = db.scalar(
         select(GroceryList).where(
-            GroceryList.user_id == current_user.id, GroceryList.weekly_plan_id == plan.id
+            _scope(GroceryList, current_user, plan.household_id),
+            GroceryList.weekly_plan_id == plan.id,
         )
     )
     if not grocery:

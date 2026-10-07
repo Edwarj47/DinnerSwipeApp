@@ -127,6 +127,7 @@ export default function RecipesScreen() {
         </View>
       </View>
       <TourTarget id="recipe-library"><SegmentedControl
+        adaptive
         accessibilityLabel="Recipe sections"
         value={pageMode}
         onChange={setPageMode}
@@ -140,6 +141,7 @@ export default function RecipesScreen() {
         <>
           <TourTarget id="recipe-add"><View style={styles.addSegment}>
             <SegmentedControl
+              adaptive
               accessibilityLabel="Recipe add options"
               value={addMode}
               onChange={setAddMode}

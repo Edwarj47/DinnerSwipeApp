@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
-import { Platform, Pressable, Share, StyleSheet, Text, TextInput, View } from "react-native";
+import { ReactNode, useEffect, useMemo, useState } from "react";
+import { Platform, Pressable, Share, StyleSheet, Text, TextInput, useWindowDimensions, View, ViewStyle } from "react-native";
 
 import { Button } from "@/components/Button";
 import { SUCCESS_MESSAGE_MS } from "@/components/useTransientMessage";
@@ -286,11 +286,12 @@ export function PremiumMacroPanel() {
           <View style={styles.targetBox}>
             <Text style={styles.subsection}>Targets</Text>
             <View style={styles.grid}>
-              <TextInput accessibilityLabel="Daily calories target" value={calories} onChangeText={setCalories} keyboardType="number-pad" placeholder="Calories" style={[styles.input, styles.gridInput]} />
-              <WeightTextInput accessibilityLabel="Daily protein target" grams={protein} onChangeGrams={setProtein} unit={unit} placeholder={`Protein ${unit}`} style={[styles.input, styles.gridInput]} />
-              <WeightTextInput accessibilityLabel="Daily carbs target" grams={carbs} onChangeGrams={setCarbs} unit={units.carbs_g} placeholder={`Carbs ${units.carbs_g}`} style={[styles.input, styles.gridInput]} />
-              <WeightTextInput accessibilityLabel="Daily fat target" grams={fat} onChangeGrams={setFat} unit={units.fat_g} placeholder={`Fat ${units.fat_g}`} style={[styles.input, styles.gridInput]} />
+              <MacroField label="Calories"><TextInput accessibilityLabel="Daily calories target" value={calories} onChangeText={setCalories} keyboardType="number-pad" placeholder="Not set" style={styles.input} /></MacroField>
+              <MacroField label={`Protein (${unit})`}><WeightTextInput accessibilityLabel="Daily protein target" grams={protein} onChangeGrams={setProtein} unit={unit} placeholder="Not set" style={styles.input} /></MacroField>
+              <MacroField label={`Carbs (${units.carbs_g})`}><WeightTextInput accessibilityLabel="Daily carbs target" grams={carbs} onChangeGrams={setCarbs} unit={units.carbs_g} placeholder="Not set" style={styles.input} /></MacroField>
+              <MacroField label={`Fat (${units.fat_g})`}><WeightTextInput accessibilityLabel="Daily fat target" grams={fat} onChangeGrams={setFat} unit={units.fat_g} placeholder="Not set" style={styles.input} /></MacroField>
             </View>
+            <Text style={styles.fieldLabel}>Goal</Text>
             <TextInput accessibilityLabel="Macro goal" value={goal} onChangeText={setGoal} placeholder="Goal" style={styles.input} />
             <Button
               label="Save targets"
@@ -302,6 +303,7 @@ export function PremiumMacroPanel() {
           </View>
 
           <SegmentedControl
+            adaptive
             accessibilityLabel="Macro views"
             value={macroView}
             onChange={setMacroView}
@@ -469,14 +471,16 @@ function DayMacroView({
       <View style={styles.entryForm}>
         <Text style={styles.subsection}>{editingEntryId ? "Edit entry" : "Add macro entry"}</Text>
         <TextInput accessibilityLabel="Entry name" value={entryName} onChangeText={setEntryName} placeholder="Meal, snack, or beverage" style={styles.input} />
-        <SegmentedControl accessibilityLabel="Meal label" value={mealLabel} onChange={setMealLabel} options={MEAL_LABEL_OPTIONS} wrap />
+        <Text style={styles.fieldLabel}>Meal type</Text>
+        <MacroChoice label="Meal type" value={mealLabel} onChange={setMealLabel} options={MEAL_LABEL_OPTIONS} disabled={savePending} />
         <View style={styles.grid}>
-          <TextInput accessibilityLabel="Calories" value={entryCalories} onChangeText={setEntryCalories} keyboardType="number-pad" placeholder="Calories" style={[styles.input, styles.gridInput]} />
-          <WeightTextInput accessibilityLabel={`Protein ${unit === "g" ? "grams" : "ounces"}`} grams={entryProtein} onChangeGrams={setEntryProtein} unit={unit} placeholder={`Protein ${unit}`} style={[styles.input, styles.gridInput]} />
-          <WeightTextInput accessibilityLabel={`Carbs ${units.carbs_g === "g" ? "grams" : "ounces"}`} grams={entryCarbs} onChangeGrams={setEntryCarbs} unit={units.carbs_g} placeholder={`Carbs ${units.carbs_g}`} style={[styles.input, styles.gridInput]} />
-          <WeightTextInput accessibilityLabel={`Fat ${units.fat_g === "g" ? "grams" : "ounces"}`} grams={entryFat} onChangeGrams={setEntryFat} unit={units.fat_g} placeholder={`Fat ${units.fat_g}`} style={[styles.input, styles.gridInput]} />
-          <WeightTextInput accessibilityLabel={`Fiber ${units.fiber_g === "g" ? "grams" : "ounces"}`} grams={entryFiber} onChangeGrams={setEntryFiber} unit={units.fiber_g} placeholder={`Fiber ${units.fiber_g}`} style={[styles.input, styles.gridInput]} />
+          <MacroField label="Calories"><TextInput accessibilityLabel="Calories" value={entryCalories} onChangeText={setEntryCalories} keyboardType="number-pad" placeholder="Optional" style={styles.input} /></MacroField>
+          <MacroField label={`Protein (${unit})`}><WeightTextInput accessibilityLabel={`Protein ${unit === "g" ? "grams" : "ounces"}`} grams={entryProtein} onChangeGrams={setEntryProtein} unit={unit} placeholder="Optional" style={styles.input} /></MacroField>
+          <MacroField label={`Carbs (${units.carbs_g})`}><WeightTextInput accessibilityLabel={`Carbs ${units.carbs_g === "g" ? "grams" : "ounces"}`} grams={entryCarbs} onChangeGrams={setEntryCarbs} unit={units.carbs_g} placeholder="Optional" style={styles.input} /></MacroField>
+          <MacroField label={`Fat (${units.fat_g})`}><WeightTextInput accessibilityLabel={`Fat ${units.fat_g === "g" ? "grams" : "ounces"}`} grams={entryFat} onChangeGrams={setEntryFat} unit={units.fat_g} placeholder="Optional" style={styles.input} /></MacroField>
+          <MacroField label={`Fiber (${units.fiber_g})`}><WeightTextInput accessibilityLabel={`Fiber ${units.fiber_g === "g" ? "grams" : "ounces"}`} grams={entryFiber} onChangeGrams={setEntryFiber} unit={units.fiber_g} placeholder="Optional" style={styles.input} /></MacroField>
         </View>
+        <Text style={styles.fieldLabel}>Notes</Text>
         <TextInput accessibilityLabel="Entry notes" value={entryNotes} onChangeText={setEntryNotes} placeholder="Notes" style={styles.input} />
         <View style={styles.actions}>
           <Button label={editingEntryId ? "Update" : "Add"} icon={editingEntryId ? "save" : "add-circle"} variant="primary" disabled={savePending || !entryName.trim()} onPress={onSave} />
@@ -620,12 +624,21 @@ function AnalyticsMacroView({
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
+  const { fontScale } = useWindowDimensions();
+  const sizing: ViewStyle = Platform.OS === "web" ? { minWidth: "max-content" as ViewStyle["minWidth"], flexBasis: "auto" } : { minWidth: 100 * fontScale, flexBasis: 100 * fontScale };
   return (
-    <View style={styles.metric}>
+    <View style={[styles.metric, sizing]}>
       <Text style={styles.metricValue}>{value}</Text>
       <Text style={styles.metricLabel}>{label}</Text>
     </View>
   );
+}
+
+function MacroField({ label, children }: { label: string; children: ReactNode }) {
+  const { fontScale } = useWindowDimensions();
+  return <View style={[styles.field, fontScale > 1.3 && { flexBasis: "100%" }]}>
+    <Text style={styles.fieldLabel}>{label}</Text>{children}
+  </View>;
 }
 
 function EntryRow({ entry, onPress }: { entry: MacroConfirmation; onPress: () => void }) {
@@ -750,7 +763,7 @@ function shortDate(value: string) {
 }
 
 const styles = StyleSheet.create({
-  panel: { gap: 16, marginTop: 16, marginBottom: 12 },
+  panel: { gap: 12, marginTop: 12, marginBottom: 8 },
   header: { flexDirection: "row", justifyContent: "space-between", gap: 10, alignItems: "center" },
   section: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
   subsection: { color: Colors.ink, fontWeight: "900", fontSize: 16 },
@@ -781,31 +794,32 @@ const styles = StyleSheet.create({
   divider: { height: 1, backgroundColor: Colors.border },
   lockedBox: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 6 },
   lockedTitle: { color: Colors.ink, fontWeight: "900" },
-  metrics: { flexDirection: "row", gap: 8 },
-  metric: { flex: 1, minWidth: 0, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12 },
+  metrics: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  metric: { flexGrow: 1, flexShrink: 0, maxWidth: "100%", borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10 },
   metricValue: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
   metricLabel: { color: Colors.muted, fontWeight: "800", fontSize: 12 },
-  targetBox: { borderTopWidth: 1, borderColor: Colors.border, paddingTop: 16, gap: 12 },
+  targetBox: { borderTopWidth: 1, borderColor: Colors.border, paddingTop: 12, gap: 8 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  gridInput: { flex: 1, minWidth: 118 },
-  viewBox: { borderTopWidth: 1, borderColor: Colors.border, paddingTop: 16, gap: 12 },
+  field: { flexBasis: "45%", flexGrow: 1, minWidth: 0, gap: 4 },
+  fieldLabel: { color: Colors.ink, fontWeight: "700", fontSize: 14 },
+  viewBox: { borderTopWidth: 1, borderColor: Colors.border, paddingTop: 12, gap: 8 },
   dayHeader: { flexDirection: "row", alignItems: "center", gap: 4 },
-  entryForm: { paddingVertical: 12, gap: 8 },
+  entryForm: { paddingVertical: 8, gap: 8 },
   entryList: { gap: 8 },
   entryRow: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 8 },
   entryTitle: { color: Colors.ink, fontWeight: "900", fontSize: 15 },
   editText: { color: Colors.tomatoDark, fontWeight: "900" },
   dayGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  dayCard: { width: "31.5%", minHeight: 104, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10, justifyContent: "space-between" },
+  dayCard: { flexBasis: "30%", flexGrow: 1, minWidth: 100, minHeight: 104, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10, justifyContent: "space-between" },
   dayName: { color: Colors.ink, fontWeight: "900" },
   dayCalories: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 20 },
   miniLabel: { color: Colors.muted, fontWeight: "800", fontSize: 11, textTransform: "uppercase" },
   miniText: { color: Colors.muted, fontSize: 12 },
   calendarRow: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44 },
-  calendarLabel: { width: 58 },
+  calendarLabel: { minWidth: 58 },
   calendarTrack: { flex: 1, height: 12, borderRadius: 999, backgroundColor: Colors.softRed, overflow: "hidden" },
   calendarFill: { height: "100%", backgroundColor: Colors.tomato },
-  calendarValue: { width: 52, textAlign: "right", color: Colors.ink, fontWeight: "900" },
+  calendarValue: { minWidth: 52, flexShrink: 0, textAlign: "right", color: Colors.ink, fontWeight: "900" },
   analyticsList: { gap: 8 },
   macroLine: { borderBottomWidth: 1, borderBottomColor: Colors.border, paddingBottom: 8 },
   macroLineLabel: { color: Colors.ink, fontWeight: "900" },

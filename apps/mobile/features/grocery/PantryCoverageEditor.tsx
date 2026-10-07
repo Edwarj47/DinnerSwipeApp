@@ -20,8 +20,8 @@ export type PantrySelection = {
   stockUnit?: string | null;
 };
 
-export function PantryCoverageEditor({ selection, onClose, onSaved }: {
-  selection: PantrySelection; onClose: () => void; onSaved: (mode: string) => void;
+export function PantryCoverageEditor({ selection, householdId, onClose, onSaved }: {
+  selection: PantrySelection; householdId?: string; onClose: () => void; onSaved: (mode: string) => void;
 }) {
   const client = useQueryClient();
   const weightUnit = useMeasurementUnits().ingredient_weight;
@@ -32,7 +32,7 @@ export function PantryCoverageEditor({ selection, onClose, onSaved }: {
   const grams = amount.trim() && Number.isFinite(Number(amount)) && factor !== null ? String(Number(amount) * factor) : amount;
   const required = selection.requiredQuantity != null ? convertWeight(selection.requiredQuantity, selection.unit, weightUnit) : null;
   const save = useMutation({
-    mutationFn: (mode: "enough" | "quantity") => apiFetch(selection.itemId ? `/api/v1/grocery-lists/items/${selection.itemId}/pantry` : "/api/v1/grocery-lists/pantry", {
+    mutationFn: (mode: "enough" | "quantity") => apiFetch(`${householdId ? `/api/v1/households/${householdId}` : "/api/v1"}/grocery-lists${selection.itemId ? `/items/${selection.itemId}/pantry` : "/pantry"}`, {
       method: "POST", body: JSON.stringify({ normalized_name: selection.normalizedName, category: selection.category, coverage_mode: mode, quantity: mode === "quantity" ? Number(amount) : null, unit: mode === "quantity" ? unit.trim() || null : null })
     }),
     onSuccess: async (_, mode) => {

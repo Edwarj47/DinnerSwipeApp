@@ -208,7 +208,7 @@ function listFromText(value: string) {
 const styles = StyleSheet.create({
   panel: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 12, gap: 8, marginBottom: 12 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
-  title: { fontSize: 19, fontWeight: "900", color: Colors.ink },
+  title: { fontSize: 19, fontWeight: "900", color: Colors.ink, flexShrink: 1 },
   badge: { color: Colors.tomato, fontWeight: "900" },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, backgroundColor: Colors.surface },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },

@@ -56,7 +56,7 @@ function GroupRecipePicker({ household, onClose, onShared }: {
       });
     },
     onSuccess: result => {
-      for (const key of ["group-recipe-options", "vote-options", "recipes", "votes"]) void client.invalidateQueries({ queryKey: [key] });
+      for (const key of ["group-recipe-options", "group-library", "group-proposals", "vote-options", "recipes", "votes"]) void client.invalidateQueries({ queryKey: [key] });
       onShared(result);
     }
   });

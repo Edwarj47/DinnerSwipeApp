@@ -187,9 +187,7 @@ def preview_invite(db: Session, invite_code: str) -> dict[str, Any]:
     return {"id": household.id, "name": household.name, "member_count": count}
 
 
-def find_invited_household(
-    db: Session, invite_code: str, *, lock: bool = False
-) -> Household:
+def find_invited_household(db: Session, invite_code: str, *, lock: bool = False) -> Household:
     query = select(Household).where(
         Household.invite_code == invite_code.strip().upper(), Household.is_personal.is_(False)
     )
@@ -288,9 +286,7 @@ def share_recipes(
         if not user.profile or not user.profile.household_id:
             raise HTTPException(status_code=404, detail="Choose a shared group.")
         target_id = user.profile.household_id
-    household = db.scalar(
-        select(Household).where(Household.id == target_id).with_for_update()
-    )
+    household = db.scalar(select(Household).where(Household.id == target_id).with_for_update())
     if not household or household.is_personal or not current_member(db, user, household):
         raise HTTPException(
             status_code=404, detail="Choose one of your own recipes and a shared group."
@@ -357,6 +353,7 @@ def update_household_settings(
     household_id: str | None = None,
 ) -> dict[str, Any]:
     household = current_household(db, user, household_id)
+    db.scalar(select(Household).where(Household.id == household.id).with_for_update())
     require_owner(db, user, household)
     if allergen_filter_mode not in SAFETY_MODES or dislike_filter_mode not in SAFETY_MODES:
         raise HTTPException(status_code=422, detail="Unsupported household safety mode")
@@ -567,9 +564,9 @@ def group_recipes_query(user: User, household: Household) -> Select[tuple[Recipe
 
 def current_member(db: Session, user: User, household: Household) -> HouseholdMember | None:
     return db.scalar(
-        select(HouseholdMember).where(
-            HouseholdMember.household_id == household.id, HouseholdMember.user_id == user.id
-        )
+        select(HouseholdMember)
+        .where(HouseholdMember.household_id == household.id, HouseholdMember.user_id == user.id)
+        .execution_options(populate_existing=True)
     )
 
 

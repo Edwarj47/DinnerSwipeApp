@@ -108,9 +108,9 @@ export function GroupManager({ current }: { current?: Household }) {
 }
 
 const styles = StyleSheet.create({
-  section: { gap: 12, paddingBottom: 20 }, heading: { flexDirection: "row", alignItems: "center", gap: 12 },
+  section: { gap: 8, paddingBottom: 8 }, heading: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { fontSize: 20, fontWeight: "800", color: Colors.ink, flex: 1 },
-  space: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 72, padding: 12, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, backgroundColor: Colors.surface },
+  space: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 60, padding: 10, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, backgroundColor: Colors.surface },
   active: { borderColor: Colors.basil, backgroundColor: "#f0f7f1" }, copy: { flex: 1, minWidth: 0 },
   name: { fontSize: 16, fontWeight: "800", color: Colors.ink }, meta: { color: Colors.muted, lineHeight: 22 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, error: { color: Colors.danger },

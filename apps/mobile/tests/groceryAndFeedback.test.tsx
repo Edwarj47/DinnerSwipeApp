@@ -50,13 +50,13 @@ test("grocery groups start expanded, collapse individually and share checks and 
   });
   const screen = mount(<GroceryScreen />);
   try {
-    await screen.findByText("For recipe: 2");
-    expect(screen.getByText("For recipe: 1")).toBeTruthy();
-    expect(screen.getAllByText("Shopping total: 3")).toHaveLength(2);
+    await screen.findByText("Recipe: 2");
+    expect(screen.getByText("Recipe: 1")).toBeTruthy();
+    expect(screen.getAllByText("Buy total: 3")).toHaveLength(2);
     expect(screen.queryByText(/search_link/)).toBeNull();
     fireEvent.press(screen.getByLabelText("Collapse Tacos"));
-    expect(screen.queryByText("For recipe: 2")).toBeNull();
-    expect(screen.getByText("For recipe: 1")).toBeTruthy();
+    expect(screen.queryByText("Recipe: 2")).toBeNull();
+    expect(screen.getByText("Recipe: 1")).toBeTruthy();
     fireEvent.press(screen.getByLabelText("Expand Tacos"));
     expect(StyleSheet.flatten(screen.getAllByRole("checkbox")[0].props.style)).toMatchObject({ width: 44, minHeight: 44 });
     fireEvent.press(screen.getAllByRole("checkbox")[0]);
@@ -81,15 +81,21 @@ test("ignored feedback stays collapsed until opened, retains warnings and can be
   });
   const screen = mount(<RecipesScreen />);
   try {
-    await screen.findByLabelText("Ignore feedback for Protein shake");
-    fireEvent.press(screen.getByLabelText("Ignore feedback for Protein shake"));
+    await screen.findByLabelText("Select Protein shake");
+    expect(screen.queryByLabelText("Ignore feedback for Protein shake")).toBeNull();
+    expect(screen.queryByLabelText("Complete review for Protein shake")).toBeNull();
+    fireEvent.press(screen.getByLabelText("Select Protein shake"));
+    fireEvent.press(screen.getByLabelText("Ignore selected"));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/recipes/shake/feedback-preference", expect.objectContaining({ method: "PUT", body: JSON.stringify({ ignored: true }) })));
+    await screen.findByText("Feedback ignored. Recipes stay in your library.");
     await waitFor(() => expect(screen.queryByText("Ingredients not added")).toBeNull());
     expect(screen.getByLabelText("Ignored feedback").props.accessibilityState.expanded).toBe(false);
     fireEvent.press(screen.getByLabelText("Ignored feedback"));
     expect(screen.getByText("Ingredients not added")).toBeTruthy();
     expect(screen.getByText("Instructions not added")).toBeTruthy();
+    expect(screen.queryByLabelText("Complete review for Protein shake")).toBeNull();
     fireEvent.press(screen.getByLabelText("Review again Protein shake"));
-    await screen.findByLabelText("Ignore feedback for Protein shake");
+    await screen.findByLabelText("Select Protein shake");
     expect(request.mock.calls.filter(([path]) => path.endsWith("/feedback-preference")).map(([, init]) => JSON.parse(String(init?.body)))).toEqual([{ ignored: true }, { ignored: false }]);
   } finally { screen.close(); }
 });
@@ -125,6 +131,8 @@ test("multiple reviews complete together, retain feedback, and can be reopened",
   const screen = mount(<RecipesScreen />);
   try {
     await screen.findByLabelText("Select Soup");
+    expect(screen.queryAllByLabelText(/^Complete review for /)).toHaveLength(0);
+    expect(screen.queryAllByLabelText(/^Ignore feedback for /)).toHaveLength(0);
     fireEvent.press(screen.getByLabelText("Select Soup"));
     fireEvent.press(screen.getByLabelText("Select Shake"));
     expect(screen.getByLabelText("Select Soup").props.accessibilityState.checked).toBe(true);
@@ -137,8 +145,49 @@ test("multiple reviews complete together, retain feedback, and can be reopened",
     expect(screen.queryByText("Photo missing; placeholder accepted")).toBeNull();
     fireEvent.press(screen.getByLabelText("Completed reviews"));
     expect(screen.getAllByText("Photo missing; placeholder accepted")).toHaveLength(2);
+    expect(screen.queryAllByLabelText(/^Complete review for /)).toHaveLength(0);
     fireEvent.press(screen.getByLabelText("Review again Soup"));
     await screen.findByLabelText("Select Soup");
+  } finally { screen.close(); }
+});
+
+test("selection toolbar clears and ignores multiple reviews without per-recipe actions", async () => {
+  const recipes: Recipe[] = ["Soup", "Shake"].map((name, index) => ({ id: String(index), name,
+    servings: 1, meal_type: "snack", difficulty: "easy", source_type: "manual", validation_status: "approved",
+    validation_warnings: ["Ingredients not added"], duplicate_status: "new", image_status: "missing",
+    ingredients: [], instructions: [], tags: [], is_favorite: false, is_hidden: false }));
+  request.mockImplementation(async (path, init) => {
+    if (path.endsWith("/feedback-preferences")) {
+      const payload = JSON.parse(String(init?.body));
+      recipes.filter(recipe => payload.recipe_ids.includes(recipe.id)).forEach(recipe => { recipe.feedback_ignored = payload.action === "ignore"; });
+      return recipes.map(recipe => ({ ...recipe }));
+    }
+    if (path.startsWith("/api/v1/recipes?")) return recipes.map(recipe => ({ ...recipe }));
+    return [];
+  });
+  const screen = mount(<RecipesScreen />);
+  try {
+    await screen.findByLabelText("Select shown");
+    fireEvent.press(screen.getByLabelText("Select shown"));
+    expect(screen.getByLabelText("Complete (2)")).toBeTruthy();
+    expect(screen.getByLabelText("Ignore selected")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Clear selection"));
+    expect(screen.getByLabelText("Select Soup").props.accessibilityState.checked).toBe(false);
+    expect(screen.getByLabelText("Select Shake").props.accessibilityState.checked).toBe(false);
+    expect(screen.queryByLabelText("Ignore selected")).toBeNull();
+    expect(request.mock.calls.every(([, init]) => !init?.method)).toBe(true);
+    fireEvent.press(screen.getByLabelText("Select shown"));
+    fireEvent.press(screen.getByLabelText("Ignore selected"));
+    await screen.findByText("Feedback ignored. Recipes stay in your library.");
+    await waitFor(() => expect(screen.queryByLabelText("Select Soup")).toBeNull());
+    const call = request.mock.calls.find(([path]) => path.endsWith("/feedback-preferences"))!;
+    expect(JSON.parse(String(call[1]?.body))).toEqual({ recipe_ids: ["0", "1"], action: "ignore" });
+    expect(screen.getByLabelText("Ignored feedback").props.accessibilityState.expanded).toBe(false);
+    fireEvent.press(screen.getByLabelText("Ignored feedback"));
+    expect(screen.getAllByText("Ingredients not added")).toHaveLength(2);
+    expect(screen.queryAllByLabelText(/^Complete review for /)).toHaveLength(0);
+    expect(screen.queryAllByLabelText(/^Ignore feedback for /)).toHaveLength(0);
+    expect(screen.getByLabelText("Review again Soup")).toBeTruthy();
   } finally { screen.close(); }
 });
 

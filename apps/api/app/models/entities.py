@@ -6,6 +6,7 @@ from datetime import date, datetime
 from sqlalchemy import (
     JSON,
     Boolean,
+    CheckConstraint,
     Date,
     DateTime,
     Float,
@@ -123,6 +124,9 @@ class Household(Base, TimestampMixin):
     invite_code: Mapped[str | None] = mapped_column(String(16), unique=True, nullable=True)
     allergen_filter_mode: Mapped[str] = mapped_column(String(16), default="warn", nullable=False)
     dislike_filter_mode: Mapped[str] = mapped_column(String(16), default="warn", nullable=False)
+    planning_settings: Mapped[dict[str, object]] = mapped_column(
+        JSON, default=dict, server_default="{}"
+    )
 
 
 class HouseholdMember(Base, TimestampMixin):
@@ -278,10 +282,17 @@ class RecipeVersion(Base, TimestampMixin):
 class WeeklyPlan(Base, TimestampMixin):
     __tablename__ = "weekly_plans"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    household_id: Mapped[str | None] = mapped_column(
+        ForeignKey("households.id"), index=True, nullable=True
+    )
     week_start: Mapped[date] = mapped_column(Date, index=True)
     meal_target: Mapped[int] = mapped_column(Integer, default=5)
-    __table_args__ = (UniqueConstraint("user_id", "week_start"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "week_start"),
+        UniqueConstraint("household_id", "week_start"),
+        CheckConstraint("(user_id IS NULL) <> (household_id IS NULL)", name="ck_weekly_plan_scope"),
+    )
 
 
 class WeeklyPlanSlot(Base, TimestampMixin):
@@ -304,6 +315,10 @@ class MealSwipe(Base, TimestampMixin):
     action: Mapped[str] = mapped_column(String(32), nullable=False)
     session_id: Mapped[str] = mapped_column(String(36), index=True)
     request_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    household_id: Mapped[str | None] = mapped_column(
+        ForeignKey("households.id"), nullable=True, index=True
+    )
+    proposal_id: Mapped[str | None] = mapped_column(ForeignKey("meal_proposals.id"), nullable=True)
     planned_slot_id: Mapped[str | None] = mapped_column(
         ForeignKey("weekly_plan_slots.id", ondelete="SET NULL"), nullable=True
     )
@@ -367,6 +382,35 @@ class HouseholdRecipe(Base, TimestampMixin):
     __table_args__ = (UniqueConstraint("household_id", "recipe_id"),)
 
 
+class HouseholdDiscoverChoice(Base, TimestampMixin):
+    __tablename__ = "household_discover_choices"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    household_id: Mapped[str] = mapped_column(ForeignKey("households.id"), index=True)
+    recipe_id: Mapped[str] = mapped_column(ForeignKey("recipes.id"), index=True)
+    __table_args__ = (UniqueConstraint("household_id", "recipe_id"),)
+
+
+class MealProposal(Base, TimestampMixin):
+    __tablename__ = "meal_proposals"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    household_id: Mapped[str] = mapped_column(ForeignKey("households.id"), index=True)
+    recipe_id: Mapped[str] = mapped_column(ForeignKey("recipes.id"), index=True)
+    week_start: Mapped[date] = mapped_column(Date, index=True)
+    status: Mapped[str] = mapped_column(String(16), default="pending")
+    planned_slot_id: Mapped[str | None] = mapped_column(
+        ForeignKey("weekly_plan_slots.id"), nullable=True
+    )
+    __table_args__ = (UniqueConstraint("household_id", "week_start", "recipe_id"),)
+
+
+class MealProposalMember(Base, TimestampMixin):
+    __tablename__ = "meal_proposal_members"
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
+    proposal_id: Mapped[str] = mapped_column(ForeignKey("meal_proposals.id"), index=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    __table_args__ = (UniqueConstraint("proposal_id", "user_id"),)
+
+
 class Favorite(Base, TimestampMixin):
     __tablename__ = "favorites"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
@@ -386,7 +430,10 @@ class HiddenRecipe(Base, TimestampMixin):
 class PantryItem(Base, TimestampMixin):
     __tablename__ = "pantry_items"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    household_id: Mapped[str | None] = mapped_column(
+        ForeignKey("households.id"), index=True, nullable=True
+    )
     normalized_name: Mapped[str] = mapped_column(String(180), nullable=False)
     category: Mapped[str] = mapped_column(String(80), default="pantry")
     coverage_mode: Mapped[str] = mapped_column(String(16), default="legacy")
@@ -394,14 +441,25 @@ class PantryItem(Base, TimestampMixin):
     unit: Mapped[str | None] = mapped_column(String(32), nullable=True)
     week_start: Mapped[date | None] = mapped_column(Date, nullable=True)
     requirements_fingerprint: Mapped[str | None] = mapped_column(String(64), nullable=True)
-    __table_args__ = (UniqueConstraint("user_id", "normalized_name"),)
+    __table_args__ = (
+        UniqueConstraint("user_id", "normalized_name"),
+        UniqueConstraint("household_id", "normalized_name"),
+        CheckConstraint("(user_id IS NULL) <> (household_id IS NULL)", name="ck_pantry_scope"),
+    )
 
 
 class GroceryList(Base, TimestampMixin):
     __tablename__ = "grocery_lists"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
-    user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
+    user_id: Mapped[str | None] = mapped_column(ForeignKey("users.id"), index=True, nullable=True)
+    household_id: Mapped[str | None] = mapped_column(
+        ForeignKey("households.id"), index=True, nullable=True
+    )
     weekly_plan_id: Mapped[str] = mapped_column(ForeignKey("weekly_plans.id"), index=True)
+    __table_args__ = (
+        UniqueConstraint("household_id", "weekly_plan_id"),
+        CheckConstraint("(user_id IS NULL) <> (household_id IS NULL)", name="ck_grocery_scope"),
+    )
 
 
 class GroceryListItem(Base, TimestampMixin):

@@ -46,6 +46,7 @@ async function open(screen: ReturnType<typeof mount>) {
 
 test("members choose multiple private recipes and already shared recipes are disabled", async () => {
   const screen = mount();
+  const invalidate = jest.spyOn(screen.client, "invalidateQueries");
   try {
     await open(screen);
     expect(screen.getByText("Family dinners")).toBeTruthy();
@@ -58,6 +59,7 @@ test("members choose multiple private recipes and already shared recipes are dis
     await screen.findByText("2 recipes shared with Family dinners.");
     expect(request).toHaveBeenCalledWith("/api/v1/households/family/recipes/share", expect.objectContaining({ method: "POST", body: JSON.stringify({ recipe_ids: ["pasta", "salad"] }) }));
     expect(screen.queryByLabelText("Search your recipes")).toBeNull();
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ["group-library"] });
   } finally { screen.close(); }
 });
 

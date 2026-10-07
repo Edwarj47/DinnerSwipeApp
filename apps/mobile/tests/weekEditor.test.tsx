@@ -23,7 +23,7 @@ jest.mock("@/features/planner/WeekDrag", () => ({
   WeekDragHandle: () => null
 }));
 jest.mock("@/features/recipes/RecipePicker", () => ({ RecipePicker: () => null }));
-jest.mock("@/features/planner/useCurrentWeek", () => ({ useCurrentWeek: () => {
+jest.mock("@/features/planner/useCurrentWeek", () => ({ plannerContextKey: jest.requireActual("@/features/planner/useCurrentWeek").plannerContextKey, useCurrentWeek: () => {
   const { useQuery } = jest.requireActual("@tanstack/react-query");
   const { apiFetch } = jest.requireMock("@/services/api");
   return useQuery({ queryKey: ["weekly-plan"], queryFn: () => apiFetch("/api/v1/weekly-plans/current") });
@@ -330,7 +330,7 @@ test("grocery quantity controls have one symbol and respect the zero minimum", a
     expect(screen.queryByText("+")).toBeNull();
     expect(screen.queryByText("-")).toBeNull();
     fireEvent.press(screen.getByLabelText("Decrease Milk quantity"));
-    await screen.findByText("Shopping total: 0");
+    await screen.findByText("Buy total: 0");
     await waitFor(() => expect(screen.getByLabelText("Increase Milk quantity").props.accessibilityState.disabled).toBe(false));
     await waitFor(() => expect(screen.getByLabelText("Decrease Milk quantity").props.accessibilityState.disabled).toBe(true));
     fireEvent.press(screen.getByLabelText("Increase Milk quantity"));

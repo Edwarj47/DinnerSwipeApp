@@ -64,3 +64,34 @@ test("a failed hide returns to the deck without dropping other choices", () => {
   store.removeChoice(requestId);
   expect(usePlannerStore.getState().history.map(choice => choice.recipe.id)).toEqual(["second"]);
 });
+
+test("kitchen and week histories are isolated and late failure removes only its original request", () => {
+  const store = usePlannerStore.getState();
+  store.resetSession();
+  store.syncWeek("family:2026-10-05");
+  const request = store.addSwipe({ recipe, action: "add" });
+  store.syncWeek("friends:2026-10-05");
+  expect(usePlannerStore.getState().history).toHaveLength(0);
+  store.addSwipe({ recipe: { ...recipe, id: "other" }, action: "add" });
+  store.removeChoice(request);
+  expect(usePlannerStore.getState().selectedRecipes.map(r => r.id)).toEqual(["other"]);
+  store.syncWeek("family:2026-10-05");
+  expect(usePlannerStore.getState().history).toHaveLength(0);
+  store.syncWeek("friends:2026-10-05");
+  expect(usePlannerStore.getState().selectedRecipes.map(r => r.id)).toEqual(["other"]);
+  store.resetSession();
+  expect(usePlannerStore.getState().contexts).toEqual({});
+});
+
+test("a delayed reset changes only its original kitchen's Discover history", () => {
+  const store = usePlannerStore.getState();
+  store.resetSession();
+  store.syncWeek("family:2026-10-05:");
+  store.addSwipe({ recipe, action: "add" });
+  store.syncWeek("friends:2026-10-05:");
+  store.addSwipe({ recipe, action: "skip" });
+  store.returnToDiscover([recipe.id], "family:2026-10-05:");
+  expect(usePlannerStore.getState().history.map(item => item.action)).toEqual(["skip"]);
+  store.syncWeek("family:2026-10-05:");
+  expect(usePlannerStore.getState().history).toEqual([]);
+});

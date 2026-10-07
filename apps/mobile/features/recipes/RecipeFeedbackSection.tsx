@@ -40,10 +40,7 @@ export function RecipeFeedbackSection({ section, recipes, pending, selectedIds, 
           </View>
           {(recipe.validation_warnings.length ? recipe.validation_warnings : [recipe.duplicate_status !== "new" ? "Possible duplicate recipe" : "Recipe details need review"]).map((warning, index) => <Text key={index} style={styles.warning}>{warning}</Text>)}
         </Pressable>
-        <View style={styles.actions}>
-          {section !== "completed" ? <Button label="Complete" accessibilityLabel={`Complete review for ${recipe.name}`} icon="checkmark" disabled={pending} onPress={() => onAction(recipe, "complete")} /> : null}
-          <Button label={section === "review" ? "Ignore" : "Review again"} accessibilityLabel={`${section === "review" ? "Ignore feedback for" : "Review again"} ${recipe.name}`} icon={section === "review" ? "eye-off-outline" : "arrow-undo-outline"} disabled={pending} onPress={() => onAction(recipe, section === "review" ? "ignore" : "review")} />
-        </View>
+        {section !== "review" ? <Button label="Review again" accessibilityLabel={`Review again ${recipe.name}`} icon="arrow-undo-outline" disabled={pending} onPress={() => onAction(recipe, "review")} /> : null}
       </View>)}
     </> : null}
   </View>;
@@ -57,7 +54,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderColor: Colors.border },
   open: { flex: 1, minWidth: 160, gap: 6 },
   checkbox: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   summary: { flexDirection: "row", alignItems: "center", gap: 8 },
   photo: { width: 44, height: 44, borderRadius: 6 },
   name: { flex: 1, color: Colors.ink, fontSize: 17, fontWeight: "800" },

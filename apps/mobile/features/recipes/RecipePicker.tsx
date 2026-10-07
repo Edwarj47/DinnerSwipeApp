@@ -11,18 +11,21 @@ import { Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { RecipePhoto } from "./RecipePhoto";
 
-export function RecipePicker({ title, visible, busy, error, ownedOnly = false, weeklyChoices = false, onClose, onSelect }: {
+export function RecipePicker({ title, visible, busy, error, ownedOnly = false, weeklyChoices = false, householdId, onClose, onSelect }: {
   title: string; visible: boolean; busy: boolean; error?: string;
   ownedOnly?: boolean;
   weeklyChoices?: boolean;
+  householdId?: string;
   onClose: () => void; onSelect: (recipe: Recipe) => void;
 }) {
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"weekly" | "all">("weekly");
   const weekStart = usePlannerStore(state => state.weekStart);
   const weekly = weeklyChoices && tab === "weekly";
-  const recipes = useInfiniteQuery({ queryKey: ["recipes", "picker", ownedOnly, weekly, weekly ? weekStart : null, search.trim()],
-    queryFn: ({ pageParam }) => apiFetch<Recipe[]>(`/api/v1/recipes?limit=30&offset=${pageParam}&owned_only=${ownedOnly}&weekly_picks=${weekly}&apply_preferences=false&q=${encodeURIComponent(search.trim())}`),
+  const recipes = useInfiniteQuery({ queryKey: ["recipes", "picker", householdId, ownedOnly, weekly, weekly ? weekStart : null, search.trim()],
+    queryFn: async ({ pageParam }) => householdId
+      ? (await apiFetch<{ items: { recipe: Recipe }[] }>(`/api/v1/households/${householdId}/library?limit=30&offset=${pageParam}&q=${encodeURIComponent(search.trim())}`)).items.map(item => item.recipe)
+      : apiFetch<Recipe[]>(`/api/v1/recipes?limit=30&offset=${pageParam}&owned_only=${ownedOnly}&weekly_picks=${weekly}&apply_preferences=false&q=${encodeURIComponent(search.trim())}`),
     initialPageParam: 0, getNextPageParam: (page, pages) => page.length === 30 ? pages.length * 30 : undefined, enabled: visible });
   const matches = recipes.data?.pages.flat() ?? [];
   return (

@@ -1,5 +1,7 @@
 import { fireEvent, render } from "@testing-library/react-native";
-import { StyleSheet, Text } from "react-native";
+import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
+import * as ReactNative from "react-native";
+import { StyleSheet, Text, View } from "react-native";
 
 import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
@@ -57,4 +59,40 @@ test("segmented controls keep full-size touch targets and selected state", () =>
   expect(screen.getByLabelText("Day").props.accessibilityState.selected).toBe(true);
   fireEvent.press(screen.getByLabelText("Calendar"));
   expect(change).toHaveBeenCalledWith("calendar");
+});
+
+test("tab screens use compact footer spacing while public screens retain their safe area", () => {
+  const screen = render(<Screen><Text>Page</Text></Screen>);
+  expect(StyleSheet.flatten(screen.getByTestId("screen-content").props.style).paddingBottom).toBe(96);
+  screen.unmount();
+  const tab = render(<BottomTabBarHeightContext.Provider value={64}><Screen><Text>Page</Text></Screen></BottomTabBarHeightContext.Provider>);
+  expect(StyleSheet.flatten(tab.getByTestId("screen-content").props.style).paddingBottom).toBe(16);
+  expect(tab.UNSAFE_getAllByType(View).find(node => node.props.edges)?.props.edges).toEqual(["top", "left", "right"]);
+});
+
+test("viewport measurements use the scroll owner or the non-scrolling content", () => {
+  const measured = jest.fn();
+  const screen = render(<Screen onViewportLayout={measured}><Text>Page</Text></Screen>);
+  fireEvent(screen.getByTestId("screen-scroll"), "layout", { nativeEvent: { layout: { height: 600, width: 320 } } });
+  expect(measured).toHaveBeenLastCalledWith(600);
+  screen.rerender(<Screen scroll={false} onViewportLayout={measured}><Text>Page</Text></Screen>);
+  fireEvent(screen.getByTestId("screen-content"), "layout", { nativeEvent: { layout: { height: 560, width: 320 } } });
+  expect(measured).toHaveBeenLastCalledWith(560);
+});
+
+test("adaptive segments wrap enlarged labels without shrinking touch targets", () => {
+  const dimensions = jest.spyOn(ReactNative, "useWindowDimensions").mockReturnValue({ width: 320, height: 720, scale: 1, fontScale: 2 });
+  try {
+    const change = jest.fn();
+    const screen = render(<SegmentedControl adaptive value="day" onChange={change} options={[
+      { value: "day", label: "Day" }, { value: "grid", label: "Grid" },
+      { value: "calendar", label: "Calendar" }, { value: "trends", label: "Trends" }
+    ]} />);
+    const calendar = StyleSheet.flatten(screen.getByLabelText("Calendar").props.style);
+    expect(calendar.minHeight).toBe(44);
+    expect(calendar.flexBasis).toBeGreaterThanOrEqual(140);
+    expect(calendar.flexBasis).toBeLessThan(284);
+    fireEvent.press(screen.getByLabelText("Calendar"));
+    expect(change).toHaveBeenCalledWith("calendar");
+  } finally { dimensions.mockRestore(); }
 });

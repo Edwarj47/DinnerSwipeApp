@@ -274,6 +274,19 @@ def update_recipe_nutrition(
 
 @router.post("/swipes")
 def swipe(payload: SwipeRequest, db: DbDep, current_user: BasicUser) -> dict[str, str]:
+    if payload.household_id:
+        from app.services.group_planning import record_swipe as group_swipe
+
+        event = group_swipe(
+            db,
+            current_user,
+            payload.recipe_id,
+            payload.action,
+            payload.session_id,
+            payload.request_id,
+            payload.household_id,
+        )
+        return {"status": "recorded", "swipe_id": event.id}
     event = record_swipe(
         db, current_user, payload.recipe_id, payload.action, payload.session_id, payload.request_id
     )
@@ -315,7 +328,6 @@ def swipe_summary(
 
 @router.post("/swipes/{request_id}/undo")
 def undo_swipe(request_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
-    plan = get_or_create_current_plan(db, current_user)
     event = db.scalar(
         select(MealSwipe)
         .where(
@@ -326,6 +338,12 @@ def undo_swipe(request_id: str, db: DbDep, current_user: BasicUser) -> dict[str,
     )
     if not event or event.action != "add":
         raise HTTPException(404, "Planned choice not found")
+    if event.household_id:
+        from app.services.group_planning import undo_swipe as group_undo
+
+        group_undo(db, current_user, event)
+        return {"status": "undone"}
+    plan = get_or_create_current_plan(db, current_user)
     if event.undone_at:
         return {"status": "undone"}
     slot = db.scalar(

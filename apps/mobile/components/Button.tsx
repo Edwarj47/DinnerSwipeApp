@@ -39,6 +39,7 @@ export function Button({ label, icon, variant = "secondary", onPress, accessibil
 const styles = StyleSheet.create({
   button: {
     minHeight: 44,
+    maxWidth: "100%",
     borderRadius: 8,
     paddingHorizontal: 14,
     alignItems: "center",
@@ -53,5 +54,5 @@ const styles = StyleSheet.create({
   quiet: { backgroundColor: "transparent" },
   "quiet-danger": { backgroundColor: "transparent" },
   disabled: { opacity: 0.45 },
-  label: { color: Colors.ink, fontWeight: "700", fontSize: 14 }
+  label: { color: Colors.ink, fontWeight: "700", fontSize: 14, flexShrink: 1, textAlign: "center", paddingVertical: 8 }
 });

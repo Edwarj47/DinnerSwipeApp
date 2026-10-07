@@ -27,6 +27,9 @@ type Props = {
   onAction: (action: MealAction) => void;
   onOpen: () => void;
   compact?: boolean;
+  proposing?: boolean;
+  availableHeight?: number;
+  onBodyLayout?: (height: number) => void;
 };
 
 const EXIT_TARGETS: Record<MealAction, { x: number; y: number }> = {
@@ -36,8 +39,10 @@ const EXIT_TARGETS: Record<MealAction, { x: number; y: number }> = {
   hide: { x: 0, y: 760 }
 };
 
-export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ recipe, onAction, onOpen, compact = false }, ref) {
+export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ recipe, onAction, onOpen, compact = false, proposing = false, availableHeight, onBodyLayout }, ref) {
   const { height } = useWindowDimensions();
+  const [bodyHeight, setBodyHeight] = useState(200);
+  const imageHeight = Math.max(120, Math.min(compact ? 240 : 360, (availableHeight ?? height - 200) - bodyHeight));
   const [isLeaving, setIsLeaving] = useState(false);
   const translateX = useSharedValue(0);
   const translateY = useSharedValue(0);
@@ -107,13 +112,13 @@ export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ re
           <RecipePhoto
             photoUrl={recipe.photo_url}
             accessibilityLabel={recipe.name}
-            style={[styles.image, compact && { maxHeight: Math.max(100, Math.min(320, height - 420)) }]}
+            style={[styles.image, { height: imageHeight }]}
             contentFit="cover"
           />
-          <View style={styles.body}>
+          <View style={styles.body} onLayout={event => { const measured = event.nativeEvent.layout.height; setBodyHeight(measured); onBodyLayout?.(measured); }}>
             <View style={styles.header}>
               <Text style={styles.title}>{recipe.name}</Text>
-              <Text style={styles.favorite}>{recipe.is_favorite ? "Favorite" : formatSourceType(recipe.source_type)}</Text>
+              <Text style={styles.favorite}>{recipe.is_favorite ? "Favorite" : recipe.source_type === "manual" && recipe.can_edit === false ? "Shared recipe" : formatSourceType(recipe.source_type)}</Text>
             </View>
             <Text style={styles.meta}>
               {recipe.total_minutes ?? "?"} min • prep {recipe.prep_minutes ?? "?"} • {formatDifficulty(recipe.difficulty)} • {formatMealType(recipe.meal_type)}
@@ -125,8 +130,8 @@ export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ re
           </View>
         </Pressable>
         <Animated.View pointerEvents="none" style={[styles.swipeBadge, styles.planBadge, planIndicator]}>
-          <Text style={[styles.swipeBadgeText, styles.planBadgeText]}>PLAN</Text>
-          <Text style={styles.swipeHint}>Add to week</Text>
+          <Text style={[styles.swipeBadgeText, styles.planBadgeText]}>{proposing ? "PROPOSE" : "PLAN"}</Text>
+          <Text style={styles.swipeHint}>{proposing ? "Ask the group" : "Add to week"}</Text>
         </Animated.View>
         <Animated.View pointerEvents="none" style={[styles.swipeBadge, styles.skipBadge, skipIndicator]}>
           <Text style={[styles.swipeBadgeText, styles.skipBadgeText]}>SKIP</Text>
@@ -147,11 +152,11 @@ export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ re
 
 const styles = StyleSheet.create({
   card: { backgroundColor: Colors.surface, borderRadius: 8, overflow: "hidden", ...shadow },
-  image: { width: "100%", aspectRatio: 1.05, backgroundColor: Colors.border },
-  body: { padding: 16, gap: 10 },
+  image: { width: "100%", backgroundColor: Colors.border },
+  body: { padding: 14, gap: 8 },
   header: { flexDirection: "row", justifyContent: "space-between", gap: 10, alignItems: "flex-start" },
-  title: { color: Colors.ink, fontSize: 26, lineHeight: 31, fontWeight: "800", flex: 1 },
-  favorite: { color: Colors.basil, fontWeight: "800", fontSize: 12, textTransform: "uppercase" },
+  title: { color: Colors.ink, fontSize: 24, lineHeight: 29, fontWeight: "800", flex: 1, minWidth: 0 },
+  favorite: { color: Colors.basil, fontWeight: "800", fontSize: 12, textTransform: "uppercase", flexShrink: 1, maxWidth: "35%" },
   meta: { color: Colors.muted, fontSize: 14 },
   ingredients: { color: Colors.ink, fontSize: 15, lineHeight: 21 },
   swipeBadge: {

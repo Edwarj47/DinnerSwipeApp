@@ -129,13 +129,14 @@ test("standalone daily logging and editing retain Beverages instead of reverting
   try {
     await screen.findByLabelText("Entry name");
     fireEvent.changeText(screen.getByLabelText("Entry name"), "Mint tea");
+    fireEvent.press(screen.getByLabelText("Meal type: Dinner"));
     fireEvent.press(screen.getByLabelText("Beverages"));
     fireEvent.changeText(screen.getByLabelText("Calories"), "0");
     fireEvent.press(screen.getByLabelText("Add"));
     await screen.findByText("Macro entry added.");
     expect(JSON.parse(String(request.mock.calls.find(([, init]) => init?.method === "POST")![1]?.body)).meal_label).toBe("beverage");
     fireEvent.press(screen.getByText("Iced tea"));
-    expect(screen.getByLabelText("Beverages").props.accessibilityState.selected).toBe(true);
+    expect(screen.getByLabelText("Meal type: Beverages")).toBeTruthy();
     fireEvent.press(screen.getByLabelText("Update"));
     await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/macros/entries/drink-entry", expect.objectContaining({ method: "PUT", body: expect.stringContaining('"meal_label":"beverage"') })));
   } finally { screen.close(); }

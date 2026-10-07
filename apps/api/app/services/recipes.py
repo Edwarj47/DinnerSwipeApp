@@ -14,6 +14,7 @@ from app.models.entities import (
     GroceryList,
     GroceryListItem,
     HiddenRecipe,
+    Household,
     HouseholdRecipe,
     MealMacroConfirmation,
     MealSwipe,
@@ -270,6 +271,19 @@ def update_recipe(db: Session, recipe: Recipe, payload: RecipeCreate) -> Recipe:
         )
     ).all()
     for plan in plans:
+        if plan.household_id:
+            from app.models.entities import HouseholdMember
+
+            owner_id = db.scalar(
+                select(HouseholdMember.user_id).where(
+                    HouseholdMember.household_id == plan.household_id,
+                    HouseholdMember.role == "owner",
+                )
+            )
+            user = db.get(User, owner_id) if owner_id else None
+            if user:
+                regenerate_grocery_list(db, user, plan, preserve_edits=True, commit=False)
+            continue
         user = db.get(User, plan.user_id)
         if user and plan.week_start == current_week_start(user):
             regenerate_grocery_list(db, user, plan, preserve_edits=True, commit=False)
@@ -441,7 +455,11 @@ def record_swipe(
             )
         )
         if previous:
-            if previous.recipe_id != recipe_id or previous.action != action:
+            if (
+                previous.recipe_id != recipe_id
+                or previous.action != action
+                or previous.household_id
+            ):
                 raise HTTPException(409, "This choice was already saved with different details.")
             return previous
     if not db.scalar(accessible_recipes_query(user).where(Recipe.id == recipe_id)):
@@ -520,14 +538,18 @@ def serialize_plan(db: Session, plan: WeeklyPlan) -> dict[str, Any]:
             "recipe_difficulty": recipe.difficulty if recipe else None,
         }
 
-    owner = db.get(User, plan.user_id)
+    owner = db.get(User, plan.user_id) if plan.user_id else None
+    group = db.get(Household, plan.household_id) if plan.household_id else None
     return {
         "id": plan.id,
+        "household_id": plan.household_id,
         "week_start": plan.week_start,
         "reset_cycle": (
-            ((owner.profile.notification_preferences or {}) if owner and owner.profile else {}).get(
-                "weekly_planning_cursor"
-            )
+            (group.planning_settings or {}).get("cursor")
+            if group
+            else (
+                (owner.profile.notification_preferences or {}) if owner and owner.profile else {}
+            ).get("weekly_planning_cursor")
         ),
         "meal_target": plan.meal_target,
         "slots": [
@@ -566,42 +588,52 @@ def regenerate_grocery_list(
 ) -> GroceryList:
     existing = db.scalar(
         select(GroceryList).where(
-            GroceryList.user_id == user.id, GroceryList.weekly_plan_id == plan.id
+            GroceryList.household_id == plan.household_id
+            if plan.household_id
+            else GroceryList.user_id == user.id,
+            GroceryList.weekly_plan_id == plan.id,
         )
     )
-    checked = {}
+    retained = {}
     if existing:
         items = db.query(GroceryListItem).filter(GroceryListItem.grocery_list_id == existing.id)
         if preserve_edits:
-            checked = {(item.normalized_name, item.unit): item.is_checked for item in items.all()}
             items = items.filter(GroceryListItem.match_status != "manual")
-        items.delete()
+            retained = {(item.normalized_name, item.unit): item for item in items.all()}
+        else:
+            items.delete()
         grocery = existing
     else:
-        grocery = GroceryList(user_id=user.id, weekly_plan_id=plan.id)
+        grocery = GroceryList(
+            user_id=None if plan.household_id else user.id,
+            household_id=plan.household_id,
+            weekly_plan_id=plan.id,
+        )
         db.add(grocery)
         db.flush()
     requirements = grocery_requirements(db, plan)
     aggregate = pantry_adjusted_requirements(db, user.id, plan, requirements)
     walmart = WalmartSearchLinkAdapter()
     for (name, _unit), item in aggregate.items():
-        db.add(
-            GroceryListItem(
-                grocery_list_id=grocery.id,
-                normalized_name=name,
-                display_name=item["display_name"],
-                quantity=round(item["quantity"], 2) if item["quantity"] is not None else None,
-                required_quantity=round(item["required_quantity"], 2)
-                if item["required_quantity"] is not None
-                else None,
-                unit=item["unit"],
-                category=category_for(name),
-                walmart_search_url=walmart.build_search_url(name),
-                match_status="search_link",
-                is_checked=checked.get((name, _unit), False),
-                notes=item["notes"],
+        row = retained.pop((name, _unit), None)
+        if row is None:
+            row = GroceryListItem(
+                grocery_list_id=grocery.id, normalized_name=name, is_checked=False
             )
+            db.add(row)
+        row.display_name = item["display_name"]
+        row.quantity = round(item["quantity"], 2) if item["quantity"] is not None else None
+        row.required_quantity = (
+            round(item["required_quantity"], 2) if item["required_quantity"] is not None else None
         )
+        row.unit = item["unit"]
+        row.category = category_for(name)
+        row.walmart_search_url = walmart.build_search_url(name)
+        row.match_status = "search_link"
+        row.notes = item["notes"]
+    for row in retained.values():
+        db.delete(row)
+    db.flush()
     update_manual_pantry(db, user.id, plan, grocery.id, requirements)
     if commit:
         db.commit()

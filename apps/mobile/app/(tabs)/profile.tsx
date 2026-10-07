@@ -388,6 +388,7 @@ export default function ProfileScreen() {
           <View style={styles.retailerPicker}>
             <Text style={styles.inputLabel}>Preferred grocery</Text>
             <SegmentedControl
+              adaptive
               accessibilityLabel="Preferred grocery retailer"
               value={preferredRetailer}
               onChange={setPreferredRetailer}
@@ -535,8 +536,8 @@ async function deliverAccountExport(data: Record<string, unknown>) {
 }
 
 const styles = StyleSheet.create({
-  title: { fontSize: 28, fontWeight: "900", color: Colors.ink, marginBottom: 12 },
-  panel: { borderTopColor: Colors.border, borderTopWidth: 1, paddingTop: 16, gap: 12, marginTop: 16 },
+  title: { fontSize: 28, fontWeight: "900", color: Colors.ink, marginBottom: 8 },
+  panel: { borderTopColor: Colors.border, borderTopWidth: 1, paddingTop: 12, gap: 10, marginTop: 12 },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12 },
   timeoutOptions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   timeoutOption: { flexGrow: 1, minHeight: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.border },

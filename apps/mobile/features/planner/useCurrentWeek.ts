@@ -7,16 +7,22 @@ import { apiFetch } from "@/services/api";
 import { WeeklyPlan } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { ensurePlanningTimeZone } from "@/services/planningPreferences";
+import { useSpace } from "@/features/groups/useSpace";
+
+export function plannerContextKey(plan: WeeklyPlan) {
+  return `${plan.household_id ?? "personal"}:${plan.week_start}:${plan.reset_cycle ?? ""}`;
+}
 
 export function useCurrentWeek() {
   const client = useQueryClient();
-  const plan = useQuery<WeeklyPlan>({ queryKey: ["weekly-plan"],
+  const space = useSpace();
+  const plan = useQuery<WeeklyPlan>({ queryKey: space.queryKey("weekly-plan"),
     queryFn: async () => {
-      await ensurePlanningTimeZone();
-      return apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current");
-    }, retry: false });
+      if (!space.groupId) await ensurePlanningTimeZone();
+      return apiFetch<WeeklyPlan>(space.path("/api/v1/weekly-plans/current"));
+    }, enabled: !space.isLoading && !space.isError, retry: false });
   const syncWeek = usePlannerStore(state => state.syncWeek);
-  const weekStart = plan.data ? `${plan.data.week_start}:${plan.data.reset_cycle ?? ""}` : undefined;
+  const weekStart = plan.data && !space.isLoading && !space.isError ? plannerContextKey(plan.data) : undefined;
   useEffect(() => {
     if (!weekStart) return;
     const previous = usePlannerStore.getState().weekStart;
@@ -28,13 +34,17 @@ export function useCurrentWeek() {
   }, [weekStart, syncWeek, client]);
   const { refetch } = plan;
   useFocusEffect(useCallback(() => {
+    if (space.isLoading || space.isError) return;
     void refetch();
     const subscription = AppState.addEventListener("change", state => {
       if (state === "active") void refetch();
     });
     // Reconcile rollover and scheduled resets while this screen stays open.
-    const timer = setInterval(() => { if (AppState.currentState === "active") void refetch(); }, 60_000);
+    const timer = setInterval(() => { if (AppState.currentState === "active") void refetch(); }, 30_000);
     return () => { subscription.remove(); clearInterval(timer); };
-  }, [refetch]));
-  return plan;
+  }, [refetch, space.isLoading, space.isError]));
+  return { ...plan, data: space.isLoading || space.isError ? undefined : plan.data,
+    isLoading: space.isLoading || plan.isLoading, isError: space.isError || plan.isError,
+    error: space.error ?? plan.error,
+    refetch: space.isError ? space.refetch : plan.refetch };
 }

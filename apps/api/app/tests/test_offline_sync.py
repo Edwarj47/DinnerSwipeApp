@@ -1,3 +1,5 @@
+import hashlib
+import json
 from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
@@ -16,6 +18,41 @@ def premium(db: Session) -> None:
 
 def operation(**kwargs: object) -> dict[str, object]:
     return {"operation_id": str(uuid4()), **kwargs}
+
+
+def test_personal_receipts_from_older_apks_keep_the_same_request_hash(
+    client: TestClient, auth_headers: dict[str, str], db_session: Session
+) -> None:
+    client.post(
+        "/api/v1/grocery-lists/current/items", headers=auth_headers, json={"display_name": "Milk"}
+    )
+    item = client.get("/api/v1/grocery-lists/current", headers=auth_headers).json()["items"][0]
+    edit = operation(
+        kind="grocery_update",
+        target_id=item["id"],
+        revision=item["revision"],
+        values={"is_checked": True},
+    )
+    user = db_session.query(User).filter_by(email="owner@example.com").one()
+    original_hash = hashlib.sha256(
+        json.dumps(edit, sort_keys=True, separators=(",", ":")).encode()
+    ).hexdigest()
+    original_result = {
+        "operation_id": edit["operation_id"],
+        "result": {"id": item["id"], "revision": "original-ack"},
+    }
+    db_session.add(
+        OfflineReceipt(
+            user_id=user.id,
+            operation_id=edit["operation_id"],
+            request_hash=original_hash,
+            result=original_result,
+        )
+    )
+    db_session.commit()
+    retry = client.post("/api/v1/offline/sync", headers=auth_headers, json=edit)
+    assert retry.status_code == 200, retry.text
+    assert retry.json() == original_result
 
 
 def test_macro_retry_is_atomic_and_versions_detect_conflict(

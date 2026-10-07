@@ -33,9 +33,10 @@ type Props = {
   onClose: () => void;
   onAction?: (action: RecipeAction) => void;
   onUpdated?: (recipe: Recipe) => void;
+  planningAction?: { label: string; onPress: () => void; busy: boolean; error?: string };
 };
 
-export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, onAction, onUpdated }: Props) {
+export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, onAction, onUpdated, planningAction }: Props) {
   const weightUnit = useMeasurementUnits().ingredient_weight;
   const queryClient = useQueryClient();
   const [savedRecipe, setSavedRecipe] = useState<{ sourceId: string; recipe: Recipe } | null>(null);
@@ -84,11 +85,6 @@ export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, on
     },
     onMutate: () => setStatus(""),
     onError: (_error, payload) => { setStatus(""); removeChoice(payload.request_id); }
-  });
-  const vote = useMutation({
-    mutationFn: (payload: { recipe_id: string; vote: "yes" | "maybe" | "no" }) =>
-      apiFetch("/api/v1/households/current/votes", { method: "POST", body: JSON.stringify(payload) }),
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["votes"] })
   });
 
   if (!recipe) return null;
@@ -156,12 +152,12 @@ export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, on
               <Text style={styles.actionTitle}>Choose</Text>
               <View style={styles.actionGrid}>
                 <ActionTile
-                  title="Plan it"
-                  subtitle="add to this week"
+                  title={planningAction?.label ?? "Plan it"}
+                  subtitle={planningAction ? "for this group" : "add to this week"}
                   icon="add-circle"
                   tone="primary"
-                  onPress={() => doAction("add")}
-                  disabled={actionMutation.isPending}
+                  onPress={() => planningAction ? planningAction.onPress() : doAction("add")}
+                  disabled={actionMutation.isPending || planningAction?.busy}
                 />
                 {onAction ? (
                   <ActionTile
@@ -191,14 +187,7 @@ export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, on
               {actionMutation.isPending ? <Text accessibilityLiveRegion="polite" style={styles.status}>Saving choice...</Text> : null}
               {actionMutation.error && actionMutation.variables?.recipe_id === recipe.id ? <Text accessibilityRole="alert" style={styles.error}>{actionMutation.error instanceof Error ? actionMutation.error.message : "Unable to save choice."}</Text> : null}
             </View>
-            <View style={styles.votePanel}>
-              <Text style={styles.sectionTitle}>Group vote</Text>
-              <View style={styles.voteActions}>
-                <Button label="Yes" icon="heart" variant="primary" onPress={() => vote.mutate({ recipe_id: recipe.id, vote: "yes" })} />
-                <Button label="Maybe" icon="help-circle" onPress={() => vote.mutate({ recipe_id: recipe.id, vote: "maybe" })} />
-                <Button label="No" icon="close-circle" onPress={() => vote.mutate({ recipe_id: recipe.id, vote: "no" })} />
-              </View>
-            </View></> : null}
+            {planningAction?.error ? <Text accessibilityRole="alert" style={styles.error}>{planningAction.error}</Text> : null}</> : null}
             <RecipeSection title="Ingredients">
               {recipe.ingredients.map((item, index) => {
                 const equivalent = ingredientWeightNote(item.quantity, item.unit, weightUnit);

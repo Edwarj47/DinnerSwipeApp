@@ -4,7 +4,7 @@ import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { Platform } from "react-native";
 import { WeeklyPlanningSettings } from "@/features/preferences/WeeklyPlanningSettings";
 import { apiFetch } from "@/services/api";
-import { clearPlanningReminders, syncPlanningReminder } from "@/services/planningReminders";
+import { clearPlanningReminders, syncGroupPlanningReminders, syncPlanningReminder } from "@/services/planningReminders";
 import { WeeklyPlanningSettings as Settings } from "@/services/types";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
@@ -44,6 +44,19 @@ test("matching reminders are kept and logout cancels the app reminder", async ()
   expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
   await clearPlanningReminders();
   expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith("dinner-weekly-reset");
+});
+
+test("group reminders have distinct destinations and departed groups are cancelled", async () => {
+  jest.mocked(Notifications.getAllScheduledNotificationsAsync).mockResolvedValue([{ identifier: "dinner-group-reset-departed" }] as never);
+  await syncGroupPlanningReminders("tester", [
+    { id: "family", name: "Family", settings: { ...manual, mode: "automatic", reset_day: 2 } },
+    { id: "friends", name: "Friends", settings: { ...manual, mode: "automatic", reset_day: 6 } },
+    { id: "manual", name: "Manual", settings: manual }
+  ]);
+  expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(2);
+  expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledWith(expect.objectContaining({ identifier: "dinner-group-reset-family", content: expect.objectContaining({ data: expect.objectContaining({ household_id: "family" }) }), trigger: expect.objectContaining({ weekday: 4 }) }));
+  expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledWith(expect.objectContaining({ identifier: "dinner-group-reset-friends", content: expect.objectContaining({ data: expect.objectContaining({ household_id: "friends" }) }) }));
+  expect(Notifications.cancelScheduledNotificationAsync).toHaveBeenCalledWith("dinner-group-reset-departed");
 });
 
 test("account settings default to manual and save the chosen reset weekday", async () => {

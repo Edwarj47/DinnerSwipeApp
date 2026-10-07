@@ -3,13 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Linking from "expo-linking";
 import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, ViewStyle } from "react-native";
 
 import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
-import { apiFetch } from "@/services/api";
+import { apiFetch as remoteFetch } from "@/services/api";
+import { useSpace } from "@/features/groups/useSpace";
+import { SpaceSelector } from "@/features/groups/SpaceSelector";
 import { PremiumStatus, UserProfile, WeeklyPlan } from "@/services/types";
 import { shouldConfirmPlanReset } from "@/services/profilePreferences";
 import { WeekDrag, WeekDragHandle, WeekDropDay, WeekDropMeal } from "@/features/planner/WeekDrag";
@@ -18,7 +20,7 @@ import { DaySelection } from "@/features/planner/DaySelection";
 import { RecipePicker } from "@/features/recipes/RecipePicker";
 import { RecipePhoto } from "@/features/recipes/RecipePhoto";
 import { usePlannerStore } from "@/stores/plannerStore";
-import { useCurrentWeek } from "@/features/planner/useCurrentWeek";
+import { plannerContextKey, useCurrentWeek } from "@/features/planner/useCurrentWeek";
 import { TourTarget } from "@/features/onboarding/TourTarget";
 import { todayISO } from "@/features/premium/macroDates";
 
@@ -26,6 +28,14 @@ type WeeklySlot = WeeklyPlan["slots"][number];
 type SlotPatch = Partial<Omit<WeeklySlot, "id" | "recipe_name" | "recipe_photo_url" | "recipe_total_minutes" | "recipe_difficulty">>;
 
 export default function WeekScreen() {
+  const space = useSpace();
+  return <WeekContent key={space.key} />;
+}
+
+function WeekContent() {
+  const space = useSpace();
+  const apiFetch = <T,>(path: string, init?: RequestInit) => init ? remoteFetch<T>(space.path(path), init) : remoteFetch<T>(space.path(path));
+  const [portion, setPortion] = useState(1);
   const router = useRouter();
   const { width, fontScale } = useWindowDimensions();
   const compact = width < 360 || (width < 480 && fontScale > 1.2);
@@ -53,7 +63,7 @@ export default function WeekScreen() {
       method: "POST", body: JSON.stringify({ recipe_id: recipeId, slot_date: date })
     }),
     onSuccess: async plan => {
-      queryClient.setQueryData(["weekly-plan"], plan);
+      queryClient.setQueryData(plan.household_id ? ["weekly-plan", plan.household_id] : ["weekly-plan"], plan);
       setAddDay(null);
       setStatusIsError(false);
       setStatus("Meal added.");
@@ -66,7 +76,7 @@ export default function WeekScreen() {
       method: "POST", body: JSON.stringify({ recipe_id: slot.recipe_id, slot_date: date, servings: slot.servings })
     }),
     onSuccess: async (plan, { date }) => {
-      queryClient.setQueryData(["weekly-plan"], plan);
+      queryClient.setQueryData(plan.household_id ? ["weekly-plan", plan.household_id] : ["weekly-plan"], plan);
       setDuplicateSlot(null);
       setExpandedSlotId(null);
       setStatusIsError(false);
@@ -82,8 +92,8 @@ export default function WeekScreen() {
     }),
     onSuccess: async (plan, scope) => {
       const returnedIds = (data?.slots ?? []).filter((slot: WeeklySlot) => !scope.date || slot.slot_date === scope.date).flatMap((slot: WeeklySlot) => slot.recipe_id ? [slot.recipe_id] : []);
-      usePlannerStore.getState().returnToDiscover(returnedIds);
-      queryClient.setQueryData(["weekly-plan"], plan);
+      usePlannerStore.getState().returnToDiscover(returnedIds, plannerContextKey(plan));
+      queryClient.setQueryData(plan.household_id ? ["weekly-plan", plan.household_id] : ["weekly-plan"], plan);
       setResetScope(null);
       setExpandedSlotId(null);
       setStatusIsError(false);
@@ -96,8 +106,8 @@ export default function WeekScreen() {
     mutationFn: (id: string) => apiFetch<WeeklyPlan>(`/api/v1/weekly-plans/current/slots/${id}`, { method: "DELETE" }),
     onSuccess: async (plan, id) => {
       const recipeId = data?.slots.find((slot: WeeklySlot) => slot.id === id)?.recipe_id;
-      if (recipeId) usePlannerStore.getState().returnToDiscover([recipeId]);
-      queryClient.setQueryData(["weekly-plan"], plan);
+      if (recipeId) usePlannerStore.getState().returnToDiscover([recipeId], plannerContextKey(plan));
+      queryClient.setQueryData(plan.household_id ? ["weekly-plan", plan.household_id] : ["weekly-plan"], plan);
       setExpandedSlotId(null);
       setStatusIsError(false);
       setStatus("Meal removed.");
@@ -109,7 +119,7 @@ export default function WeekScreen() {
     mutationFn: ({ slot, patch }: { slot: WeeklySlot; patch: SlotPatch }) =>
       apiFetch<WeeklyPlan>(`/api/v1/weekly-plans/current/slots/${slot.id}`, { method: "PUT", body: JSON.stringify(patch) }),
     onSuccess: async (plan) => {
-      queryClient.setQueryData(["weekly-plan"], plan);
+      queryClient.setQueryData(plan.household_id ? ["weekly-plan", plan.household_id] : ["weekly-plan"], plan);
       setStatusIsError(false);
       setStatus("Plan updated.");
       await invalidatePlan(queryClient);
@@ -125,7 +135,7 @@ export default function WeekScreen() {
           weekly_plan_slot_id: slot.id,
           meal_date: slot.slot_date ?? todayISO(),
           status: mealStatus,
-          servings_consumed: slot.servings
+          servings_consumed: space.groupId ? portion : slot.servings
         })
       }),
     onSuccess: async (_, { slot, mealStatus }) => {
@@ -164,7 +174,7 @@ export default function WeekScreen() {
       method: "POST", body: JSON.stringify({ ordered_slot_ids: ids })
     }),
     onSuccess: async plan => {
-      queryClient.setQueryData(["weekly-plan"], plan);
+      queryClient.setQueryData(plan.household_id ? ["weekly-plan", plan.household_id] : ["weekly-plan"], plan);
       setStatusIsError(false); setStatus("Meal order updated.");
       await invalidatePlan(queryClient);
     },
@@ -185,8 +195,9 @@ export default function WeekScreen() {
           <Text style={styles.title}>This Week</Text>
           <Text style={styles.subtitle}>{isLoading ? "Loading plan..." : `${plannedCount} ${plannedCount === 1 ? "meal" : "meals"} planned`}</Text>
         </View>
-        <Button label="Reset" icon="refresh" disabled={!data || busy} onPress={() => requestReset({ date: null, label: "This week" })} />
+        {space.canManage ? <Button label="Reset" icon="refresh" disabled={!data || busy} onPress={() => requestReset({ date: null, label: "This week" })} /> : null}
       </View>
+      <SpaceSelector />
       {status ? <Text accessibilityLiveRegion="polite" accessibilityRole={statusIsError ? "alert" : undefined} style={[styles.status, statusIsError && styles.error]}>{status}</Text> : null}
       {error ? <Button label="Retry loading week" icon="refresh" onPress={() => { void refetch(); }} /> : null}
       {!premiumActive ? (
@@ -212,7 +223,7 @@ export default function WeekScreen() {
           />
         </View>
       ) : null}
-      <WeekDrag days={dayOptions} disabled={busy} onAssign={(slotId, date) => {
+      <WeekDrag days={dayOptions} disabled={busy || !space.canManage} onAssign={(slotId, date) => {
         const slot = sortedSlots.find(item => item.id === slotId);
         if (slot && slot.slot_date !== date) update.mutate({ slot, patch: { slot_date: date } });
       }} onReorder={(id, beforeId) => {
@@ -224,14 +235,14 @@ export default function WeekScreen() {
             <TourTarget id={group.iso === dayOptions[0]?.iso ? "week" : `week-${group.iso}`}>
             <View style={styles.groupHeader}>
               <View style={styles.dayHeading}><Text style={styles.groupTitle}>{group.label}</Text><Text style={styles.dayDate}>{group.short}</Text></View>
-              {group.iso && group.slots.some(slot => slot.recipe_id || slot.slot_type !== "flexible") ? (
+              {space.canManage && group.iso && group.slots.some(slot => slot.recipe_id || slot.slot_type !== "flexible") ? (
                 <Pressable accessibilityRole="button" accessibilityLabel={`Reset ${group.label}`} disabled={busy} onPress={() => requestReset({ date: group.iso, label: group.label })} style={styles.resetDay}>
                   <Ionicons name="refresh" color={Colors.muted} size={20} />
                 </Pressable>
               ) : null}
-              <Pressable accessibilityRole="button" accessibilityLabel={`Add meal to ${group.label}`} disabled={busy || !data} onPress={() => { addMeal.reset(); setAddDay(group); }} style={styles.addDay}>
+              {space.canManage ? <Pressable accessibilityRole="button" accessibilityLabel={`Add meal to ${group.label}`} disabled={busy || !data} onPress={() => { addMeal.reset(); setAddDay(group); }} style={styles.addDay}>
                 <Ionicons name="add" size={20} color={Colors.tomato} /><Text style={styles.addLabel}>Add meal</Text>
-              </Pressable>
+              </Pressable> : null}
             </View>
             </TourTarget>
             {!group.slots.length ? <Text style={styles.emptyDay}>No dinner planned</Text> : null}
@@ -242,10 +253,10 @@ export default function WeekScreen() {
             <View style={[styles.row, isExpanded ? styles.rowExpanded : null]}>
               <View style={styles.cardTop}>
                 <View style={[styles.identity, compact && styles.compactIdentity]}>
-                  <WeekDragHandle id={slot.id} label={slot.recipe_name ?? slotLabel(slot.slot_type)} disabled={busy} />
+                  {space.canManage ? <WeekDragHandle id={slot.id} label={slot.recipe_name ?? slotLabel(slot.slot_type)} disabled={busy} /> : null}
                   {slot.recipe_id ? <RecipePhoto photoUrl={slot.recipe_photo_url} accessibilityLabel={`${slot.recipe_name ?? "Meal"} photo`} style={styles.thumb} /> : null}
                 </View>
-                <View style={styles.slotMain}>
+                <View style={[styles.slotMain, { minWidth: Platform.OS === "web" ? "min-content" as ViewStyle["minWidth"] : 100 * fontScale }]}>
                   <Text style={styles.meal}>{slot.recipe_name ?? slotLabel(slot.slot_type)}</Text>
                   <Text style={styles.meta}>
                     Serves {slot.servings}
@@ -253,18 +264,19 @@ export default function WeekScreen() {
                   </Text>
                 </View>
                 <Button
-                  label={isExpanded ? (compact ? "" : "Done") : "Edit"}
-                  accessibilityLabel={isExpanded ? "Done" : "Edit"}
+                  label={isExpanded ? (compact ? "" : "Done") : space.canManage ? "Edit" : "Log"}
+                  accessibilityLabel={isExpanded ? "Done" : space.canManage ? "Edit" : "Log"}
                   icon={isExpanded ? "checkmark" : "create"}
                   disabled={busy}
                   onPress={() => {
                     setExpandedSlotId(isExpanded ? null : slot.id);
+                    setPortion(1);
                   }}
                 />
               </View>
               {isExpanded ? (
                 <>
-                  <DaySelection days={dayOptions} value={slot.slot_date} disabled={busy}
+                  {space.canManage ? <><DaySelection days={dayOptions} value={slot.slot_date} disabled={busy}
                     onChange={date => update.mutate({ slot, patch: { slot_date: date } })} />
                   <View style={styles.controls}>
                     <View style={styles.stepper}>
@@ -275,6 +287,8 @@ export default function WeekScreen() {
                     {slot.recipe_id ? <Button label="Duplicate" icon="copy-outline" variant="quiet" accessibilityLabel={`Duplicate ${slot.recipe_name ?? "meal"}`} disabled={busy}
                       onPress={() => { duplicateMeal.reset(); setDuplicateSlot(slot); }} /> : null}
                   </View>
+                  </> : null}
+                  {space.groupId && premiumActive ? <View style={styles.controls}><Text style={styles.meta}>Your portion</Text><Button label="" icon="remove" accessibilityLabel="Decrease your portion" disabled={busy || portion <= 1} onPress={() => setPortion(portion - 1)} /><Text style={styles.servings}>{portion}</Text><Button label="" icon="add" accessibilityLabel="Increase your portion" disabled={busy || portion >= 30} onPress={() => setPortion(portion + 1)} /></View> : null}
                   <View style={styles.actions}>
                     {slot.recipe_id && premiumActive ? (
                       <>
@@ -282,7 +296,7 @@ export default function WeekScreen() {
                         <Button label="Skipped" icon="close-circle" variant="quiet" disabled={busy} onPress={() => confirmMeal.mutate({ slot, mealStatus: "skipped" })} />
                       </>
                     ) : null}
-                    <View style={styles.removeAction}><Button label="" icon="trash-outline" variant="quiet-danger" accessibilityLabel={`Remove ${slot.recipe_name ?? slotLabel(slot.slot_type)}`} disabled={busy} onPress={() => remove.mutate(slot.id)} /></View>
+                    {space.canManage ? <View style={styles.removeAction}><Button label="" icon="trash-outline" variant="quiet-danger" accessibilityLabel={`Remove ${slot.recipe_name ?? slotLabel(slot.slot_type)}`} disabled={busy} onPress={() => remove.mutate(slot.id)} /></View> : null}
                   </View>
                 </>
               ) : null}
@@ -293,7 +307,7 @@ export default function WeekScreen() {
           </WeekDropDay>
         ))}
       </WeekDrag>
-      <RecipePicker weeklyChoices title={`Add to ${addDay?.label ?? "day"}`} visible={!!addDay} busy={addMeal.isPending} error={addMeal.error instanceof Error ? addMeal.error.message : undefined}
+      <RecipePicker weeklyChoices={!space.groupId} householdId={space.groupId} title={`Add to ${addDay?.label ?? "day"}`} visible={!!addDay} busy={addMeal.isPending} error={addMeal.error instanceof Error ? addMeal.error.message : undefined}
         onClose={() => setAddDay(null)} onSelect={recipe => { if (addDay) addMeal.mutate({ recipeId: recipe.id, date: addDay.iso || null }); }} />
       <Modal visible={!!duplicateSlot} transparent animationType="fade" onRequestClose={() => { if (!duplicateMeal.isPending) setDuplicateSlot(null); }}>
         <View style={styles.modalBackdrop}>
@@ -380,7 +394,7 @@ const styles = StyleSheet.create({
   modalCopy: { color: Colors.muted, lineHeight: 22 },
   row: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 12, gap: 12 },
   rowExpanded: { borderColor: "#f0b6b2" },
-  cardTop: { flexDirection: "row", gap: 8, alignItems: "center" },
+  cardTop: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "center" },
   identity: { flexDirection: "row", gap: 8, alignItems: "center" },
   compactIdentity: { flexDirection: "column-reverse", gap: 0 },
   duplicatePanel: { maxHeight: "90%" },

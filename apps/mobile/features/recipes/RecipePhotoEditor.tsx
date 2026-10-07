@@ -39,7 +39,7 @@ export function RecipePhotoEditor({ recipe, onUpdated }: { recipe: Recipe; onUpd
   });
   return <View style={styles.section}>
     <RecipePhoto photoUrl={photo}
-      accessibilityLabel={recipe.name} style={styles.photo} contentFit="contain" />
+      accessibilityLabel={recipe.name} style={styles.photo} fallbackStyle={styles.placeholder} contentFit="contain" />
     {recipe.can_edit ? editing ? <View style={styles.controls}>
       <RecipePhotoPicker disabled={upload.isPending} onSelect={async image => { setSaved(false); await upload.mutateAsync(image); }} />
       <Button label="Cancel" icon="close" disabled={upload.isPending} onPress={() => { setEditing(false); upload.reset(); }} />
@@ -53,6 +53,7 @@ export function RecipePhotoEditor({ recipe, onUpdated }: { recipe: Recipe; onUpd
 const styles = StyleSheet.create({
   section: { gap: 10 },
   photo: { width: "100%", aspectRatio: 1.25, borderRadius: 8, backgroundColor: Colors.border },
+  placeholder: { aspectRatio: undefined, height: 160 },
   controls: { flexDirection: "row", flexWrap: "wrap", gap: 8, alignItems: "flex-start" },
   status: { color: Colors.basil, fontWeight: "700" }
 });

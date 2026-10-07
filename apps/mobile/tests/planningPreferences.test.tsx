@@ -24,7 +24,7 @@ jest.mock("@/features/discover/MealCard", () => ({ MealCard: jest.requireActual(
   const { Text } = jest.requireActual("react-native");
   return <Text>Next dinner to swipe</Text>;
 }) }));
-jest.mock("@/features/planner/useCurrentWeek", () => ({ useCurrentWeek: () => ({ data: {
+jest.mock("@/features/planner/useCurrentWeek", () => ({ plannerContextKey: jest.requireActual("@/features/planner/useCurrentWeek").plannerContextKey, useCurrentWeek: () => ({ data: {
   id: "week", week_start: "2026-09-28", meal_target: 1, slots: [
     { id: "slot", slot_date: "2026-09-28", slot_type: "meal", recipe_id: "planned", recipe_name: "Planned meal", servings: 2, sort_order: 0 }
   ]
@@ -36,6 +36,7 @@ let confirmation: boolean | undefined;
 beforeEach(() => {
   confirmation = undefined;
   request.mockReset().mockImplementation(async (path) => {
+    if (path === "/api/v1/households/current") return { id: "kitchen", name: "My Kitchen", is_personal: true, current_user_role: "owner" };
     if (path === "/api/v1/profile") return { notification_preferences: { confirm_plan_reset: confirmation } };
     if (path.includes("subscription")) return { premium_active: true };
     if (path.includes("recipes")) return [{ id: "unplanned", name: "Another dinner", is_hidden: false }];
@@ -53,7 +54,7 @@ test("reset confirmation defaults on for existing accounts", async () => {
   const screen = mount(<WeekScreen />);
   try {
     await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/profile"));
-    fireEvent.press(screen.getByLabelText("Reset Monday"));
+    fireEvent.press(await screen.findByLabelText("Reset Monday"));
     await screen.findByText("Reset monday?");
     expect(request.mock.calls.some(([path]) => path.endsWith("/reset"))).toBe(false);
     fireEvent.press(screen.getByLabelText("Cancel"));

@@ -251,6 +251,7 @@ export type MacroExport = {
 };
 
 export type WeeklyPlan = {
+  household_id?: string | null;
   id: string;
   week_start: string;
   reset_cycle?: string | null;

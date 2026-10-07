@@ -34,9 +34,7 @@ def test_postgres_migration_concurrent_retry_and_atomic_rollback(
     command.upgrade(config, "d8126c4ab391")
     engine = create_engine(url)
     with Session(engine) as db:
-        user = User(
-            email=f"{uuid4()}@example.com", password_hash=str(uuid4()), email_verified=True
-        )
+        user = User(email=f"{uuid4()}@example.com", password_hash=str(uuid4()), email_verified=True)
         db.add(user)
         db.flush()
         user_id = user.id
@@ -49,7 +47,8 @@ def test_postgres_migration_concurrent_retry_and_atomic_rollback(
             )
         )
         db.commit()
-    command.upgrade(config, "head")
+    # Exercise the legacy downgrade before installing the non-destructive group revision.
+    command.upgrade(config, "f20b84e901ac")
 
     def isolated_session() -> Generator[Session, None, None]:
         with Session(engine) as db:

@@ -209,7 +209,7 @@ function tierSummary(currentTier: string, trialDays: number) {
 }
 
 const styles = StyleSheet.create({
-  panel: { gap: 12, marginTop: 16, marginBottom: 12 },
+  panel: { gap: 10, marginTop: 12, marginBottom: 8 },
   header: { flexDirection: "row", justifyContent: "space-between", gap: 10, alignItems: "center" },
   section: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
   meta: { color: Colors.muted, lineHeight: 20 },

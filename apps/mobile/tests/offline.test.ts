@@ -97,6 +97,28 @@ test("grocery edits survive a restart and synchronize in revision order", async 
   expect(await apiFetch(groceryPath)).toMatchObject({ items: [{ is_checked: true, quantity: 2, revision: "revision-3" }] });
 });
 
+test("shared grocery queues stay in their original group and never change personal stock", async () => {
+  await connect();
+  const groupPath = "/api/v1/households/family/grocery-lists/current";
+  jest.mocked(fetch).mockResolvedValueOnce(response({ items: [{ id: "milk", display_name: "Milk", is_checked: false, revision: "group-revision-1" }] }));
+  await apiFetch(groupPath);
+  setDeviceOffline(true);
+  await apiFetch("/api/v1/households/family/grocery-lists/items/milk", { method: "PATCH", body: JSON.stringify({ is_checked: true }) });
+  expect(await apiFetch(groupPath)).toMatchObject({ items: [{ is_checked: true }] });
+  expect(await apiFetch(groceryPath)).toMatchObject({ items: [{ is_checked: false }] });
+  for (const path of ["/api/v1/households/family/proposals", "/api/v1/households/family/discover-choices", "/api/v1/households/family/weekly-plans/current/slots"]) {
+    await expect(apiFetch(path, { method: "POST", body: "{}" })).rejects.toThrow(/offline/);
+  }
+  setDeviceOffline(false);
+  jest.mocked(fetch).mockResolvedValueOnce(response({ result: { id: "milk", revision: "group-revision-2" } }));
+  await syncOffline();
+  const body = JSON.parse(String(jest.mocked(fetch).mock.calls.at(-1)?.[1]?.body));
+  expect(body.household_id).toBe("family");
+  setDeviceOffline(true);
+  expect(await apiFetch(groupPath)).toMatchObject({ items: [{ revision: "group-revision-2", is_checked: true }] });
+  expect(await apiFetch(groceryPath)).toMatchObject({ items: [{ revision: "revision-1", is_checked: false }] });
+});
+
 test("response lost after commit retries the identical operation, not a new macro", async () => {
   await connect();
   jest.mocked(fetch).mockRejectedValueOnce(new TypeError("Response lost"));

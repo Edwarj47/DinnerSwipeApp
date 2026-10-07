@@ -85,12 +85,21 @@ def create_confirmation(
     if payload.weekly_plan_slot_id:
         slot = db.get(WeeklyPlanSlot, payload.weekly_plan_slot_id)
         plan = db.get(WeeklyPlan, slot.weekly_plan_id) if slot else None
-        if not slot or not plan or plan.user_id != user.id:
+        if not slot or not plan:
+            raise HTTPException(status_code=404, detail="Weekly plan slot not found")
+        if plan.household_id:
+            from app.services.group_planning import authorize, library_query
+
+            authorize(db, user, plan.household_id)
+        elif plan.user_id != user.id:
             raise HTTPException(status_code=404, detail="Weekly plan slot not found")
         if recipe_id and recipe_id != slot.recipe_id:
             raise HTTPException(422, "Recipe does not match the planned meal")
         recipe_id = recipe_id or slot.recipe_id
-    recipe = _accessible_recipe(db, user, recipe_id) if recipe_id else None
+    if payload.weekly_plan_slot_id and plan and plan.household_id and recipe_id:
+        recipe = db.scalar(library_query(plan.household_id).where(Recipe.id == recipe_id))
+    else:
+        recipe = _accessible_recipe(db, user, recipe_id) if recipe_id else None
     if recipe_id and not recipe:
         raise HTTPException(status_code=404, detail="Recipe not found")
     meal_date = payload.meal_date or date.today()

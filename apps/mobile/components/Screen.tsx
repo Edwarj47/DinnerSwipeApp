@@ -1,4 +1,5 @@
-import { ReactNode, useCallback, useRef } from "react";
+import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
+import { ReactNode, useCallback, useContext, useRef } from "react";
 import { Platform, ScrollView, StyleSheet, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
@@ -10,20 +11,22 @@ type Props = {
   children: ReactNode;
   scroll?: boolean;
   contentWidth?: number;
+  onViewportLayout?: (height: number) => void;
 };
 
-export function Screen({ children, scroll = true, contentWidth }: Props) {
+export function Screen({ children, scroll = true, contentWidth, onViewportLayout }: Props) {
   const tour = useGuidedTour();
+  const tabBarHeight = useContext(BottomTabBarHeightContext);
   const contentRef = useRef<View>(null);
   const scrollRef = useRef<ScrollView>(null);
   const canScroll = scroll;
   const reveal = useCallback((node: View) => revealTourTarget(node, contentRef.current, scrollRef.current), []);
-  const content = <View ref={contentRef} testID="screen-content" collapsable={false} style={[styles.content, contentWidth !== undefined && { width: "100%", maxWidth: contentWidth, alignSelf: "center" }, !canScroll && { flex: 1, minHeight: 0, paddingBottom: 12 }]}>{children}</View>;
+  const content = <View ref={contentRef} testID="screen-content" collapsable={false} onLayout={!canScroll && onViewportLayout ? event => onViewportLayout(event.nativeEvent.layout.height) : undefined} style={[styles.content, tabBarHeight !== undefined && { paddingBottom: 16 }, contentWidth !== undefined && { width: "100%", maxWidth: contentWidth, alignSelf: "center" }, !canScroll && { flex: 1, minHeight: 0, paddingBottom: 12 }]}>{children}</View>;
   return (
     <TourScrollContext.Provider value={reveal}>
-      <SafeAreaView style={styles.root} edges={tour ? ["left", "right", "bottom"] : undefined}>
+      <SafeAreaView style={styles.root} edges={tabBarHeight !== undefined ? tour ? ["left", "right"] : ["top", "left", "right"] : tour ? ["left", "right", "bottom"] : undefined}>
         <OfflineStatusBar />
-        {canScroll ? <ScrollView ref={scrollRef} testID="screen-scroll" style={styles.scroll} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={Platform.OS === "web"} keyboardShouldPersistTaps="handled">{content}</ScrollView> : content}
+        {canScroll ? <ScrollView ref={scrollRef} testID="screen-scroll" onLayout={onViewportLayout ? event => onViewportLayout(event.nativeEvent.layout.height) : undefined} style={styles.scroll} contentContainerStyle={{ flexGrow: 1 }} showsVerticalScrollIndicator={Platform.OS === "web"} keyboardShouldPersistTaps="handled">{content}</ScrollView> : content}
       </SafeAreaView>
     </TourScrollContext.Provider>
   );

@@ -10,7 +10,7 @@ import { useOfflineStatus } from "@/services/offlineStore";
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-linking", () => ({ openURL: jest.fn() }));
 jest.mock("@/services/api", () => ({ apiFetch: jest.fn(), savedMessage: (message: string) => message }));
-jest.mock("react-native-calendars", () => ({ Calendar: ({ onDayPress }: { onDayPress: (day: { dateString: string }) => void }) => {
+jest.mock("react-native-calendars", () => ({ LocaleConfig: { locales: { "": {} }, defaultLocale: "" }, Calendar: ({ onDayPress }: { onDayPress: (day: { dateString: string }) => void }) => {
   const { Button } = jest.requireActual("react-native");
   return <Button title="Pick leap day" onPress={() => onDayPress({ dateString: "2024-02-29" })} />;
 } }));
@@ -44,6 +44,7 @@ test("Save as recipe preserves the form, canonical grams and zero values without
     await screen.findByLabelText("Protein ounces");
     expect(screen.getByLabelText("Save as recipe").props.accessibilityState.disabled).toBe(true);
     fireEvent.changeText(screen.getByLabelText("Entry name"), "Protein shake");
+    fireEvent.press(screen.getByLabelText("Meal type: Dinner"));
     fireEvent.press(screen.getByText("Beverages", { exact: true }));
     fireEvent.changeText(screen.getByLabelText("Calories"), "160");
     fireEvent.changeText(screen.getByLabelText("Protein ounces"), "1");
@@ -95,6 +96,7 @@ test("macro success is transient, invalid dates do not query, and errors stay vi
     expect(screen.getByText("Last 7 days")).toBeTruthy();
     expect(screen.queryByText("Testing access code")).toBeNull();
     fireEvent.changeText(screen.getByLabelText("Entry name"), "Breakfast oats");
+    fireEvent.press(screen.getByLabelText("Meal type: Dinner"));
     fireEvent.press(screen.getByText("Breakfast"));
     fireEvent.changeText(screen.getByLabelText("Calories"), "250");
     fireEvent.press(screen.getByLabelText("Add"));
@@ -130,6 +132,29 @@ test("date popup loads the exact historic day and calendar filters hide empty da
     expect(screen.queryByLabelText("2026-09-27: 0 calories, 0 entries")).toBeNull();
     fireEvent.press(screen.getByLabelText("2026-09-28: 500 calories, 1 entries"));
     await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/macros/entries?start_date=2026-09-28&end_date=2026-09-28"));
+  } finally { screen.close(); }
+});
+
+test("meal dropdown retains all five choices and nutrition labels remain visible with filled values", async () => {
+  const screen = mount();
+  try {
+    await screen.findByLabelText("Entry name");
+    fireEvent.press(screen.getByLabelText("Meal type: Dinner"));
+    for (const label of ["Breakfast", "Lunch", "Dinner", "Snack", "Beverages"]) {
+      expect(screen.getByRole("radio", { name: label })).toBeTruthy();
+    }
+    fireEvent.press(screen.getByRole("radio", { name: "Breakfast" }));
+    expect(screen.getByLabelText("Meal type: Breakfast")).toBeTruthy();
+    expect(screen.queryByRole("radio", { name: "Beverages" })).toBeNull();
+    fireEvent.changeText(screen.getByLabelText("Daily calories target"), "2000");
+    fireEvent.changeText(screen.getByLabelText("Daily protein target"), "180");
+    fireEvent.changeText(screen.getByLabelText("Calories"), "500");
+    fireEvent.changeText(screen.getByLabelText("Protein grams"), "30");
+    expect(screen.getAllByText("Protein (g)")).toHaveLength(2);
+    expect(screen.getAllByText("Carbs (g)")).toHaveLength(2);
+    expect(screen.getAllByText("Fat (g)")).toHaveLength(2);
+    expect(screen.getByText("Fiber (g)")).toBeTruthy();
+    expect(screen.getByText("Goal")).toBeTruthy();
   } finally { screen.close(); }
 });
 

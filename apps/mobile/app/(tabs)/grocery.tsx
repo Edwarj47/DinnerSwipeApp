@@ -9,7 +9,9 @@ import { useTransientMessage } from "@/components/useTransientMessage";
 import { Screen } from "@/components/Screen";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
-import { apiFetch } from "@/services/api";
+import { apiFetch as remoteFetch } from "@/services/api";
+import { useSpace } from "@/features/groups/useSpace";
+import { SpaceSelector } from "@/features/groups/SpaceSelector";
 import { TourTarget } from "@/features/onboarding/TourTarget";
 import { PantryCoverageEditor, PantrySelection } from "@/features/grocery/PantryCoverageEditor";
 import { convertWeight, formatWeight, weightFactor, WeightUnit } from "@/services/weightUnits";
@@ -38,6 +40,13 @@ type GroceryListResponse = { items: GroceryItem[]; recipe_groups?: RecipeGroup[]
 type GroceryMode = "list" | "add" | "pantry";
 
 export default function GroceryScreen() {
+  const space = useSpace();
+  return <GroceryContent key={space.key} />;
+}
+
+function GroceryContent() {
+  const space = useSpace();
+  const apiFetch = <T,>(path: string, init?: RequestInit) => init ? remoteFetch<T>(space.path(path), init) : remoteFetch<T>(space.path(path));
   const weightUnit = useMeasurementUnits().ingredient_weight;
   const queryClient = useQueryClient();
   const [status, setStatus] = useTransientMessage();
@@ -53,8 +62,8 @@ export default function GroceryScreen() {
   const [manualUnit, setManualUnit] = useState("");
   const [pantryName, setPantryName] = useState("");
   const [pantrySelection, setPantrySelection] = useState<PantrySelection | null>(null);
-  const { data, error: loadError } = useQuery<GroceryListResponse>({ queryKey: ["grocery"], queryFn: () => apiFetch<GroceryListResponse>("/api/v1/grocery-lists/current") });
-  const { data: pantry } = useQuery<PantryItem[]>({ queryKey: ["pantry"], queryFn: () => apiFetch<PantryItem[]>("/api/v1/grocery-lists/pantry") });
+  const { data, error: loadError } = useQuery<GroceryListResponse>({ queryKey: space.queryKey("grocery"), queryFn: () => apiFetch<GroceryListResponse>("/api/v1/grocery-lists/current"), enabled: !space.isLoading && !space.isError, refetchInterval: space.groupId ? 30_000 : false });
+  const { data: pantry } = useQuery<PantryItem[]>({ queryKey: space.queryKey("pantry"), queryFn: () => apiFetch<PantryItem[]>("/api/v1/grocery-lists/pantry"), enabled: !space.isLoading && !space.isError, refetchInterval: space.groupId ? 30_000 : false });
   const list = data as GroceryListResponse | undefined;
   const pantryReady = list?.pantry_coverage_version === 1;
   const grouped = useMemo<RecipeGroup[]>(() => {
@@ -119,6 +128,7 @@ export default function GroceryScreen() {
     }
   });
   const error = [loadError, regen.error, patchItem.error, deleteItem.error, addManual.error, deletePantry.error].find(Boolean);
+  if (space.isLoading || space.isError) return <Screen contentWidth={960}><Text style={styles.title}>Grocery List</Text><Text style={styles.subtitle}>{space.isError ? "Couldn't load your kitchen." : "Loading your kitchen..."}</Text>{space.isError ? <Button label="Retry kitchen" icon="refresh" onPress={() => { void space.refetch(); }} /> : null}</Screen>;
   return (
     <Screen contentWidth={960}>
       <View style={styles.header}>
@@ -128,6 +138,7 @@ export default function GroceryScreen() {
         </View>
         <Button label="Regenerate" icon="sync" onPress={() => regen.mutate()} />
       </View>
+      <SpaceSelector label="Shopping for" />
       {status ? <Text style={styles.status}>{status}</Text> : null}
       {error ? <Text accessibilityRole="alert" style={{ color: Colors.danger, marginBottom: 10 }}>{error.message}</Text> : null}
       <TourTarget id="grocery-list"><SegmentedControl
@@ -199,8 +210,8 @@ export default function GroceryScreen() {
               <View style={styles.itemBody}>
                 <Pressable accessibilityRole="button" accessibilityLabel={`Edit ${item.display_name}`} onPress={() => setExpandedItemId(isExpanded ? null : item.id)} style={styles.itemSummary}>
                   <Text style={[styles.name, item.is_checked && styles.checked]}>{item.display_name}</Text>
-                  <Text style={styles.meta}>{item.recipe_quantity !== undefined ? `For recipe: ${formatQuantity({ ...item, quantity: item.recipe_quantity }, weightUnit)}` : formatQuantity(item, weightUnit)}</Text>
-                  {(item.recipe_count ?? 0) > 1 ? <Text style={styles.meta}>Shopping total: {formatQuantity(item, weightUnit)}</Text> : null}
+                  <Text style={styles.meta}>{item.recipe_quantity !== undefined ? `Recipe: ${formatQuantity({ ...item, quantity: item.recipe_quantity }, weightUnit)}` : formatQuantity(item, weightUnit)}</Text>
+                  {(item.recipe_count ?? 0) > 1 ? <Text style={styles.meta}>Buy total: {formatQuantity(item, weightUnit)}</Text> : null}
                   {item.notes ? <Text style={styles.meta}>{item.notes}</Text> : null}
                 </Pressable>
               </View>
@@ -214,7 +225,7 @@ export default function GroceryScreen() {
               </View>
                 {isExpanded ? (
                   <>
-                  <Text style={styles.meta}>Shopping total: {formatQuantity(item, weightUnit)}</Text>
+                  <Text style={styles.meta}>Buy total: {formatQuantity(item, weightUnit)}</Text>
                   <View style={styles.itemControls}>
                   <Button label="" icon="remove" accessibilityLabel={`Decrease ${item.display_name} quantity`} disabled={patchItem.isPending || item.quantity === 0} onPress={() => patchItem.mutate({ item, patch: { quantity: Math.max(0, (item.quantity ?? 1) - quantityStep(item.unit, weightUnit)) } })} />
                   <Button label="" icon="add" accessibilityLabel={`Increase ${item.display_name} quantity`} disabled={patchItem.isPending} onPress={() => patchItem.mutate({ item, patch: { quantity: (item.quantity ?? 0) + quantityStep(item.unit, weightUnit) } })} />
@@ -240,7 +251,7 @@ export default function GroceryScreen() {
           <Text style={styles.empty}>Choose meals or add a household item, then regenerate the list.</Text>
           </View>
       ) : null}
-      {pantrySelection ? <PantryCoverageEditor selection={pantrySelection} onClose={() => setPantrySelection(null)} onSaved={coverage => {
+      {pantrySelection ? <PantryCoverageEditor householdId={space.groupId} selection={pantrySelection} onClose={() => setPantrySelection(null)} onSaved={coverage => {
         setPantrySelection(null); setPantryName(""); setExpandedItemId(null);
         setStatus(coverage === "enough" ? "Covered for this week's meals." : "Pantry updated. Shopping amounts recalculated.");
       }} /> : null}
@@ -280,7 +291,7 @@ const styles = StyleSheet.create({
   pantryChip: { flexDirection: "row", gap: 7, alignItems: "center", borderRadius: 999, backgroundColor: Colors.softRed, paddingHorizontal: 10, minHeight: 34 },
   pantryText: { color: Colors.tomatoDark, fontWeight: "800", textTransform: "capitalize" },
   pantryRemove: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 16 },
-  group: { marginTop: 16, gap: 8 },
+  group: { marginTop: 12, gap: 8 },
   groupHeader: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
   groupName: { flex: 1, fontSize: 18, fontWeight: "900", color: Colors.ink },
   item: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 8 },

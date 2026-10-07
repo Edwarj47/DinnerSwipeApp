@@ -1,6 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { Tabs } from "expo-router";
 
+import { AdaptiveTabBar } from "@/components/AdaptiveTabBar";
 import { Colors } from "@/components/theme";
 import { OnboardingGuide } from "@/features/onboarding/OnboardingGuide";
 import { useAppAccess, useAuthSession } from "@/services/session";
@@ -21,11 +22,11 @@ export default function TabLayout() {
   return (
     <OnboardingGuide key={email}>
       <Tabs
+        tabBar={props => <AdaptiveTabBar {...props} />}
         screenOptions={({ route }) => ({
           headerShown: false,
           tabBarActiveTintColor: Colors.tomato,
           tabBarInactiveTintColor: Colors.muted,
-          tabBarStyle: { height: 64, paddingBottom: 10, paddingTop: 6 },
           tabBarIcon: ({ color, size }) => (
             <Ionicons name={icons[route.name as keyof typeof icons]} size={size} color={color} />
           )
