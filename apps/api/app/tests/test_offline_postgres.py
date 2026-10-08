@@ -49,6 +49,13 @@ def test_postgres_migration_concurrent_retry_and_atomic_rollback(
         db.commit()
     # Exercise the legacy downgrade before installing the non-destructive group revision.
     command.upgrade(config, "f20b84e901ac")
+    assert inspect(engine).has_table("offline_receipts")
+    command.downgrade(config, "d8126c4ab391")
+    assert not inspect(engine).has_table("offline_receipts")
+    with Session(engine) as db:
+        assert db.get(User, user_id) is not None
+    # Current handlers require the current additive nutrition schema.
+    command.upgrade(config, "head")
 
     def isolated_session() -> Generator[Session, None, None]:
         with Session(engine) as db:
@@ -99,12 +106,6 @@ def test_postgres_migration_concurrent_retry_and_atomic_rollback(
         with Session(engine) as db:
             assert db.get(MealMacroConfirmation, edit["operation_id"]) is None
             assert db.query(OfflineReceipt).filter_by(user_id=user_id).count() == 1
-        command.downgrade(config, "d8126c4ab391")
-        assert not inspect(engine).has_table("offline_receipts")
-        with Session(engine) as db:
-            assert db.get(User, user_id) is not None
-            assert db.query(MealMacroConfirmation).filter_by(user_id=user_id).count() == 1
-        command.upgrade(config, "head")
         assert inspect(engine).has_table("offline_receipts")
     finally:
         app.dependency_overrides.pop(get_db, None)
