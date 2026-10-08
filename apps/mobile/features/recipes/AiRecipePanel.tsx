@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
 import { useEffect, useRef, useState } from "react";
 import { StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
+import { openSettings } from "@/services/settingsMenu";
 import { AiRecipeJob } from "./aiRecipeTypes";
 import { ManualRecipePanel } from "./ManualRecipePanel";
 import { appendRecipeImage, RecipeImage, RecipePhotoPicker } from "./RecipePhotoPicker";
@@ -15,7 +15,6 @@ type Usage = { used: number; limit: number | null; remaining: number | null; res
 
 export function AiRecipePanel() {
   const queryClient = useQueryClient();
-  const router = useRouter();
   const [description, setDescription] = useState("");
   const [image, setImage] = useState<RecipeImage | null>(null);
   const [preview, setPreview] = useState("");
@@ -63,7 +62,7 @@ export function AiRecipePanel() {
     <Text style={styles.title}>Create with AI</Text>
     <Text style={styles.meta}>{usage.data?.limit === null ? "Premium: unlimited AI recipes." : usage.data ? `${usage.data.remaining} of 3 AI recipes left this month. Resets ${new Date(usage.data.resets_at).toLocaleDateString(undefined, { month: "short", day: "numeric", timeZone: "UTC" })} (UTC).` : "Checking AI access..."}</Text>
     {usage.data?.limit !== null ? <Text style={styles.meta}>Drafts count even when discarded.</Text> : null}
-    {usage.data?.remaining === 0 ? <Button label="View Premium" icon="star-outline" onPress={() => router.push({ pathname: "/profile", params: { section: "account" } })} /> : null}
+    {usage.data?.remaining === 0 ? <Button label="View Premium" icon="star-outline" onPress={() => openSettings({ section: "account", focus: "subscription" })} /> : null}
     <TextInput accessibilityLabel="Recipe idea" placeholder="Describe your recipe" value={description} maxLength={6000}
       editable={!generate.isPending} multiline style={styles.input} onChangeText={value => { setDescription(value); requestId.current = ""; }} />
     <RecipePhotoPicker disabled={generate.isPending} onSelect={value => { setImage(value); requestId.current = ""; }} />

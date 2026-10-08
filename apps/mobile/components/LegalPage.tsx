@@ -3,6 +3,7 @@ import { StyleSheet, Text, View } from "react-native";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
+import { NutritionAttribution } from "@/features/premium/NutritionAttribution";
 
 type Section = {
   title: string;
@@ -33,6 +34,7 @@ export function LegalPage({ eyebrow, title, effectiveDate, sections }: Props) {
           <Text style={styles.body}>{section.body}</Text>
         </View>
       ))}
+      <NutritionAttribution />
     </Screen>
   );
 }

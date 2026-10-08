@@ -8,32 +8,36 @@ import { Household } from "@/services/types";
 import { applyGroupChange } from "./groupAccess";
 import { useSpace } from "./useSpace";
 
-export function SpaceSelector({ label = "Planning for" }: { label?: string }) {
+export function SpaceSelector({ label = "Planning for", purpose = "switch" }: { label?: string; purpose?: "switch" | "default" }) {
   const client = useQueryClient();
   const space = useSpace();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
-  const groups = useQuery<Household[]>({ queryKey: ["households"], queryFn: () => apiFetch<Household[]>("/api/v1/households"), enabled: open });
-  const change = useMutation({ mutationFn: (id: string) => apiFetch<Household>(`/api/v1/households/${id}/switch`, { method: "POST" }),
+  const groups = useQuery<Household[]>({ queryKey: ["households"], queryFn: () => apiFetch<Household[]>("/api/v1/households"), enabled: open || purpose === "default" });
+  const groupList: Household[] = Array.isArray(groups.data) ? groups.data : [];
+  const matches = groupList.filter(g => (g.is_personal ? "My Kitchen" : g.name).toLowerCase().includes(search.toLowerCase()));
+  const selected = purpose === "default" ? groupList.find(group => group.is_default) ?? space.group : space.group;
+  const selectedName = selected?.is_personal ? "My Kitchen" : selected?.name ?? "Choose a group";
+  const change = useMutation({ mutationFn: (id: string) => apiFetch<Household>(`/api/v1/households/${id}/${purpose}`, { method: "POST" }),
     onSuccess: async group => { await applyGroupChange(client, group); setOpen(false); setSearch(""); } });
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${space.groupId ? space.group?.name : "My Kitchen"}`} disabled={space.isLoading || change.isPending} onPress={() => setOpen(true)} style={styles.selector}>
-      <Ionicons name={space.groupId ? "people-outline" : "home-outline"} size={20} color={Colors.basil} />
-      <View style={styles.copy}><Text style={styles.label}>{label}</Text><Text style={styles.name}>{space.groupId ? space.group?.name : "My Kitchen"}</Text></View>
+    <Pressable accessibilityRole="button" accessibilityLabel={`${label}: ${selectedName}`} disabled={space.isLoading || change.isPending || (purpose === "default" && groups.isLoading)} onPress={() => setOpen(true)} style={styles.selector}>
+      <Ionicons name={selected?.is_personal ? "home-outline" : "people-outline"} size={20} color={Colors.basil} />
+      <View style={styles.copy}><Text style={styles.label}>{label}</Text><Text style={styles.name}>{selectedName}</Text></View>
       <Ionicons name="chevron-down" size={20} color={Colors.muted} />
     </Pressable>
     <Modal visible={open} transparent animationType="slide" onRequestClose={() => { if (!change.isPending) setOpen(false); }}>
       <View style={styles.backdrop}><View style={styles.sheet} accessibilityViewIsModal>
-        <View style={styles.header}><Text style={styles.title}>Choose a kitchen</Text><Pressable accessibilityRole="button" accessibilityLabel="Close kitchen selection" disabled={change.isPending} onPress={() => setOpen(false)} style={styles.icon}><Ionicons name="close" size={24} color={Colors.ink} /></Pressable></View>
-        <TextInput accessibilityLabel="Search kitchens" placeholder="Search kitchens" value={search} onChangeText={setSearch} style={styles.input} />
+        <View style={styles.header}><Text style={styles.title}>Choose a group</Text><Pressable accessibilityRole="button" accessibilityLabel="Close group selection" disabled={change.isPending} onPress={() => setOpen(false)} style={styles.icon}><Ionicons name="close" size={24} color={Colors.ink} /></Pressable></View>
+        <TextInput accessibilityLabel="Search groups" placeholder="Search groups" value={search} onChangeText={setSearch} style={styles.input} />
         <ScrollView keyboardShouldPersistTaps="handled" style={styles.list}>
-          {(Array.isArray(groups.data) ? groups.data : []).filter(g => (g.is_personal ? "My Kitchen" : g.name).toLowerCase().includes(search.toLowerCase())).map(g => <Pressable key={g.id} accessibilityRole="radio" accessibilityLabel={g.is_personal ? "My Kitchen" : g.name} accessibilityState={{ checked: g.id === space.group?.id }} aria-checked={g.id === space.group?.id} disabled={change.isPending} onPress={() => change.mutate(g.id)} style={styles.row}>
+          {matches.map(g => <Pressable key={g.id} accessibilityRole="radio" accessibilityLabel={g.is_personal ? "My Kitchen" : g.name} accessibilityState={{ checked: g.id === selected?.id }} aria-checked={g.id === selected?.id} disabled={change.isPending} onPress={() => change.mutate(g.id)} style={styles.row}>
             <Ionicons name={g.is_personal ? "home-outline" : "people-outline"} size={22} color={Colors.basil} />
             <View style={styles.copy}><Text style={styles.name}>{g.is_personal ? "My Kitchen" : g.name}</Text><Text style={styles.label}>{g.is_personal ? "Personal" : g.current_user_role === "owner" ? "Owner" : "Member"}</Text></View>
-            {g.id === space.group?.id ? <Ionicons name="checkmark-circle" color={Colors.tomato} size={24} /> : null}
+            {g.id === selected?.id ? <Ionicons name="checkmark-circle" color={Colors.tomato} size={24} /> : null}
           </Pressable>)}
-          {groups.isLoading ? <Text style={styles.label}>Loading kitchens...</Text> : null}
-          {!groups.isLoading && !groups.isError && Array.isArray(groups.data) && !groups.data.length ? <Text style={styles.label}>No kitchens found.</Text> : null}
+          {groups.isLoading ? <Text style={styles.label}>Loading groups...</Text> : null}
+          {!groups.isLoading && !groups.isError && !matches.length ? <Text style={styles.label}>No groups found.</Text> : null}
         </ScrollView>
         {change.error || groups.error ? <Text accessibilityRole="alert" style={styles.error}>{(change.error ?? groups.error)?.message}</Text> : null}
       </View></View>

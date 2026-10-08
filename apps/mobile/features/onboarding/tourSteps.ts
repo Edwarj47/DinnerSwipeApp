@@ -29,14 +29,14 @@ export const TOUR_STEPS: TourStep[] = [
     title: "Shop from your plan", body: "Regenerate builds ingredients from your planned meals. Check items off, or tap one to adjust it and search your preferred store. Add keeps household extras on the list." },
   { id: "grocery-pantry", section: "grocery", path: "/grocery", params: { mode: "pantry" },
     title: "Already in the cupboard?", body: "Add pantry staples here to leave them out of generated groceries. Regenerate the list after saving an exclusion. This step is optional." },
-  { id: "preferences", section: "preferences", path: "/profile", params: { section: "meals" },
-    title: "Food and shopping preferences", body: "Choose default servings and a store, then add allergens or dislikes. Save only changes you want to keep. Group owners control allergy warnings or blocking; always check ingredients." },
-  { id: "groups", section: "groups", path: "/profile", params: { section: "group" },
-    title: "Plan with your people", body: "Keep a private kitchen, create a shared group, or join by invitation. Select a group to vote and manage invitations. Basic allows one shared group; Premium allows unlimited groups." },
+  { id: "preferences", section: "preferences", path: "/",
+    title: "Food and shopping preferences", body: "In User settings, open Meals to choose servings, a store, allergens, and dislikes. Save changes you want to keep. Always check ingredients." },
+  { id: "groups", section: "groups", path: "/",
+    title: "Plan with your people", body: "Group settings keeps your kitchens, invitations, shared recipes, and Discover choices together. Basic allows one shared group; Premium allows unlimited groups." },
   { id: "macros", section: "macros", path: "/profile", params: { section: "macros" },
-    title: "Your daily nutrition", body: "Log a meal, snack, or beverage, or confirm a planned meal in This Week. Switch between Day, Grid, Calendar, and Trends. Choose a period before exporting. The overview shows the last seven days." },
-  { id: "account", section: "account", path: "/profile", params: { section: "account" },
-    title: "Set your own defaults", body: "Control reset confirmations and, on supported phones, biometrics and the lock timeout. Replay tour stays in Account whenever you need it." }
+    title: "Your daily nutrition", body: "Macros contains your tracker and Analytics. Log meals, snacks, or beverages, or confirm meals in This Week. Use the calculator for multiple foods. Choose your own summary period." },
+  { id: "account", section: "account", path: "/",
+    title: "Set your own defaults", body: "In User settings, Account holds your subscription, weekly resets, measurements, and device security. Replay tour stays in Account details." }
 ];
 export function tourStepsFor(sections: TourSection[], premium: boolean) {
   return TOUR_STEPS.filter(step => sections.includes(step.section) && (step.section !== "macros" || premium));

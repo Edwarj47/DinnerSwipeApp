@@ -18,6 +18,11 @@ from app.models.entities import (
     UserProfile,
     WeeklyPlan,
 )
+from app.services.account_preferences import (
+    DEFAULT_GROUP_KEY,
+    configured_default_group,
+    display_name,
+)
 from app.services.billing import is_premium_active, subscription_for_user
 from app.services.parsing import normalize_name
 from app.services.recipes import (
@@ -72,10 +77,17 @@ def serialize_household(db: Session, user: User, household_id: str | None = None
         .where(HouseholdMember.household_id == household.id)
         .order_by(HouseholdMember.created_at)
     ).all()
+    owner = next(
+        (member_user for membership, member_user in rows if membership.role == "owner"), None
+    )
     return {
         "id": household.id,
         "name": household.name,
         "is_personal": household.is_personal,
+        "is_default": household.id == (configured_default_group(user) or user.profile.household_id),
+        "owner": {"id": owner.id, "email": owner.email, "name": display_name(owner)}
+        if owner
+        else None,
         "invite_code": invite_code,
         "allergen_filter_mode": household.allergen_filter_mode,
         "dislike_filter_mode": household.dislike_filter_mode,
@@ -141,6 +153,59 @@ def switch_household(db: Session, user: User, household_id: str) -> dict[str, An
     return serialize_household(db, user)
 
 
+def set_default_household(db: Session, user: User, household_id: str) -> dict[str, Any]:
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    household = current_household(db, user, household_id)
+    profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    assert profile is not None
+    profile.notification_preferences = {
+        **(profile.notification_preferences or {}),
+        DEFAULT_GROUP_KEY: household.id,
+    }
+    profile.household_id = household.id
+    db.commit()
+    return serialize_household(db, user)
+
+
+def restore_default_household(db: Session, user: User) -> None:
+    if not configured_default_group(user):
+        return
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
+    profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    assert profile is not None
+    default_id = configured_default_group(user)
+    household = db.scalar(
+        select(Household)
+        .join(HouseholdMember)
+        .where(Household.id == default_id, HouseholdMember.user_id == user.id)
+    )
+    if household:
+        profile.household_id = household.id
+        return
+    kitchen = db.scalar(
+        select(Household)
+        .join(HouseholdMember)
+        .where(Household.is_personal.is_(True), HouseholdMember.user_id == user.id)
+    )
+    preferences = dict(profile.notification_preferences or {})
+    if kitchen:
+        profile.household_id = kitchen.id
+        preferences[DEFAULT_GROUP_KEY] = kitchen.id
+    else:
+        preferences.pop(DEFAULT_GROUP_KEY, None)
+    profile.notification_preferences = preferences
+
+
 def leave_household(db: Session, user: User, household_id: str) -> dict[str, Any]:
     db.scalar(select(User).where(User.id == user.id).with_for_update())
     household = current_household(db, user, household_id)
@@ -168,11 +233,22 @@ def leave_household(db: Session, user: User, household_id: str) -> dict[str, Any
         raise HTTPException(
             status_code=409, detail="Your private kitchen is unavailable. Try again."
         )
+    db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     db.delete(member)
     if count == 1:
         household.invite_code = None
     if user.profile.household_id == household.id:
         user.profile.household_id = kitchen.id
+    if configured_default_group(user) == household.id:
+        user.profile.notification_preferences = {
+            **(user.profile.notification_preferences or {}),
+            DEFAULT_GROUP_KEY: kitchen.id,
+        }
     db.commit()
     return serialize_household(db, user)
 

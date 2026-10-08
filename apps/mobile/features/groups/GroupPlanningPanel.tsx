@@ -22,11 +22,11 @@ type Library = { items: { recipe: Recipe; enabled: boolean; is_blocked: boolean;
 type Proposal = { id: string; recipe: Recipe; status: "pending" | "approved" | "declined"; proposer_count: number; is_proposer: boolean; extra_request: boolean; my_vote: "yes" | "maybe" | "no" | null; votes: Record<"yes" | "maybe" | "no", number> };
 type Proposals = { week_start: string; items: Proposal[] };
 
-export function GroupPlanningPanel({ household }: { household: Household }) {
+export function GroupPlanningPanel({ household, initialView }: { household: Household; initialView?: "choices" }) {
   const [tab, setTab] = useState<"proposals" | "library" | "choices">("proposals");
   const owner = household.current_user_role === "owner";
   const { group_view } = useLocalSearchParams<{ group_view?: string }>();
-  useEffect(() => { if (owner && group_view === "choices") setTab("choices"); }, [owner, group_view]);
+  useEffect(() => { if (owner && (group_view === "choices" || initialView === "choices")) setTab("choices"); }, [owner, group_view, initialView]);
   useEffect(() => { if (!owner && tab === "choices") setTab("proposals"); }, [owner, tab]);
   return <View style={styles.section}>
     <SegmentedControl adaptive accessibilityLabel="Group planning view" value={tab} onChange={setTab} options={[

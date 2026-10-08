@@ -4,6 +4,7 @@ import json
 from datetime import UTC, date, datetime, timedelta
 from hashlib import sha256
 from typing import Any
+from uuid import uuid4
 
 from fastapi import HTTPException
 from sqlalchemy import Select, func, or_, select, true
@@ -88,7 +89,12 @@ def serialize_recipe(
     feedback_ignored = False
     feedback_completed = False
     nutrition = None
+    calculator_id = None
     if db:
+        from app.services.calculator import find_calculation
+
+        calculation = find_calculation(db, recipe_id=recipe.id)
+        calculator_id = calculation.id if calculation else None
         profile = db.scalar(
             select(RecipeMacroProfile).where(RecipeMacroProfile.recipe_id == recipe.id)
         )
@@ -176,6 +182,7 @@ def serialize_recipe(
         "is_archived": recipe.archived_at is not None,
         "can_edit": bool(user_id and recipe.owner_user_id == user_id),
         "nutrition": nutrition,
+        "calculator_id": calculator_id,
         "last_selected_date": None,
         "feedback_ignored": feedback_ignored,
         "feedback_completed": feedback_completed,
@@ -209,7 +216,14 @@ def recipe_children(payload: RecipeCreate) -> tuple[list[dict[str, Any]], list[d
     return ingredients, instructions
 
 
-def update_recipe(db: Session, recipe: Recipe, payload: RecipeCreate) -> Recipe:
+def update_recipe(
+    db: Session, recipe: Recipe, payload: RecipeCreate, *, commit: bool = True
+) -> Recipe:
+    from app.services.calculator import find_calculation, has_provider, resolve
+
+    calculation = find_calculation(db, recipe_id=recipe.id)
+    if calculation:
+        calculation.servings = payload.servings
     ingredients, instructions = recipe_children(payload)
     validation = validate_recipe_payload(
         payload.model_dump() | {"ingredients": ingredients, "instructions": instructions},
@@ -259,6 +273,9 @@ def update_recipe(db: Session, recipe: Recipe, payload: RecipeCreate) -> Recipe:
     recipe.image_status = validation["image_status"]
     if "nutrition" in payload.model_fields_set:
         save_recipe_nutrition(db, recipe, payload.nutrition or RecipeNutrition())
+    elif calculation and not has_provider(calculation):
+        totals, _ = resolve(calculation, scale=1 / payload.servings)
+        save_recipe_nutrition(db, recipe, RecipeNutrition.model_validate(totals))
     db.flush()
     # Refresh materialized grocery lists only for plans using this recipe this week.
     plans = db.scalars(
@@ -287,7 +304,7 @@ def update_recipe(db: Session, recipe: Recipe, payload: RecipeCreate) -> Recipe:
         user = db.get(User, plan.user_id)
         if user and plan.week_start == current_week_start(user):
             regenerate_grocery_list(db, user, plan, preserve_edits=True, commit=False)
-    db.commit()
+    db.commit() if commit else db.flush()
     db.refresh(recipe)
     return recipe
 
@@ -295,6 +312,24 @@ def update_recipe(db: Session, recipe: Recipe, payload: RecipeCreate) -> Recipe:
 def create_recipe(
     db: Session, payload: RecipeCreate, user: User | None = None, *, commit: bool = True
 ) -> Recipe:
+    from app.models.nutrition import NutritionCalculation
+    from app.services.billing import require_premium
+    from app.services.calculator import has_provider, resolve
+
+    source = None
+    if payload.calculator_source_id:
+        if not user:
+            raise HTTPException(404, "Calculation not found.")
+        require_premium(db, user)
+        source = db.get(NutritionCalculation, payload.calculator_source_id)
+        if (
+            not source
+            or not source.recipe_id
+            or not db.scalar(accessible_recipes_query(user).where(Recipe.id == source.recipe_id))
+        ):
+            raise HTTPException(404, "Calculation not found.")
+        if has_provider(source) and payload.nutrition is not None:
+            raise HTTPException(422, "Database recipes use refreshed nutrition.")
     ingredients, instructions = recipe_children(payload)
     content_hash = recipe_hash(payload.name, ingredients, instructions)
     validation = validate_recipe_payload(
@@ -345,6 +380,18 @@ def create_recipe(
             db.add(RecipeTag(recipe_id=recipe.id, tag=clean))
     if payload.nutrition is not None:
         save_recipe_nutrition(db, recipe, payload.nutrition)
+    if source and user:
+        copied = NutritionCalculation(
+            user_id=user.id,
+            recipe_id=recipe.id,
+            items=source.items,
+            servings=payload.servings,
+            request_id=str(uuid4()),
+        )
+        db.add(copied)
+        if not has_provider(source):
+            totals, _ = resolve(source, scale=1 / payload.servings)
+            save_recipe_nutrition(db, recipe, RecipeNutrition.model_validate(totals))
     if commit:
         db.commit()
     else:
@@ -354,6 +401,11 @@ def create_recipe(
 
 
 def save_recipe_nutrition(db: Session, recipe: Recipe, nutrition: RecipeNutrition) -> None:
+    from app.services.calculator import find_calculation, has_provider
+
+    calculation = find_calculation(db, recipe_id=recipe.id)
+    if calculation and has_provider(calculation):
+        raise HTTPException(422, "Edit database nutrition in the macro calculator.")
     profile = db.scalar(select(RecipeMacroProfile).where(RecipeMacroProfile.recipe_id == recipe.id))
     if not profile:
         profile = RecipeMacroProfile(recipe_id=recipe.id)

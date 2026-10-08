@@ -47,7 +47,7 @@ export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayIS
       const amount = Number(portions);
       if (!portions.trim() || amount <= 0 || amount > 20 || !Number.isFinite(amount)) throw new Error("Enter between 0 and 20 servings, excluding zero.");
       if (!isISODate(mealDate)) throw new Error("Enter a valid date.");
-      const totals = parseNutrition(nutrition);
+      const totals = recipe?.calculator_id || entry?.calculator_id ? {} : parseNutrition(nutrition);
       // Save the reviewed totals, including explicit unknowns, so offline replay
       // cannot recalculate history from a recipe edited after this meal was logged.
       return apiFetch(entry ? `/api/v1/macros/entries/${entry.id}` : "/api/v1/macros/entries", { method: entry ? "PUT" : "POST",
@@ -90,8 +90,10 @@ export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayIS
             <Button label="" accessibilityLabel="Half serving more" icon="add" disabled={Number(portions) >= 20} onPress={() => changePortions(String(Math.min(20, Number(portions) + 0.5)))} />
           </View>
           <Text style={styles.name}>Nutrition for this entry</Text>
-          <NutritionFields value={nutrition} onChange={setNutrition} />
-          {recipe ? <Button label="Use recipe values" icon="refresh" onPress={() => { setNutrition(nutritionInputs(recipe.nutrition, scaledPortions)); setLocalError(""); }} /> : null}
+          {recipe?.calculator_id || entry?.calculator_id ? <Text style={styles.meta}>Nutrition is calculated from the saved ingredients and servings.</Text> : <>
+            <NutritionFields value={nutrition} onChange={setNutrition} />
+            {recipe ? <Button label="Use recipe values" icon="refresh" onPress={() => { setNutrition(nutritionInputs(recipe.nutrition, scaledPortions)); setLocalError(""); }} /> : null}
+          </>}
           <TextInput accessibilityLabel="Recipe log notes" placeholder="Notes" value={notes} onChangeText={setNotes} style={styles.input} />
           <Button label={save.isPending ? "Saving..." : "Save entry"} icon="checkmark" variant="primary" disabled={save.isPending || remove.isPending || !isISODate(mealDate)} onPress={() => save.mutate()} />
           {entry ? <Button label="Delete entry" icon="trash-outline" disabled={save.isPending || remove.isPending} onPress={() => remove.mutate()} /> : null}

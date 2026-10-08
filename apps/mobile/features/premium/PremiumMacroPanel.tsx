@@ -20,6 +20,8 @@ import { MacroChoice } from "./MacroChoice";
 import { SummaryPeriod, summaryDays } from "./SummaryPeriod";
 import { RecipeMacroLogger } from "@/features/recipes/RecipeMacroLogger";
 import { MacroDatePicker } from "./MacroDatePicker";
+import { MacroCalculator } from "./MacroCalculator";
+import { NutritionAttribution } from "./NutritionAttribution";
 import { TourTarget } from "@/features/onboarding/TourTarget";
 import { CalendarSort, calendarDays, isISODate, macroRangeQuery, shiftISODate, todayISO } from "./macroDates";
 import {
@@ -68,6 +70,7 @@ export function PremiumMacroPanel() {
       carbs_g: entryCarbs, fat_g: entryFat, fiber_g: entryFiber } };
   const recipeFingerprint = JSON.stringify(recipeDraft);
   const [recipeLog, setRecipeLog] = useState<MacroConfirmation | "new" | null>(null);
+  const [calculator, setCalculator] = useState<string | "new" | null>(null);
   const [summarySelection, setSummarySelection] = useState<number | null>(null);
   const profile = useQuery({ queryKey: ["profile"], queryFn: () => apiFetch<UserProfile>("/api/v1/profile") });
   const summaryRange = summarySelection ?? summaryDays(profile.data?.notification_preferences?.macro_summary_days) ?? 7;
@@ -225,6 +228,7 @@ export function PremiumMacroPanel() {
   });
 
   function beginEdit(entry: MacroConfirmation) {
+    if (entry.calculator_id) { setCalculator(entry.calculator_id); return; }
     if (entry.recipe_id) { setRecipeLog(entry); return; }
     setEditingEntryId(entry.id);
     setSelectedDate(entry.meal_date);
@@ -282,6 +286,8 @@ export function PremiumMacroPanel() {
             <Metric label="Protein" value={summary.data ? `${formatWeight(convertWeight(summary.data.totals.protein_g, "g", unit)!, unit)} ${unit}` : "-"} />
             <Metric label="Calories" value={summary.data ? String(summary.data.totals.calories) : "-"} />
           </View></TourTarget>
+          {summary.data?.temporary_nutrition ? <NutritionAttribution /> : null}
+          {summary.data?.nutrition_unavailable_count ? <Text style={styles.error}>Some database nutrition is pending. Totals are incomplete.</Text> : null}
 
           <View style={styles.targetBox}>
             <Text style={styles.subsection}>Targets</Text>
@@ -320,6 +326,8 @@ export function PremiumMacroPanel() {
             <Button label="Retry macros" icon="refresh" onPress={() => { void activeQuery.refetch(); }} />
           </View> : activeQuery.isLoading && (macroView !== "day" || isISODate(selectedDate)) ? <Text style={styles.meta}>Loading macros...</Text> : null}
 
+          {macroView !== "day" && (macroView === "analytics" ? analytics.data : calendarAnalytics.data)?.temporary_nutrition ? <NutritionAttribution /> : null}
+          {macroView !== "day" && (macroView === "analytics" ? analytics.data : calendarAnalytics.data)?.nutrition_unavailable_count ? <Text style={styles.error}>Some database nutrition is pending. Totals are incomplete.</Text> : null}
           {macroView === "day" ? (
             <><Button label="Log a saved recipe" icon="restaurant-outline" onPress={() => setRecipeLog("new")} />
             <DayMacroView
@@ -353,10 +361,16 @@ export function PremiumMacroPanel() {
               onClear={clearEntryForm}
               onDelete={() => editingEntryId ? deleteEntry.mutate(editingEntryId) : undefined}
               onEdit={beginEdit}
+              onCalculator={() => setCalculator("new")}
             /></>
           ) : null}
           {recipeLog ? <RecipeMacroLogger entry={recipeLog === "new" ? undefined : recipeLog} date={selectedDate}
             onClose={() => setRecipeLog(null)} /> : null}
+          {calculator ? <MacroCalculator calculationId={calculator === "new" ? undefined : calculator}
+            onClose={() => setCalculator(null)} onSaved={result => {
+              if (result.entry_id) { setSelectedDate(result.meal_date ?? todayISO()); setMacroView("day"); }
+              setStatus(result.recipe_id ? "Recipe saved with ingredients and nutrition." : "Calculation added to your macro entries.");
+            }} /> : null}
 
           {macroView === "grid" ? (
             <GridMacroView dailyTotals={calendarAnalytics.data?.daily_totals ?? []} onPickDay={pickDay} />
@@ -414,7 +428,8 @@ function DayMacroView({
   onSave,
   onClear,
   onDelete,
-  onEdit
+  onEdit,
+  onCalculator
 }: {
   selectedDate: string;
   setSelectedDate: (value: string) => void;
@@ -446,6 +461,7 @@ function DayMacroView({
   onClear: () => void;
   onDelete: () => void;
   onEdit: (entry: MacroConfirmation) => void;
+  onCalculator: () => void;
 }) {
   const units = useMeasurementUnits();
   const unit = units.protein_g;
@@ -485,12 +501,15 @@ function DayMacroView({
         <View style={styles.actions}>
           <Button label={editingEntryId ? "Update" : "Add"} icon={editingEntryId ? "save" : "add-circle"} variant="primary" disabled={savePending || !entryName.trim()} onPress={onSave} />
           <Button label="Clear" icon="close" onPress={onClear} />
-          <Button label={recipeSaved ? "Recipe saved" : "Save as recipe"} icon="book-outline" disabled={recipeSaveDisabled} onPress={onSaveRecipe} />
+          <View style={styles.actions}><Button label={recipeSaved ? "Recipe saved" : "Save as recipe"} icon="book-outline" disabled={recipeSaveDisabled} onPress={onSaveRecipe} />
+            <Button label="" icon="calculator-outline" accessibilityLabel="Open macro calculator" onPress={onCalculator} /></View>
           {editingEntryId ? <Button label="Delete" icon="trash" variant="danger" disabled={deletePending} onPress={onDelete} /> : null}
         </View>
       </View>
 
       <View style={styles.entryList}>
+        {selectedEntries.some(entry => entry.temporary_nutrition) ? <NutritionAttribution /> : null}
+        {selectedEntries.some(entry => entry.nutrition_unavailable) ? <Text style={styles.error}>Some database nutrition is pending. Today's totals are incomplete.</Text> : null}
         <Text style={styles.subsection}>Logged on {selectedDate}</Text>
         {selectedEntries.length === 0 ? <Text style={styles.meta}>No macro entries for this date yet.</Text> : null}
         {selectedEntries.map((entry) => (

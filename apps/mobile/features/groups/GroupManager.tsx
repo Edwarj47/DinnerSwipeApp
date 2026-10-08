@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Image } from "expo-image";
-import { useRouter } from "expo-router";
 import qrcode from "qrcode-generator";
 import { useMemo, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, Share, StyleSheet, Text, TextInput, View } from "react-native";
@@ -10,13 +9,14 @@ import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
+import { openSettings } from "@/services/settingsMenu";
 import { Household, PremiumStatus } from "@/services/types";
 import { applyGroupChange } from "./groupAccess";
 import { GroupJoinForm } from "./GroupJoinForm";
+import { SpaceSelector } from "./SpaceSelector";
 
 export function GroupManager({ current }: { current?: Household }) {
   const client = useQueryClient();
-  const router = useRouter();
   const [action, setAction] = useState<"create" | "join" | "invite" | "leave" | null>(null);
   const [name, setName] = useState("");
   const [status, setStatus] = useTransientMessage();
@@ -57,7 +57,8 @@ export function GroupManager({ current }: { current?: Household }) {
     } catch { setStatus("Sharing was not completed. You can copy the invitation code below."); }
   }
   return <View style={styles.section}>
-    <View style={styles.heading}><Text style={styles.title}>Your spaces</Text><Text style={styles.meta}>{subscription.data?.premium_active ? "Premium" : "Basic"}</Text></View>
+    <View style={styles.heading}><Text style={styles.title}>Your groups</Text><Text style={styles.meta}>{subscription.data?.premium_active ? "Premium" : "Basic"}</Text></View>
+    <SpaceSelector label="Default group" purpose="default" />
     {groups.isLoading ? <Text style={styles.meta}>Loading groups...</Text> : null}
     {groups.isError ? <Button label="Retry groups" icon="refresh" onPress={() => { void groups.refetch(); }} /> : null}
     {groupList.map(group => <Pressable key={group.id} accessibilityRole="button" accessibilityLabel={`Switch to ${group.is_personal ? "My kitchen" : group.name}`} accessibilityState={{ selected: current?.id === group.id, disabled: busy }} disabled={busy || current?.id === group.id} onPress={() => switchGroup.mutate(group.id)} style={[styles.space, current?.id === group.id && styles.active]}>
@@ -77,7 +78,7 @@ export function GroupManager({ current }: { current?: Household }) {
         <View style={styles.heading}><Text style={styles.title}>{action === "leave" ? "Leave this group?" : action === "invite" ? "Invite to your group" : action === "create" ? "Create a group" : "Join a group"}</Text><Pressable accessibilityRole="button" accessibilityLabel="Close group dialog" disabled={busy} onPress={close} style={styles.close}><Ionicons name="close" size={24} color={Colors.ink} /></Pressable></View>
         {(action === "create" || action === "join") && full ? <>
           <Text style={styles.meta}>Basic includes a private kitchen and one shared group. Premium lets you create or join unlimited groups.</Text>
-          <Button label="View Premium" icon="star-outline" onPress={() => { close(); router.push({ pathname: "/profile", params: { section: "account" } }); }} />
+          <Button label="View Premium" icon="star-outline" onPress={() => { close(); openSettings({ section: "account", focus: "subscription" }); }} />
         </> : null}
         {action === "create" && !full ? <>
           <TextInput accessibilityLabel="Group name" placeholder="Group name" maxLength={120} value={name} onChangeText={setName} editable={!busy} style={styles.input} />

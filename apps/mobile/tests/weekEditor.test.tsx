@@ -15,7 +15,7 @@ jest.mock("@expo/vector-icons", () => ({ Ionicons: ({ name }: { name: string }) 
 jest.mock("expo-image", () => ({ Image: () => null }));
 jest.mock("expo-linking", () => ({ openURL: jest.fn() }));
 jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn() }), useLocalSearchParams: () => ({}) }));
-jest.mock("@/components/Screen", () => ({ Screen: jest.requireActual("react-native").View }));
+jest.mock("@/components/Screen", () => ({ Screen: ({ header, children }: { header: React.ReactNode; children: React.ReactNode }) => <>{header}{children}</> }));
 jest.mock("@/features/planner/WeekDrag", () => ({
   WeekDrag: jest.requireActual("react-native").View,
   WeekDropDay: jest.requireActual("react-native").View,

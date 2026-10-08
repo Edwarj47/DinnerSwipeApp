@@ -99,7 +99,8 @@ export function ManualRecipePanel({ initialDraft, initialRecipe, onSaved, onCanc
             return original?.text === text ? { ...original, step_number: index + 1 } : { text, step_number: index + 1 };
           }),
           source_type: editingOwned ? initialRecipe!.source_type : "manual",
-          nutrition: parseNutrition(nutrition, nutritionBasis === "recipe" ? Number(servings) : 1),
+          ...(!initialRecipe?.calculator_id ? { nutrition: parseNutrition(nutrition, nutritionBasis === "recipe" ? Number(servings) : 1) } : {}),
+          ...(!editingOwned && initialRecipe?.calculator_id ? { calculator_source_id: initialRecipe.calculator_id } : {}),
           accept_placeholder_photo: !photoUrl
         })
       });
@@ -185,10 +186,11 @@ export function ManualRecipePanel({ initialDraft, initialRecipe, onSaved, onCanc
       <TextInput accessibilityLabel="Ingredients" value={ingredients} onChangeText={setIngredients} placeholder="Ingredients, one per line" multiline style={[styles.input, styles.area]} />
       <Text style={styles.fieldLabel}>Instructions (optional)</Text>
       <TextInput accessibilityLabel="Instructions" value={instructions} onChangeText={setInstructions} placeholder="Instructions, one step per line" multiline style={[styles.input, styles.area]} />
-      <Text style={styles.title}>Nutrition (optional)</Text>
+      {!initialRecipe?.calculator_id ? <><Text style={styles.title}>Nutrition (optional)</Text>
       <SegmentedControl accessibilityLabel="Nutrition amounts" value={nutritionBasis} onChange={setNutritionBasis}
         options={[{ label: "Per serving", value: "serving" }, { label: "Whole recipe", value: "recipe" }]} />
       <NutritionFields value={nutrition} onChange={setNutrition} />
+      </> : null}
       <View style={styles.summary}>
         <Text style={styles.meta}>{ingredientRows.length} ingredient{ingredientRows.length === 1 ? "" : "s"} • {instructionRows.length} step{instructionRows.length === 1 ? "" : "s"}</Text>
         {!hasRequiredFields ? <Text style={styles.warning}>Enter a name and use 1-30 servings.</Text> : null}

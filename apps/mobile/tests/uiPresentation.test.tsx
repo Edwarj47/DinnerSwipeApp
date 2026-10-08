@@ -7,10 +7,27 @@ import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
+import { SettingsContext } from "@/features/settings/SettingsContext";
+import { addSettingsListener } from "@/services/settingsMenu";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: jest.requireActual("react-native").View }));
 jest.mock("@/components/OfflineStatusBar", () => ({ OfflineStatusBar: () => null }));
+
+test("settings stays in the fixed header outside scrolling content", () => {
+  const open = jest.fn();
+  const remove = addSettingsListener(open);
+  const screen = render(<SettingsContext.Provider value={{ open: false, close: jest.fn(), invitePremium: jest.fn() }}>
+    <Screen header={<Text>Recipes</Text>}><Text>Library</Text></Screen>
+  </SettingsContext.Provider>);
+  try {
+    const button = screen.getByLabelText("Open settings");
+    expect(StyleSheet.flatten(button.props.style)).toMatchObject({ width: 44, height: 44, borderRadius: 22 });
+    expect(screen.getByTestId("screen-scroll").findAll((node: { props: { accessibilityLabel?: string } }) => node.props.accessibilityLabel === "Open settings")).toHaveLength(0);
+    fireEvent.press(button);
+    expect(open).toHaveBeenCalledWith({});
+  } finally { remove(); screen.unmount(); }
+});
 
 test.each([
   ["secondary", Colors.ink, Colors.surface],

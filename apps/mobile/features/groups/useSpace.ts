@@ -4,7 +4,7 @@ import { Household } from "@/services/types";
 
 export function useSpace() {
   const query = useQuery<Household>({ queryKey: ["household"], queryFn: () => apiFetch<Household>("/api/v1/households/current"), refetchInterval: 30_000 });
-  const group = query.data;
+  const group: Household | undefined = query.data;
   const groupId = group?.id && !group.is_personal ? group.id : undefined;
   return {
     ...query, group, groupId, key: groupId ?? "personal", canManage: !query.isLoading && !query.isError && (!groupId || group?.current_user_role === "owner"),

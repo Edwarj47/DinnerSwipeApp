@@ -117,15 +117,14 @@ export default function RecipesScreen() {
   }
 
   return (
-    <Screen contentWidth={960}>
+    <Screen contentWidth={960} header={
       <View style={styles.header}>
-        <BrandLogo size={54} framed />
+        <BrandLogo size={44} framed />
         <View style={{ flex: 1 }}>
           <Text style={styles.kicker}>Dinner Swipe</Text>
           <Text style={styles.title}>Recipes</Text>
-          <Text style={styles.subtitle}>Save, import, and review meals before they hit Discover.</Text>
         </View>
-      </View>
+      </View>}>
       <TourTarget id="recipe-library"><SegmentedControl
         adaptive
         accessibilityLabel="Recipe sections"
@@ -240,7 +239,7 @@ export default function RecipesScreen() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", gap: 12, alignItems: "center", marginBottom: 12 },
+  header: { flexDirection: "row", gap: 10, alignItems: "center" },
   kicker: { color: Colors.basil, fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
   title: { color: Colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 },
   subtitle: { color: Colors.muted, lineHeight: 20 },

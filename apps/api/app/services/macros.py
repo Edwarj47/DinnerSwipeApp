@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
@@ -134,6 +135,11 @@ def create_confirmation(
     if entry_id:
         confirmation.id = entry_id
     db.add(confirmation)
+    db.flush()
+    if recipe:
+        from app.services.calculator import copy_recipe_calculation
+
+        copy_recipe_calculation(db, recipe, confirmation)
     db.commit() if commit else db.flush()
     db.refresh(confirmation)
     return confirmation
@@ -167,6 +173,12 @@ def update_macro_entry(
         raise HTTPException(status_code=404, detail="Macro entry not found")
 
     updates = payload.model_dump(exclude_unset=True)
+    from app.services.calculator import find_calculation, has_provider
+
+    calculation = find_calculation(db, entry_id=row.id)
+    linked = bool(calculation and has_provider(calculation))
+    if linked and any(key in updates for key in RecipeNutrition.model_fields):
+        raise HTTPException(422, "Edit database nutrition in the macro calculator.")
     for key in ("entry_name", "meal_label", "notes"):
         if key in updates:
             setattr(row, key, _clean_optional(updates[key]))
@@ -183,6 +195,10 @@ def update_macro_entry(
         for field in macro_fields:
             setattr(row, field, 0)
         row.macro_source = "skipped"
+    elif linked:
+        for field in macro_fields:
+            setattr(row, field, None)
+        row.macro_source = "calculator_reference"
     else:
         if row.servings_consumed != previous_servings:
             # Scale the logged snapshot; later recipe edits must not rewrite food history.
@@ -205,6 +221,7 @@ def update_macro_entry(
     _validate_totals({field: getattr(row, field) for field in macro_fields})
     db.commit() if commit else db.flush()
     db.refresh(row)
+    row._calculator_checked = False
     return row
 
 
@@ -220,6 +237,11 @@ def delete_macro_entry(db: Session, user: User, entry_id: str, *, commit: bool =
     )
     if not row:
         raise HTTPException(status_code=404, detail="Macro entry not found")
+    from app.services.calculator import find_calculation
+
+    calculation = find_calculation(db, entry_id=row.id)
+    if calculation:
+        db.delete(calculation)
     db.delete(row)
     db.commit() if commit else db.flush()
 
@@ -252,6 +274,10 @@ def macro_summary(
         "active": active,
         "targets": serialize_targets(target),
         "totals": totals,
+        "temporary_nutrition": any(getattr(row, "_temporary_nutrition", False) for row in rows),
+        "nutrition_unavailable_count": sum(
+            bool(getattr(row, "_nutrition_unavailable", False)) for row in rows
+        ),
         "eaten_meals": sum(1 for row in rows if row.status == "ate"),
         "skipped_meals": sum(1 for row in rows if row.status == "skipped"),
         "unmatched_meals": sum(1 for row in rows if row.macro_source == "unmatched_recipe"),
@@ -266,6 +292,8 @@ def macro_analytics(
     start_date: date | None = None,
     end_date: date | None = None,
     all_time: bool = False,
+    *,
+    hydrate: bool = True,
 ) -> dict[str, Any]:
     require_premium(db, user)
     if all_time:
@@ -282,7 +310,7 @@ def macro_analytics(
     else:
         window_start, window_end, bounded_days = _date_window(days, start_date, end_date)
     target = db.scalar(select(MacroProfileTarget).where(MacroProfileTarget.user_id == user.id))
-    rows = _rows_for_window(db, user, window_start, window_end)
+    rows = _rows_for_window(db, user, window_start, window_end, hydrate=hydrate)
     totals = _macro_totals(rows)
     daily_totals = _daily_totals(rows, window_start, window_end, include_empty=not all_time)
     days_logged = sum(1 for item in daily_totals if item["entry_count"] > 0)
@@ -293,6 +321,10 @@ def macro_analytics(
         "start_date": window_start,
         "end_date": window_end,
         "totals": totals,
+        "temporary_nutrition": any(getattr(row, "_temporary_nutrition", False) for row in rows),
+        "nutrition_unavailable_count": sum(
+            bool(getattr(row, "_nutrition_unavailable", False)) for row in rows
+        ),
         "averages": averages,
         "targets": serialize_targets(target),
         "days_logged": days_logged,
@@ -312,18 +344,32 @@ def macro_export(
     end_date: date | None = None,
     all_time: bool = False,
 ) -> dict[str, Any]:
-    analytics = macro_analytics(db, user, days, start_date, end_date, all_time)
-    rows = _rows_for_window(db, user, analytics["start_date"], analytics["end_date"])
+    analytics = macro_analytics(db, user, days, start_date, end_date, all_time, hydrate=False)
+    rows = _rows_for_window(db, user, analytics["start_date"], analytics["end_date"], hydrate=False)
     return {
         "exported_at": datetime.now(UTC),
         "export_format_version": "2026-09-07",
         "days": analytics["days"],
         "analytics": analytics,
-        "entries": [serialize_confirmation(db, row) for row in rows],
+        "entries": [serialize_confirmation(db, row, hydrate=False) for row in rows],
+        "nutrition_references": [
+            {
+                "entry_id": row.id,
+                "servings_consumed": row.servings_consumed,
+                "items": calculation.items,
+                "servings": calculation.servings,
+            }
+            for row in rows
+            if (calculation := _entry_calculation(db, row)) is not None
+        ],
     }
 
 
-def serialize_confirmation(db: Session, row: MealMacroConfirmation) -> dict[str, Any]:
+def serialize_confirmation(
+    db: Session, row: MealMacroConfirmation, *, hydrate: bool = True
+) -> dict[str, Any]:
+    if hydrate and not getattr(row, "_calculator_checked", False):
+        _hydrate_entry(db, row)
     recipe = db.get(Recipe, row.recipe_id) if row.recipe_id else None
     return {
         "id": row.id,
@@ -336,11 +382,15 @@ def serialize_confirmation(db: Session, row: MealMacroConfirmation) -> dict[str,
         "meal_date": row.meal_date,
         "status": row.status,
         "servings_consumed": row.servings_consumed,
-        "calories": row.calories,
-        "protein_g": row.protein_g,
-        "carbs_g": row.carbs_g,
-        "fat_g": row.fat_g,
-        "fiber_g": row.fiber_g,
+        **{
+            field: _macro_value(row, field) if hydrate else getattr(row, field)
+            for field in RecipeNutrition.model_fields
+        },
+        "calculator_id": getattr(row, "_calculator_id", None)
+        if hydrate
+        else (calculation.id if (calculation := _entry_calculation(db, row)) else None),
+        "temporary_nutrition": getattr(row, "_temporary_nutrition", False) if hydrate else False,
+        "nutrition_unavailable": getattr(row, "_nutrition_unavailable", False),
         "macro_source": row.macro_source,
         "notes": row.notes,
         "created_at": row.created_at,
@@ -365,6 +415,13 @@ def _confirmation_macros(
         return manual, "manual" if any(
             v is not None for v in manual.values()
         ) else "unmatched_recipe"
+    from app.services.calculator import find_calculation, has_provider
+
+    calculation = find_calculation(db, recipe_id=recipe.id)
+    if calculation and has_provider(calculation):
+        if any(value is not None for value in manual.values()):
+            raise HTTPException(422, "Database recipes use refreshed nutrition, not copied totals.")
+        return dict.fromkeys(manual), "calculator_reference"
     profile = db.scalar(select(RecipeMacroProfile).where(RecipeMacroProfile.recipe_id == recipe.id))
     if not profile or all(getattr(profile, f"{field}_per_serving") is None for field in manual):
         return manual, "manual" if any(
@@ -404,7 +461,42 @@ def _scaled(value: float | None, scale: float) -> float | None:
 
 
 def _sum_macro(rows: Sequence[MealMacroConfirmation], attr: str) -> float:
-    return round(sum(float(getattr(row, attr) or 0) for row in rows), 2)
+    return round(sum(float(_macro_value(row, attr) or 0) for row in rows), 2)
+
+
+def _macro_value(row: MealMacroConfirmation, attr: str) -> float | None:
+    values = row._calculator_values
+    return (
+        values[attr]
+        if values is not None
+        else float(value)
+        if (value := getattr(row, attr)) is not None
+        else None
+    )
+
+
+def _entry_calculation(db: Session, row: MealMacroConfirmation) -> Any:
+    from app.services.calculator import find_calculation
+
+    return find_calculation(db, entry_id=row.id)
+
+
+def _hydrate_entry(db: Session, row: MealMacroConfirmation, deadline: float | None = None) -> None:
+    from app.services.calculator import has_provider, resolve
+
+    row._calculator_checked = True
+    calculation = _entry_calculation(db, row)
+    row._calculator_id = calculation.id if calculation else None
+    row._temporary_nutrition = bool(calculation and has_provider(calculation))
+    row._nutrition_unavailable = False
+    row._calculator_values = None
+    if calculation and has_provider(calculation) and row.status == "ate":
+        # These attributes are deliberately unmapped: autoflush must never persist API values.
+        values, unavailable = resolve(
+            calculation, scale=row.servings_consumed / calculation.servings, deadline=deadline
+        )
+        row._calculator_values = values
+        row._nutrition_unavailable = unavailable
 
 
 def _macro_totals(rows: Sequence[MealMacroConfirmation]) -> dict[str, float]:
@@ -418,9 +510,9 @@ def _macro_totals(rows: Sequence[MealMacroConfirmation]) -> dict[str, float]:
 
 
 def _rows_for_window(
-    db: Session, user: User, start_date: date, end_date: date
+    db: Session, user: User, start_date: date, end_date: date, *, hydrate: bool = True
 ) -> list[MealMacroConfirmation]:
-    return list(
+    rows = list(
         db.scalars(
             select(MealMacroConfirmation)
             .where(
@@ -434,6 +526,15 @@ def _rows_for_window(
             )
         ).all()
     )
+    if hydrate:
+        deadline = time.monotonic() + 8
+        for row in rows:
+            _hydrate_entry(db, row, deadline)
+    else:
+        for row in rows:
+            row._calculator_values = None
+            row._temporary_nutrition = False
+    return rows
 
 
 def _date_window(
@@ -484,6 +585,9 @@ def _daily_totals(
                 "eaten_meals": sum(1 for row in day_rows if row.status == "ate"),
                 "skipped_meals": sum(1 for row in day_rows if row.status == "skipped"),
                 "entry_count": len(day_rows),
+                "nutrition_unavailable_count": sum(
+                    bool(getattr(row, "_nutrition_unavailable", False)) for row in day_rows
+                ),
             }
         )
     return totals

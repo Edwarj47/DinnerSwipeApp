@@ -116,6 +116,7 @@ def _apply(payload: OfflineEdit, db: DbDep, user: BasicUser) -> dict[str, object
                 commit=False,
                 entry_id=str(payload.operation_id),
             ),
+            hydrate=False,
         )
     if not payload.target_id or not payload.revision:
         raise HTTPException(422, "Download this item before editing it offline.")
@@ -160,4 +161,5 @@ def _apply(payload: OfflineEdit, db: DbDep, user: BasicUser) -> dict[str, object
             MacroEntryUpdate.model_validate(payload.values),
             commit=False,
         ),
+        hydrate=False,
     )

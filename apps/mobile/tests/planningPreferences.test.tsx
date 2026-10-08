@@ -10,7 +10,7 @@ jest.mock("expo-image", () => ({ Image: () => null }));
 jest.mock("expo-linking", () => ({ openURL: jest.fn() }));
 jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn() }), useLocalSearchParams: () => ({}) }));
 jest.mock("@/components/BrandLogo", () => ({ BrandLogo: () => null }));
-jest.mock("@/components/Screen", () => ({ Screen: jest.requireActual("react-native").View }));
+jest.mock("@/components/Screen", () => ({ Screen: ({ header, children }: { header: React.ReactNode; children: React.ReactNode }) => <>{header}{children}</> }));
 jest.mock("@/features/planner/WeekDrag", () => ({
   WeekDrag: jest.requireActual("react-native").View,
   WeekDropDay: jest.requireActual("react-native").View,
@@ -62,7 +62,7 @@ test("reset confirmation defaults on for existing accounts", async () => {
   } finally { screen.close(); }
 }, 20_000);
 
-test.each([['Reset Monday', '2026-09-28'], ['Reset', null]])("disabled warning resets the correct scope: %s", async (button, date) => {
+test.each([['Reset Monday', '2026-09-28'], ['Reset week', null]])("disabled warning resets the correct scope: %s", async (button, date) => {
   confirmation = false;
   const screen = mount(<WeekScreen />);
   try {

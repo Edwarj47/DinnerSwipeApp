@@ -211,6 +211,9 @@ class MacroEntryUpdate(ApiModel):
 
 
 class MealMacroConfirmationOut(ApiModel):
+    calculator_id: str | None = None
+    temporary_nutrition: bool = False
+    nutrition_unavailable: bool = False
     revision: str
     id: str
     recipe_id: str | None
@@ -232,6 +235,8 @@ class MealMacroConfirmationOut(ApiModel):
 
 
 class MacroSummary(ApiModel):
+    temporary_nutrition: bool = False
+    nutrition_unavailable_count: int = 0
     days: int
     start_date: date
     end_date: date
@@ -245,6 +250,7 @@ class MacroSummary(ApiModel):
 
 
 class MacroDayTotal(ApiModel):
+    nutrition_unavailable_count: int = 0
     meal_date: date
     calories: float
     protein_g: float
@@ -257,6 +263,8 @@ class MacroDayTotal(ApiModel):
 
 
 class MacroAnalytics(ApiModel):
+    temporary_nutrition: bool = False
+    nutrition_unavailable_count: int = 0
     days: int
     start_date: date
     end_date: date
@@ -272,6 +280,7 @@ class MacroAnalytics(ApiModel):
 
 
 class MacroExport(ApiModel):
+    nutrition_references: list[dict[str, Any]] = Field(default_factory=list)
     exported_at: datetime
     export_format_version: str = "2026-09-07"
     days: int
@@ -311,6 +320,7 @@ class RecipeNutrition(ApiModel):
 
 
 class RecipeCreate(ApiModel):
+    calculator_source_id: str | None = Field(default=None, min_length=36, max_length=36)
     name: str = Field(min_length=2, max_length=240)
     description: str | None = None
     photo_url: str | None = None
@@ -354,6 +364,7 @@ class RecipeCreate(ApiModel):
 
 
 class RecipeOut(ApiModel):
+    calculator_id: str | None = None
     id: str
     name: str
     description: str | None
@@ -511,10 +522,22 @@ class UrlApprovalRequest(ApiModel):
     edits: RecipeCreate | None = None
 
 
+class ProfileIdentityUpdate(ApiModel):
+    display_name: str = Field(default="", max_length=100)
+
+
+class HouseholdOwnerOut(ApiModel):
+    id: str
+    email: str
+    name: str | None = None
+
+
 class HouseholdOut(ApiModel):
     id: str
     name: str
     is_personal: bool = False
+    is_default: bool = False
+    owner: HouseholdOwnerOut | None = None
     invite_code: str
     allergen_filter_mode: Literal["off", "warn", "block"] = "warn"
     dislike_filter_mode: Literal["off", "warn", "block"] = "warn"

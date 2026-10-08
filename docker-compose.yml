@@ -23,6 +23,8 @@ services:
     container_name: dinner-swipe-api
     env_file:
       - .env
+      - path: .env.fatsecret
+        required: false
     environment:
       DATABASE_URL: postgresql+psycopg://dinner_swipe_app:${DINNER_SWIPE_POSTGRES_PASSWORD:-change-me-dev-only}@dinner-swipe-postgres:5432/dinner_swipe
     depends_on:

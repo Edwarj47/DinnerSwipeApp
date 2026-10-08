@@ -11,12 +11,12 @@ import { GroupManager } from "./GroupManager";
 import { GroupPlanningPanel } from "./GroupPlanningPanel";
 import { useSpace } from "./useSpace";
 
-export function HouseholdPanel() {
+export function HouseholdPanel({ initialView }: { initialView?: "choices" } = {}) {
   const space = useSpace();
-  return <HouseholdContent key={space.key} household={space.group} />;
+  return <HouseholdContent key={space.key} household={space.group} initialView={initialView} />;
 }
 
-function HouseholdContent({ household }: { household?: Household }) {
+function HouseholdContent({ household, initialView }: { household?: Household; initialView?: "choices" }) {
   const client = useQueryClient();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState<Household["members"][number] | null>(null);
@@ -30,7 +30,7 @@ function HouseholdContent({ household }: { household?: Household }) {
     <GroupManager current={household} />
     {household?.id && !household.is_personal ? <>
       <Text style={styles.title}>{household.name}</Text>
-      <GroupPlanningPanel household={household} />
+      <GroupPlanningPanel household={household} initialView={initialView} />
       {owner ? <Button label={settingsOpen ? "Close group settings" : "Group settings"} icon="settings-outline" onPress={() => setSettingsOpen(!settingsOpen)} /> : null}
       {owner && settingsOpen ? <View style={styles.settings}>
         <Text style={styles.heading}>Group safety</Text>

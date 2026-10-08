@@ -58,6 +58,7 @@ from app.services.email_auth import (
     reset_password,
     verify_email_token,
 )
+from app.services.groups import restore_default_household
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -116,6 +117,7 @@ def login(payload: LoginRequest, request: Request, db: DbDep) -> TokenPair:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
         )
+    restore_default_household(db, user)
     refresh_token = issue_refresh_token(db, user, request)
     db.commit()
     return TokenPair(access_token=create_access_token(user.id), refresh_token=refresh_token)

@@ -7,7 +7,13 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbDep
 from app.models.entities import UserProfile
-from app.schemas.common import OnboardingUpdate, ProfileUpdate, WeeklyPlanningUpdate
+from app.schemas.common import (
+    OnboardingUpdate,
+    ProfileIdentityUpdate,
+    ProfileUpdate,
+    WeeklyPlanningUpdate,
+)
+from app.services.account_preferences import DEFAULT_GROUP_KEY, DISPLAY_NAME_KEY, display_name
 from app.services.planning import (
     CURSOR_KEY,
     SETTINGS_KEY,
@@ -24,6 +30,7 @@ def get_profile(current_user: CurrentUser) -> dict[str, object]:
     profile = current_user.profile
     return {
         "email": current_user.email,
+        "display_name": display_name(current_user),
         "household_size": profile.household_size,
         "weekly_meal_target": profile.weekly_meal_target,
         "max_cook_minutes": profile.max_cook_minutes,
@@ -63,6 +70,8 @@ def update_profile(
                 COMPLETED_FEEDBACK_KEY,
                 SETTINGS_KEY,
                 CURSOR_KEY,
+                DEFAULT_GROUP_KEY,
+                DISPLAY_NAME_KEY,
             ):
                 stored = (profile.notification_preferences or {}).get(protected)
                 if stored is not None:
@@ -70,6 +79,25 @@ def update_profile(
                 else:
                     value.pop(protected, None)
         setattr(profile, key, value)
+    db.commit()
+    return get_profile(current_user)
+
+
+@router.patch("/identity")
+def update_identity(
+    payload: ProfileIdentityUpdate, db: DbDep, current_user: CurrentUser
+) -> dict[str, object]:
+    profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == current_user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    assert profile is not None
+    profile.notification_preferences = {
+        **(profile.notification_preferences or {}),
+        DISPLAY_NAME_KEY: payload.display_name.strip(),
+    }
     db.commit()
     return get_profile(current_user)
 

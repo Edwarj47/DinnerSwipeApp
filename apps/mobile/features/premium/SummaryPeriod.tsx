@@ -14,12 +14,13 @@ export function summaryDays(value: unknown): number | null {
   return Number.isInteger(days) && days >= 1 && days <= MAX_SUMMARY_DAYS ? days : null;
 }
 
-export function SummaryPeriod({ days, onChange, disabled = false }: {
-  days: number; onChange: (days: number) => void; disabled?: boolean;
+export function SummaryPeriod({ days, onChange, disabled = false, maxDays = MAX_SUMMARY_DAYS }: {
+  days: number; onChange: (days: number) => void; disabled?: boolean; maxDays?: number;
 }) {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState(String(days));
-  const value = summaryDays(input);
+  const parsed = summaryDays(input);
+  const value = parsed !== null && parsed <= maxDays ? parsed : null;
   const label = days === 1 ? "Today" : `Last ${days} days`;
   return <>
     <Pressable accessibilityRole="button" accessibilityLabel={`Summary period: ${label}`} accessibilityState={{ expanded: open, disabled }} disabled={disabled}
@@ -39,7 +40,7 @@ export function SummaryPeriod({ days, onChange, disabled = false }: {
           <Text style={styles.help}>Choose how many days to show, including today. Enter 1 for today only.</Text>
           <TextInput accessibilityLabel="Summary days" value={input} onChangeText={setInput} keyboardType="number-pad"
             inputMode="numeric" selectTextOnFocus style={styles.input} />
-          {value === null ? <Text accessibilityRole="alert" style={styles.error}>Enter a whole number from 1 to {MAX_SUMMARY_DAYS}.</Text> : null}
+          {value === null ? <Text accessibilityRole="alert" style={styles.error}>Enter a whole number from 1 to {maxDays}.</Text> : null}
           <Button label="Apply" accessibilityLabel="Apply summary period" icon="checkmark" variant="primary" disabled={disabled || value === null}
             onPress={() => { if (value !== null) { if (value !== days) onChange(value); setOpen(false); } }} />
         </View>

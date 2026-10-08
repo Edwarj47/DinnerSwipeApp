@@ -1,6 +1,7 @@
 import * as SecureStore from "expo-secure-store";
 import { Platform } from "react-native";
 import * as Crypto from "expo-crypto";
+import { expireNutrition, hasTemporaryNutrition } from "./temporaryNutrition";
 import { clearPlanningReminders } from "./planningReminders";
 import { MacroConfirmation, PremiumStatus } from "./types";
 import { cacheable, changeOffline, deviceOffline, findMacro, loadOffline, macroAfter, offlineAccess, offlineOwner,
@@ -223,7 +224,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
       await remember(owner, data => { data.subscription = result as PremiumStatus; data.verifiedAt = Date.now(); });
     } else if (owner && method === "GET" && cacheable(path)) {
       await remember(owner, data => {
-        data.cache[path] = { data: result, at: Date.now() };
+        data.cache[path] = { data: hasTemporaryNutrition(result) ? expireNutrition(result) : result, at: Date.now() };
         if (path === "/api/v1/households" && Array.isArray(result)) {
           const allowed = new Set((result as { id: string }[]).map(group => group.id));
           for (const key of Object.keys(data.cache)) {
@@ -292,10 +293,10 @@ async function request(path: string, init: RequestInit): Promise<Response> {
   init.signal?.addEventListener("abort", abort);
   if (init.signal?.aborted) abort();
   const slowAction = init.body instanceof FormData || path.includes("ingestion") || path.includes("ai-recipes");
-  const timer = setTimeout(abort, slowAction ? 120000 : 12000);
+  const timer = setTimeout(abort, slowAction ? 120000 : path.includes("/nutrition/") ? 30000 : 12000);
   try {
     const response = await fetch(`${API_URL}${path}`, { ...init, signal: controller.signal });
-    if (response.status >= 500 || response.status === 408 || response.status === 429) throw new ConnectionError("Unable to reach Dinner Swipe. Your saved work is still on this device.");
+    if (!path.includes("/nutrition/") && (response.status >= 500 || response.status === 408 || response.status === 429)) throw new ConnectionError("Unable to reach Dinner Swipe. Your saved work is still on this device.");
     return response;
   } catch (error) {
     if (init.signal?.aborted) throw error;
@@ -333,6 +334,7 @@ function makeOfflineEdit(path: string, init: RequestInit, data: Awaited<ReturnTy
   if (/^\/api\/v1\/macros\/entries\/[^/]+$/.test(path) && (method === "PUT" || method === "DELETE")) {
     const target_id = path.split("/").pop()!;
     const row = findMacro(data, target_id);
+    if (row?.calculator_id) return null;
     if (!row?.revision) throw new Error("Reconnect to download this macro entry before editing.");
     if (values.meal_date && values.meal_date !== row.meal_date) readOffline(data, `/api/v1/macros/entries?start_date=${values.meal_date}&end_date=${values.meal_date}`);
     return { operation_id, kind: method === "DELETE" ? "macro_delete" : "macro_update", target_id,

@@ -1,7 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import * as ImagePicker from "expo-image-picker";
-import ProfileScreen from "@/app/(tabs)/profile";
+import { UserSettingsPanel } from "@/features/settings/UserSettingsPanel";
 import { AiRecipePanel } from "@/features/recipes/AiRecipePanel";
 import { ManualRecipePanel } from "@/features/recipes/ManualRecipePanel";
 import { RecipePhotoPicker } from "@/features/recipes/RecipePhotoPicker";
@@ -44,23 +44,45 @@ function mount(element: React.ReactElement) {
   const screen = render(<QueryClientProvider client={client}>{element}</QueryClientProvider>);
   return { ...screen, close: () => { screen.unmount(); client.clear(); } };
 }
-test("Account owns subscription and coupon codes; Basic cannot open macro controls", async () => {
-  const screen = mount(<ProfileScreen />);
+test("Account settings retain subscription, coupon codes, and collapsed settings groups", async () => {
+  const screen = mount(<UserSettingsPanel />);
   try {
+    expect(screen.queryByText("tester@example.com")).toBeNull();
+    expect(screen.queryByLabelText("Default servings")).toBeNull();
+    fireEvent.press(screen.getByLabelText("Expand Account"));
     await screen.findByText("tester@example.com");
     expect(screen.getByText("Subscription")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Expand Subscription"));
     expect(screen.getByText("Coupon code")).toBeTruthy();
-    expect(screen.getByText("Account Settings")).toBeTruthy();
     expect(screen.getByText("Planning")).toBeTruthy();
     expect(screen.getByText("Device security")).toBeTruthy();
     expect(screen.getByLabelText("App version")).toBeTruthy();
     expect(screen.queryByText("Account tools")).toBeNull();
-    fireEvent.press(screen.getByText("Macro Tracker"));
-    await screen.findByText("Available with Premium.");
-    expect(screen.queryByText("Coupon code")).toBeNull();
     expect(request.mock.calls.some(([path]) => path.includes("/macros/"))).toBe(false);
-    fireEvent.press(screen.getByLabelText("View subscription"));
-    expect(screen.getByText("Coupon code")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Expand Meals"));
+    expect(screen.getByLabelText("Default servings")).toBeTruthy();
+    expect(screen.queryByText("Coupon code")).toBeNull();
+  } finally { screen.close(); }
+});
+test("an optional account name saves independently and refreshes owner metadata", async () => {
+  const current = { household_size: 2, allergens: [], disliked_ingredients: [], notification_preferences: {}, display_name: "" };
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init) => {
+    if (path === "/api/v1/profile/identity") {
+      current.display_name = JSON.parse(String(init?.body)).display_name;
+      return { ...current };
+    }
+    if (path === "/api/v1/profile") return { ...current };
+    return original(path, init);
+  });
+  const screen = mount(<UserSettingsPanel initialSection="account" />);
+  try {
+    const input = await screen.findByLabelText("Display name");
+    fireEvent.changeText(input, " Alex ");
+    fireEvent.press(screen.getByLabelText("Save name"));
+    await screen.findByText("Name saved.");
+    expect(request).toHaveBeenCalledWith("/api/v1/profile/identity", { method: "PATCH", body: JSON.stringify({ display_name: "Alex" }) });
+    expect(screen.getByLabelText("Display name").props.value).toBe("Alex");
   } finally { screen.close(); }
 });
 test("Manual form has no prefilled samples and camera permission is handled", async () => {

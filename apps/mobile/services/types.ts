@@ -27,6 +27,7 @@ export type RecipeNutrition = {
 export type CouponResult = { message: string; subscription?: PremiumStatus | null; checkout_url?: string | null };
 
 export type Recipe = {
+  calculator_id?: string | null;
   id: string;
   name: string;
   description?: string | null;
@@ -62,6 +63,8 @@ export type Household = {
   id: string;
   name: string;
   is_personal: boolean;
+  is_default?: boolean;
+  owner?: { id: string; email: string; name: string | null } | null;
   invite_code: string;
   allergen_filter_mode: SafetyFilterMode;
   dislike_filter_mode: SafetyFilterMode;
@@ -114,6 +117,7 @@ export type WeeklyPlanningSettings = {
 
 export type UserProfile = {
   email: string;
+  display_name?: string | null;
   household_size: number;
   weekly_meal_target: number;
   max_cook_minutes: number | null;
@@ -182,6 +186,9 @@ export type MacroTarget = {
 };
 
 export type MacroConfirmation = {
+  calculator_id?: string | null;
+  temporary_nutrition?: boolean;
+  nutrition_unavailable?: boolean;
   revision?: string;
   id: string;
   recipe_id?: string | null;
@@ -203,6 +210,8 @@ export type MacroConfirmation = {
 };
 
 export type MacroSummary = {
+  temporary_nutrition?: boolean;
+  nutrition_unavailable_count?: number;
   days: number;
   start_date: string;
   end_date: string;
@@ -216,6 +225,7 @@ export type MacroSummary = {
 };
 
 export type MacroDayTotal = {
+  nutrition_unavailable_count?: number;
   meal_date: string;
   calories: number;
   protein_g: number;
@@ -228,6 +238,8 @@ export type MacroDayTotal = {
 };
 
 export type MacroAnalytics = {
+  temporary_nutrition?: boolean;
+  nutrition_unavailable_count?: number;
   days: number;
   start_date: string;
   end_date: string;

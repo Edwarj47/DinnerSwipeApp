@@ -1,5 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { StyleProp, StyleSheet, ViewStyle } from "react-native";
 import DiscoverScreen from "@/app/(tabs)/index";
 import WeekScreen from "@/app/(tabs)/week";
 import { GroupPlanningPanel } from "@/features/groups/GroupPlanningPanel";
@@ -12,7 +13,7 @@ jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-image", () => ({ Image: () => null }));
 jest.mock("expo-router", () => ({ useLocalSearchParams: () => ({}), useRouter: () => ({ push: jest.fn() }), useFocusEffect: () => undefined }));
 jest.mock("@/services/api", () => ({ apiFetch: jest.fn() }));
-jest.mock("@/components/Screen", () => ({ Screen: jest.requireActual("react-native").View }));
+jest.mock("@/components/Screen", () => ({ Screen: ({ header, children }: { header: React.ReactNode; children: React.ReactNode }) => <>{header}{children}</> }));
 jest.mock("@/features/recipes/RecipeDetailSheet", () => ({ RecipeDetailSheet: () => null }));
 jest.mock("@/features/groups/GroupRecipeSharing", () => ({ GroupRecipeSharing: () => null }));
 jest.mock("@/features/recipes/RecipePicker", () => ({ RecipePicker: () => null }));
@@ -110,9 +111,73 @@ test("kitchen selector searches and persists the selected kitchen through the ex
   try {
     fireEvent.press(await screen.findByLabelText("Swiping for: Family"));
     await screen.findByText("My Kitchen");
-    fireEvent.changeText(screen.getByLabelText("Search kitchens"), "my");
+    expect(screen.getByText("Choose a group")).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText("Search groups"), "my");
     fireEvent.press(screen.getByRole("radio", { name: "My Kitchen" }));
     await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/households/kitchen/switch", { method: "POST" }));
+  } finally { screen.close(); }
+});
+
+test("Profile default picker keeps the default separate from the active group", async () => {
+  const defaults = [{ ...group, is_default: true }, { ...group, id: "kitchen", name: "My Kitchen", is_personal: true, is_default: false }];
+  selected = defaults[1];
+  request.mockImplementation(async (path) => {
+    if (path === "/api/v1/households/current") return selected;
+    if (path === "/api/v1/households") return defaults;
+    if (path.endsWith("/kitchen/default")) {
+      defaults[0].is_default = false;
+      defaults[1].is_default = true;
+      return defaults[1];
+    }
+    return {};
+  });
+  const screen = mount(<SpaceSelector label="Default group" purpose="default" />);
+  try {
+    fireEvent.press(await screen.findByLabelText("Default group: Family"));
+    expect(screen.getByRole("radio", { name: "Family" }).props.accessibilityState.checked).toBe(true);
+    fireEvent.press(screen.getByRole("radio", { name: "My Kitchen" }));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/households/kitchen/default", { method: "POST" }));
+  } finally { screen.close(); }
+});
+
+test.each(["owner", "member"])("empty group Discover shows owner details and a reachable picker for %s", async role => {
+  selected = { ...group, current_user_role: role, owner: { id: "owner", email: "owner@example.com", name: "Alex" } };
+  request.mockImplementation(async path => {
+    if (path === "/api/v1/households/current") return selected;
+    if (path === "/api/v1/households") return [selected];
+    if (path.includes("/library")) return { items: [], total: 0 };
+    if (path.includes("weekly-plans")) return { ...plan, slots: [] };
+    return {};
+  });
+  const screen = mount(<DiscoverScreen />);
+  try {
+    await screen.findByText("No recipes selected yet");
+    expect(screen.getByText("Group owner: Alex")).toBeTruthy();
+    expect(screen.getByText("owner@example.com")).toBeTruthy();
+    const target = screen.getByTestId("tour-target-discover");
+    expect(StyleSheet.flatten(target.props.style).flexGrow).toBe(1);
+    const wrappers: { props: { style?: StyleProp<ViewStyle> } }[] = target.findAllByType(jest.requireActual("react-native").View);
+    expect(wrappers.some(view => view !== target && StyleSheet.flatten(view.props.style)?.flexGrow === 1)).toBe(true);
+    expect(Boolean(screen.queryByLabelText("Choose recipes"))).toBe(role === "owner");
+    fireEvent.press(screen.getByLabelText("Swiping for: Family"));
+    await screen.findByText("Choose a group");
+    expect(screen.getByLabelText("Search groups")).toBeTruthy();
+  } finally { screen.close(); }
+});
+
+test("empty group never invents an owner's name and retains the email from legacy metadata", async () => {
+  selected = { ...group, members: [{ id: "owner", role: "owner", email: "owner@example.com" }] };
+  request.mockImplementation(async path => {
+    if (path === "/api/v1/households/current") return selected;
+    if (path.includes("/library")) return { items: [], total: 0 };
+    if (path.includes("weekly-plans")) return { ...plan, slots: [] };
+    return {};
+  });
+  const screen = mount(<DiscoverScreen />);
+  try {
+    await screen.findByText("No recipes selected yet");
+    expect(screen.getByText("Group owner")).toBeTruthy();
+    expect(screen.getByText("owner@example.com")).toBeTruthy();
   } finally { screen.close(); }
 });
 

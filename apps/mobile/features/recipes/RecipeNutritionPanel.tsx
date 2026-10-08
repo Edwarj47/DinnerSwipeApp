@@ -10,6 +10,9 @@ import { RecipeMacroLogger } from "./RecipeMacroLogger";
 import { NUTRIENTS, nutritionInputs, parseNutrition } from "./recipeNutrition";
 import { convertWeight, formatWeight } from "@/services/weightUnits";
 import { useMeasurementUnits } from "@/services/measurementPreferences";
+import { MacroCalculator } from "@/features/premium/MacroCalculator";
+import { Calculation } from "@/features/premium/calculator";
+import { NutritionAttribution } from "@/features/premium/NutritionAttribution";
 
 export function RecipeNutritionPanel({ recipe, onUpdated }: { recipe: Recipe; onUpdated?: (recipe: Recipe) => void }) {
   const units = useMeasurementUnits();
@@ -19,9 +22,19 @@ export function RecipeNutritionPanel({ recipe, onUpdated }: { recipe: Recipe; on
   const [current, setCurrent] = useState(recipe);
   const [editing, setEditing] = useState(false);
   const [logging, setLogging] = useState(false);
+  const [calculator, setCalculator] = useState(false);
   const [fields, setFields] = useState(nutritionInputs(recipe.nutrition));
   useEffect(() => { setCurrent(recipe); setFields(nutritionInputs(recipe.nutrition)); }, [recipe]);
   const subscription = useQuery({ queryKey: ["subscription-status"], queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status") });
+  const calculated = useQuery({ queryKey: ["nutrition-calculation", recipe.calculator_id],
+    queryFn: () => apiFetch<Calculation>(`/api/v1/nutrition/calculations/${recipe.calculator_id}`),
+    enabled: !!recipe.calculator_id && !!(subscription.data?.premium_active ?? subscription.data?.active), retry: false });
+  const values = calculated.data ? Object.fromEntries(NUTRIENTS.map(([field]) => [field,
+    calculated.data.totals[field] == null ? null : calculated.data.totals[field]! / calculated.data.servings])) as Recipe["nutrition"] : current.nutrition;
+  const reloadRecipe = useMutation({
+    mutationFn: () => apiFetch<Recipe>(`/api/v1/recipes/${recipe.id}`),
+    onSuccess: updated => { setCurrent(updated); onUpdated?.(updated); }
+  });
   const save = useMutation({
     mutationFn: () => apiFetch<Recipe>(`/api/v1/recipes/${recipe.id}/nutrition`, { method: "PUT", body: JSON.stringify(parseNutrition(fields)) }),
     onSuccess: async updated => { setCurrent(updated); setEditing(false); onUpdated?.(updated); await client.invalidateQueries({ queryKey: ["recipes"] }); }
@@ -35,15 +48,21 @@ export function RecipeNutritionPanel({ recipe, onUpdated }: { recipe: Recipe; on
     </> : <>
       <View style={styles.values}>{NUTRIENTS.map(([key, label]) => <View key={key} style={[styles.value, valueSize]}>
         <Text style={styles.label}>{key === "calories" ? label : label.replace("(g)", `(${units[key]})`)}</Text>
-        <Text style={styles.number}>{current.nutrition?.[key] == null ? "Not entered" : key === "calories" ? current.nutrition[key] : formatWeight(convertWeight(current.nutrition[key]!, "g", units[key])!, units[key])}</Text>
+        <Text style={styles.number}>{values?.[key] == null ? recipe.calculator_id ? "Pending" : "Not entered" : key === "calories" ? values[key] : formatWeight(convertWeight(values[key]!, "g", units[key])!, units[key])}</Text>
       </View>)}</View>
       <View style={styles.actions}>
-        {recipe.can_edit ? <Button label="Edit nutrition" icon="create-outline" onPress={() => { setFields(nutritionInputs(current.nutrition)); setEditing(true); }} /> : null}
+        {recipe.can_edit ? <Button label="Edit nutrition" icon="create-outline" onPress={() => {
+          if (recipe.calculator_id) setCalculator(true); else { setFields(nutritionInputs(current.nutrition)); setEditing(true); }
+        }} /> : null}
         {(subscription.data?.premium_active ?? subscription.data?.active) && !recipe.is_archived ? <Button label="Log meal" icon="add-circle-outline" variant="primary" onPress={() => setLogging(true)} /> : null}
       </View>
     </>}
+    {calculated.data?.temporary_nutrition ? <NutritionAttribution /> : null}
+    {calculated.isError || calculated.data?.nutrition_unavailable ? <Text style={styles.error}>Database nutrition is temporarily unavailable.</Text> : null}
     {save.isError ? <Text accessibilityRole="alert" style={styles.error}>{save.error instanceof Error ? save.error.message : "Unable to save nutrition."}</Text> : null}
+    {reloadRecipe.isError ? <Text accessibilityRole="alert" style={styles.error}>Recipe saved. Reopen it to refresh the details.</Text> : null}
     {logging ? <RecipeMacroLogger recipe={current} onClose={() => setLogging(false)} /> : null}
+    {calculator && recipe.calculator_id ? <MacroCalculator calculationId={recipe.calculator_id} onClose={() => setCalculator(false)} onSaved={() => { void calculated.refetch(); reloadRecipe.mutate(); }} /> : null}
   </View>;
 }
 const styles = StyleSheet.create({

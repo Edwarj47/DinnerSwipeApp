@@ -3,7 +3,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -61,6 +61,14 @@ class Settings(BaseSettings):
     basic_waiver_codes: str = ""
     premium_waiver_codes: str = ""
     access_coupon_grants: dict[str, AccessCoupon] = Field(default_factory=dict)
+    fatsecret_enabled: bool = False
+    fatsecret_client_id: SecretStr = SecretStr("")
+    fatsecret_client_secret: SecretStr = SecretStr("")
+    fatsecret_daily_budget: int = Field(default=1000, ge=1, le=4000)
+    fatsecret_background_budget: int = Field(default=100, ge=0, le=500)
+    fatsecret_min_interval_seconds: float = Field(default=1, ge=0.5, le=60)
+    fatsecret_cache_seconds: int = Field(default=82800, ge=1, le=82800)
+    fatsecret_refresh_enabled: bool = False
 
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
@@ -72,6 +80,14 @@ class Settings(BaseSettings):
     @property
     def allowed_origin_list(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def fatsecret_configured(self) -> bool:
+        return bool(
+            self.fatsecret_enabled
+            and self.fatsecret_client_id.get_secret_value()
+            and self.fatsecret_client_secret.get_secret_value()
+        )
 
     @property
     def smtp_configured(self) -> bool:

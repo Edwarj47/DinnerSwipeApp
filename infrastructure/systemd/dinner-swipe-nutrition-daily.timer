@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Dinner Swipe nutrition maintenance at 4:15 AM Eastern
+
+[Timer]
+OnCalendar=*-*-* 04:15:00 America/New_York
+Persistent=true
+RandomizedDelaySec=5min
+Unit=dinner-swipe-nutrition-daily.service
+
+[Install]
+WantedBy=timers.target

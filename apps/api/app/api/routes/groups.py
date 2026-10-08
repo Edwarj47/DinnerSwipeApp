@@ -28,6 +28,7 @@ from app.services.groups import (
     record_weekly_vote,
     rotate_invite,
     serialize_household,
+    set_default_household,
     share_recipe,
     share_recipes,
     switch_household,
@@ -68,6 +69,11 @@ def switch_group(household_id: str, db: DbDep, current_user: BasicUser) -> dict[
 @router.post("/{household_id}/leave", response_model=HouseholdOut)
 def leave_group(household_id: str, db: DbDep, current_user: BasicUser) -> dict[str, object]:
     return leave_household(db, current_user, household_id)
+
+
+@router.post("/{household_id}/default", response_model=HouseholdOut)
+def set_default_group(household_id: str, db: DbDep, current_user: BasicUser) -> dict[str, object]:
+    return set_default_household(db, current_user, household_id)
 
 
 @router.post("/{household_id}/rotate-invite", response_model=HouseholdOut)

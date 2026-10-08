@@ -331,6 +331,12 @@ class MealSwipe(Base, TimestampMixin):
 
 class MealMacroConfirmation(Base, TimestampMixin):
     __tablename__ = "meal_macro_confirmations"
+    __allow_unmapped__ = True
+    _calculator_checked: bool = False
+    _calculator_id: str | None = None
+    _calculator_values: dict[str, float | None] | None = None
+    _temporary_nutrition: bool = False
+    _nutrition_unavailable: bool = False
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     recipe_id: Mapped[str | None] = mapped_column(

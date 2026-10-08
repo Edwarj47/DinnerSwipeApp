@@ -1,5 +1,9 @@
 export const privacySections = [
   {
+    title: "Food Database Lookups",
+    body: "When you search the nutrition database, Dinner Swipe sends your search through our server to fatsecret. Database names, serving descriptions and nutrition are temporary, not stored as permanent copies. Saved calculations retain food and serving identifiers, your labels and portions, and any manually entered nutrition. Database values are refreshed for display and are unavailable offline."
+  },
+  {
     title: "Information We Collect",
     body:
       "Dinner Swipe may collect account information, profile preferences, household and group membership, recipe data you create or import, recipe URLs you submit, uploaded photos, weekly meal plans, grocery list items, pantry exclusions, and support communications. We record meal choices (plan, favorite, skip, and hide), when they happen, and when a plan is undone to provide weekly picks and understand product usage. These choices are included in your account data export."
@@ -52,6 +56,10 @@ export const privacySections = [
 ];
 
 export const termsSections = [
+  {
+    title: "fatsecret Nutrition Database",
+    body: "By using Dinner Swipe's fatsecret food database features, you agree to be bound by the fatsecret Platform API Terms of Use at https://platform.fatsecret.com/terms. Nutrition is provided for factual tracking only, not as health advice or a substitute for medical consultation, evaluation or treatment. Values may change when refreshed; review product labels for accuracy. Database values are temporary and are excluded from permanent offline copies and exports."
+  },
   {
     title: "Use Of Dinner Swipe",
     body:

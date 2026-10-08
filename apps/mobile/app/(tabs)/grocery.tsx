@@ -128,16 +128,16 @@ function GroceryContent() {
     }
   });
   const error = [loadError, regen.error, patchItem.error, deleteItem.error, addManual.error, deletePantry.error].find(Boolean);
-  if (space.isLoading || space.isError) return <Screen contentWidth={960}><Text style={styles.title}>Grocery List</Text><Text style={styles.subtitle}>{space.isError ? "Couldn't load your kitchen." : "Loading your kitchen..."}</Text>{space.isError ? <Button label="Retry kitchen" icon="refresh" onPress={() => { void space.refetch(); }} /> : null}</Screen>;
+  if (space.isLoading || space.isError) return <Screen contentWidth={960} header={<Text style={styles.title}>Grocery List</Text>}><Text style={styles.subtitle}>{space.isError ? "Couldn't load your kitchen." : "Loading your kitchen..."}</Text>{space.isError ? <Button label="Retry kitchen" icon="refresh" onPress={() => { void space.refetch(); }} /> : null}</Screen>;
   return (
-    <Screen contentWidth={960}>
+    <Screen contentWidth={960} header={
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Grocery List</Text>
           <Text style={styles.subtitle}>{itemsLeft} left to grab • {data?.retailer_display_name ?? "Walmart"} links</Text>
         </View>
-        <Button label="Regenerate" icon="sync" onPress={() => regen.mutate()} />
-      </View>
+        <Button label="" accessibilityLabel="Regenerate groceries" icon="sync" onPress={() => regen.mutate()} />
+      </View>}>
       <SpaceSelector label="Shopping for" />
       {status ? <Text style={styles.status}>{status}</Text> : null}
       {error ? <Text accessibilityRole="alert" style={{ color: Colors.danger, marginBottom: 10 }}>{error.message}</Text> : null}
@@ -276,7 +276,7 @@ function retailerUrl(item: GroceryItem) {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", flexWrap: "wrap", gap: 8, justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  header: { flexDirection: "row", gap: 8, justifyContent: "space-between", alignItems: "center" },
   title: { fontSize: 28, fontWeight: "900", color: Colors.ink },
   subtitle: { color: Colors.muted },
   status: { color: Colors.basil, fontWeight: "800", marginBottom: 8 },

@@ -13,7 +13,7 @@ import { GRAMS_PER_OUNCE } from "@/services/weightUnits";
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-image", () => ({ Image: () => null }));
 jest.mock("expo-router", () => ({ useLocalSearchParams: () => ({ mode: "review" }) }));
-jest.mock("@/components/Screen", () => ({ Screen: jest.requireActual("react-native").View }));
+jest.mock("@/components/Screen", () => ({ Screen: ({ header, children }: { header: React.ReactNode; children: React.ReactNode }) => <>{header}{children}</> }));
 jest.mock("@/components/BrandLogo", () => ({ BrandLogo: () => null }));
 jest.mock("@/features/onboarding/TourTarget", () => ({ TourTarget: jest.requireActual("react-native").View }));
 jest.mock("@/features/recipes/RecipePhotoPicker", () => ({ RecipePhotoPicker: () => null }));

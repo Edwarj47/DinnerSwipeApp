@@ -1,7 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Linking from "expo-linking";
-import { useRouter } from "expo-router";
 import { useMemo, useState } from "react";
 import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, ViewStyle } from "react-native";
 
@@ -10,6 +9,7 @@ import { useTransientMessage } from "@/components/useTransientMessage";
 import { Screen } from "@/components/Screen";
 import { Colors } from "@/components/theme";
 import { apiFetch as remoteFetch } from "@/services/api";
+import { openSettings } from "@/services/settingsMenu";
 import { useSpace } from "@/features/groups/useSpace";
 import { SpaceSelector } from "@/features/groups/SpaceSelector";
 import { PremiumStatus, UserProfile, WeeklyPlan } from "@/services/types";
@@ -36,7 +36,6 @@ function WeekContent() {
   const space = useSpace();
   const apiFetch = <T,>(path: string, init?: RequestInit) => init ? remoteFetch<T>(space.path(path), init) : remoteFetch<T>(space.path(path));
   const [portion, setPortion] = useState(1);
-  const router = useRouter();
   const { width, fontScale } = useWindowDimensions();
   const compact = width < 360 || (width < 480 && fontScale > 1.2);
   const queryClient = useQueryClient();
@@ -189,27 +188,27 @@ function WeekContent() {
   }
 
   return (
-    <Screen scroll={false} contentWidth={960}>
+    <Screen scroll={false} contentWidth={960} header={
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>This Week</Text>
           <Text style={styles.subtitle}>{isLoading ? "Loading plan..." : `${plannedCount} ${plannedCount === 1 ? "meal" : "meals"} planned`}</Text>
         </View>
-        {space.canManage ? <Button label="Reset" icon="refresh" disabled={!data || busy} onPress={() => requestReset({ date: null, label: "This week" })} /> : null}
-      </View>
+        {space.canManage ? <Button label="" accessibilityLabel="Reset week" icon="refresh" disabled={!data || busy} onPress={() => requestReset({ date: null, label: "This week" })} /> : null}
+      </View>}>
       <SpaceSelector />
       {status ? <Text accessibilityLiveRegion="polite" accessibilityRole={statusIsError ? "alert" : undefined} style={[styles.status, statusIsError && styles.error]}>{status}</Text> : null}
       {error ? <Button label="Retry loading week" icon="refresh" onPress={() => { void refetch(); }} /> : null}
       {!premiumActive ? (
         <View style={styles.premiumBanner}>
           <View style={{ flex: 1 }}>
-            <Text style={styles.premiumTitle}>Premium macro tracking is managed from Profile.</Text>
+            <Text style={styles.premiumTitle}>Macro tracking is available with Premium.</Text>
             <Text style={styles.premiumNote}>
               Upgrade when you want meal confirmations, macro targets, and weekly nutrition totals.
             </Text>
           </View>
           <Button
-            label={premiumCheckoutReady ? "Subscribe" : "Profile"}
+            label={premiumCheckoutReady ? "Subscribe" : "Premium"}
             icon={premiumCheckoutReady ? "card" : "person-circle"}
             variant="primary"
             disabled={startPremiumCheckout.isPending}
@@ -218,7 +217,7 @@ function WeekContent() {
                 startPremiumCheckout.mutate();
                 return;
               }
-              router.push({ pathname: "/profile", params: { section: "account" } });
+              openSettings({ section: "account", focus: "subscription" });
             }}
           />
         </View>
@@ -373,7 +372,7 @@ function slotLabel(type: WeeklySlot["slot_type"]) {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 12 },
+  header: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { fontSize: 28, fontWeight: "900", color: Colors.ink },
   subtitle: { color: Colors.muted },
   status: { color: Colors.basil, fontWeight: "800", marginBottom: 8 },

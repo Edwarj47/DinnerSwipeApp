@@ -6,7 +6,7 @@ import { Colors, shadow } from "@/components/theme";
 import { TourScrollContext, useGuidedTour } from "./TourContext";
 
 // In-flow callouts never cover a control or capture its gestures.
-export function TourTarget({ id, children }: { id: string; children: ReactNode }) {
+export function TourTarget({ id, children, fill = false }: { id: string; children: ReactNode; fill?: boolean }) {
   const tour = useGuidedTour();
   const reveal = useContext(TourScrollContext);
   const node = useRef<View>(null);
@@ -18,7 +18,7 @@ export function TourTarget({ id, children }: { id: string; children: ReactNode }
     const timer = setTimeout(() => { if (node.current) reveal?.(node.current); }, 100);
     return () => clearTimeout(timer);
   }, [active, expanded, tour?.visit, tour?.step.title, reveal]);
-  return <View ref={node} collapsable={false} testID={`tour-target-${id}`} onLayout={() => { if (expanded && node.current) reveal?.(node.current); }}>
+  return <View ref={node} collapsable={false} testID={`tour-target-${id}`} style={fill ? styles.fill : undefined} onLayout={() => { if (expanded && node.current) reveal?.(node.current); }}>
     {expanded ? <View style={styles.callout} testID="tour-callout">
       <View style={styles.heading}><Ionicons name="compass-outline" size={20} color={Colors.basil} />
         <Text accessibilityRole="header" style={styles.title}>{tour.step.title}</Text></View>
@@ -29,10 +29,11 @@ export function TourTarget({ id, children }: { id: string; children: ReactNode }
       </View>
       <View pointerEvents="none" style={styles.pointer} />
     </View> : null}
-    <View>{children}{active ? <View testID="tour-highlight" pointerEvents="none" style={styles.highlight} /> : null}</View>
+    <View style={fill ? styles.fill : undefined}>{children}{active ? <View testID="tour-highlight" pointerEvents="none" style={styles.highlight} /> : null}</View>
   </View>;
 }
 const styles = StyleSheet.create({
+  fill: { flexGrow: 1 },
   callout: { marginVertical: 10, backgroundColor: Colors.surface, padding: 14, borderRadius: 8, borderColor: Colors.basil, borderWidth: 1, gap: 10, ...shadow },
   heading: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { flex: 1, color: Colors.ink, fontSize: 17, fontWeight: "800", lineHeight: 22 },

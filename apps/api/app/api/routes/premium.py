@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Header, Query, Request
+from fastapi import APIRouter, Depends, Header, Query, Request, Response
 
 from app.api.deps import CurrentUser, DbDep
 from app.schemas.common import (
@@ -49,7 +49,12 @@ from app.services.macros import (
     update_targets,
 )
 
-router = APIRouter(tags=["premium"])
+
+def private_response(response: Response) -> None:
+    response.headers["Cache-Control"] = "no-store"
+
+
+router = APIRouter(tags=["premium"], dependencies=[Depends(private_response)])
 
 
 @router.post("/subscription/coupon-code", response_model=CouponResult)

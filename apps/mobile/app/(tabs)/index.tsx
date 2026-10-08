@@ -13,6 +13,7 @@ import { TourTarget } from "@/features/onboarding/TourTarget";
 import { useGuidedTour } from "@/features/onboarding/TourContext";
 import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
 import { apiFetch } from "@/services/api";
+import { openSettings } from "@/services/settingsMenu";
 import { Recipe, WeeklyPlan } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { shuffleRecipes } from "@/features/discover/deck";
@@ -29,13 +30,13 @@ function DiscoverContent() {
   const space = useSpace();
   const { height, fontScale } = useWindowDimensions();
   const [viewportHeight, setViewportHeight] = useState(height - 64);
-  const [headerHeight, setHeaderHeight] = useState(46);
   const [selectorHeight, setSelectorHeight] = useState(76);
   const [cardBodyHeight, setCardBodyHeight] = useState(200);
   const [statusHeight, setStatusHeight] = useState(0);
-  const cardHeight = viewportHeight - headerHeight - selectorHeight - statusHeight - 42;
+  const cardHeight = viewportHeight - selectorHeight - statusHeight - 42;
   const accessibleLayout = height < 720 || fontScale > 1.2 || cardBodyHeight + 120 > cardHeight;
   const tour = useGuidedTour();
+  const scroll = Platform.OS === "web" || accessibleLayout || Boolean(tour?.expanded && tour.step.id === "discover");
   const router = useRouter();
   const params = useLocalSearchParams<{ replace_slot_id?: string; replace_name?: string }>();
   const queryClient = useQueryClient();
@@ -107,6 +108,8 @@ function DiscoverContent() {
   const progressText = isReplacingSlot ? `Replacing ${replaceName}` : `${plannedCount} ${plannedCount === 1 ? "meal" : "meals"} planned`;
   const lastAction = history[history.length - 1];
   const canUndoPlannedMeal = !isReplacingSlot && lastAction?.action === "add" && !!lastAction.requestId && !undoPlannedMeal.isPending && !swipe.isPending;
+  const owner = space.group?.owner ?? space.group?.members?.find(member => member.role === "owner");
+  const ownerName = owner && "name" in owner ? owner.name : null;
 
   const headline = useMemo(
     () => (isReplacingSlot ? "Pick replacement" : "Find dinners"),
@@ -138,8 +141,8 @@ function DiscoverContent() {
   }
 
   return (
-    <Screen contentWidth={960} scroll={Platform.OS === "web" || accessibleLayout || Boolean(tour?.expanded && tour.step.id === "discover")} onViewportLayout={setViewportHeight}>
-      <View style={styles.header} onLayout={event => setHeaderHeight(event.nativeEvent.layout.height)}>
+    <Screen contentWidth={960} scroll={scroll} onViewportLayout={setViewportHeight} header={
+      <View style={styles.header}>
         <View style={styles.brand}>
           <BrandLogo size={46} />
           <View style={styles.brandText}>
@@ -161,9 +164,9 @@ function DiscoverContent() {
             }}
           />
         ) : null}
-      </View>
+      </View>}>
       {status ? <Text style={styles.status} onLayout={event => setStatusHeight(event.nativeEvent.layout.height)}>{status}</Text> : null}
-      <TourTarget id="discover">
+      <TourTarget id="discover" fill>
       {space.isLoading || isLoading || plan.isLoading ? (
         <View style={styles.empty}>
           <ActivityIndicator color={Colors.tomato} />
@@ -176,7 +179,15 @@ function DiscoverContent() {
           <Button label={isFetching || plan.isFetching ? "Trying again..." : "Try again"} icon="refresh" disabled={isFetching || plan.isFetching} onPress={() => { if (space.isError) { void space.refetch(); } else { void refetch(); void plan.refetch(); } }} />
         </View>
       ) : recipes.length === 0 && space.groupId ? (
-        <View style={styles.empty}><BrandLogo size={72} framed /><Text style={styles.done}>No Discover choices yet</Text><Text style={styles.emptyCopy}>{space.canManage ? "Choose recipes for this group." : "The owner hasn't enabled any recipes yet."}</Text>{space.canManage ? <Button label="Choose recipes" icon="options-outline" onPress={() => router.push("/profile?section=group&group_view=choices")} /> : null}</View>
+        <View style={styles.empty}>
+          <View style={styles.emptyCard} testID="group-discover-empty">
+            <BrandLogo size={56} framed />
+            <Text style={styles.done}>No recipes selected yet</Text>
+            <Text style={styles.emptyCopy}>The group owner hasn't selected any recipes for Discover.</Text>
+            {owner ? <View style={styles.owner}><Text style={styles.ownerLabel}>Group owner{ownerName ? `: ${ownerName}` : ""}</Text><Text selectable style={styles.ownerEmail}>{owner.email}</Text></View> : null}
+            {space.canManage ? <Button label="Choose recipes" icon="options-outline" onPress={() => openSettings({ tab: "group", groupView: "choices" })} /> : null}
+          </View>
+        </View>
       ) : recipes.length === 0 ? (
         <View style={styles.empty}>
           <BrandLogo size={72} framed />
@@ -211,13 +222,17 @@ function DiscoverContent() {
 }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12, gap: 8 },
+  header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 6 },
   brand: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 },
   brandText: { flex: 1, minWidth: 0 },
   eyebrow: { color: Colors.basil, fontWeight: "800", textTransform: "uppercase", fontSize: 12 },
   title: { color: Colors.ink, fontSize: 28, fontWeight: "900" },
   status: { color: Colors.basil, fontWeight: "800", marginBottom: 8 },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 14 },
+  empty: { flexGrow: 1, flexShrink: 0, minHeight: 260, paddingVertical: 20, alignItems: "center", justifyContent: "center", gap: 14 },
+  emptyCard: { width: "100%", maxWidth: 440, alignItems: "center", gap: 14, padding: 20, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, borderRadius: 8 },
+  owner: { alignItems: "center", gap: 4, width: "100%" },
+  ownerLabel: { color: Colors.ink, fontWeight: "700", textAlign: "center", alignSelf: "stretch" },
+  ownerEmail: { color: Colors.muted, textAlign: "center", alignSelf: "stretch" },
   emptyCopy: { color: Colors.muted, textAlign: "center", lineHeight: 22, maxWidth: 360 },
   emptyActions: { width: "100%", maxWidth: 320, gap: 10 },
   done: { fontSize: 22, fontWeight: "800", color: Colors.ink, textAlign: "center" },
