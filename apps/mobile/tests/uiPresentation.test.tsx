@@ -22,6 +22,7 @@ test("settings stays in the fixed header outside scrolling content", () => {
   </SettingsContext.Provider>);
   try {
     const button = screen.getByLabelText("Open settings");
+    expect(StyleSheet.flatten(screen.getByTestId("screen-header").props.style)).toMatchObject({ flexDirection: "row", alignItems: "center" });
     expect(StyleSheet.flatten(button.props.style)).toMatchObject({ width: 44, height: 44, borderRadius: 22 });
     expect(screen.getByTestId("screen-scroll").findAll((node: { props: { accessibilityLabel?: string } }) => node.props.accessibilityLabel === "Open settings")).toHaveLength(0);
     fireEvent.press(button);

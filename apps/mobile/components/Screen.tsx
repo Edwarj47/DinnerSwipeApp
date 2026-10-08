@@ -41,6 +41,6 @@ const styles = StyleSheet.create({
   root: { flex: 1, minHeight: 0, backgroundColor: Colors.background },
   scroll: { flex: 1, minHeight: 0 },
   content: { flexGrow: 1, paddingHorizontal: 18, paddingTop: 14, paddingBottom: 96 },
-  header: { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 2 },
+  header: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 18, paddingTop: 10, paddingBottom: 2 },
   headerContent: { flex: 1, minWidth: 0 }
 });

@@ -22,7 +22,7 @@ function HouseholdContent({ household, initialView }: { household?: Household; i
   const [transferTarget, setTransferTarget] = useState<Household["members"][number] | null>(null);
   const [status, setStatus] = useTransientMessage();
   const update = useMutation({ mutationFn: (payload: { allergen_filter_mode: SafetyFilterMode; dislike_filter_mode: SafetyFilterMode }) => apiFetch(`/api/v1/households/${household?.id}/settings`, { method: "PATCH", body: JSON.stringify(payload) }),
-    onSuccess: async () => { setStatus("Group settings saved."); await client.invalidateQueries(); } });
+    onSuccess: async () => { setStatus("Group safety settings saved."); await client.invalidateQueries(); } });
   const transfer = useMutation({ mutationFn: (id: string) => apiFetch(`/api/v1/households/${household?.id}/transfer-owner`, { method: "POST", body: JSON.stringify({ user_id: id }) }),
     onSuccess: async () => { setTransferTarget(null); setSettingsOpen(false); await client.invalidateQueries(); } });
   const owner = household?.current_user_role === "owner";
@@ -31,9 +31,9 @@ function HouseholdContent({ household, initialView }: { household?: Household; i
     {household?.id && !household.is_personal ? <>
       <Text style={styles.title}>{household.name}</Text>
       <GroupPlanningPanel household={household} initialView={initialView} />
-      {owner ? <Button label={settingsOpen ? "Close group settings" : "Group settings"} icon="settings-outline" onPress={() => setSettingsOpen(!settingsOpen)} /> : null}
+      {owner ? <Button label={settingsOpen ? "Close group safety settings" : "Group safety settings"} icon="warning-outline" onPress={() => setSettingsOpen(!settingsOpen)} /> : null}
       {owner && settingsOpen ? <View style={styles.settings}>
-        <Text style={styles.heading}>Group safety</Text>
+        <Text style={styles.heading}>Group safety settings</Text>
         {(["allergen_filter_mode", "dislike_filter_mode"] as const).map(field => <View key={field} style={styles.settings}>
           <Text style={styles.label}>{field === "allergen_filter_mode" ? "Allergens" : "Dislikes"}</Text>
           <SegmentedControl accessibilityLabel={field === "allergen_filter_mode" ? "Allergens" : "Dislikes"} value={household[field]} disabled={update.isPending}
