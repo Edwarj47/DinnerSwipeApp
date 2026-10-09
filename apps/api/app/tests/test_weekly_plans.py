@@ -352,12 +352,13 @@ def test_copy_meal_preserves_portions_without_copying_logs_or_swipe_history(
     )
     db_session.add(log)
     db_session.commit()
-    before_groceries = client.get(
-        "/api/v1/grocery-lists/current", headers=auth_headers
-    ).json()["items"]
+    before_groceries = client.get("/api/v1/grocery-lists/current", headers=auth_headers).json()[
+        "items"
+    ]
     destination = (
         str(date.fromisoformat(plan["week_start"]) + timedelta(days=day_offset))
-        if day_offset is not None else None
+        if day_offset is not None
+        else None
     )
     copied = client.post(
         "/api/v1/weekly-plans/current/slots",
@@ -367,7 +368,14 @@ def test_copy_meal_preserves_portions_without_copying_logs_or_swipe_history(
     assert copied.status_code == 200
     meals = [slot for slot in copied.json()["slots"] if slot["recipe_id"]]
     assert len(meals) == 2
-    assert next(slot for slot in meals if slot["id"] == source["id"]) == source
+    original = next(slot for slot in meals if slot["id"] == source["id"])
+    assert {key: value for key, value in original.items() if key != "recipe_photo_url"} == {
+        key: value for key, value in source.items() if key != "recipe_photo_url"
+    }
+    assert (
+        original["recipe_photo_url"].split("&token=")[0]
+        == source["recipe_photo_url"].split("&token=")[0]
+    )
     copy = next(slot for slot in meals if slot["id"] != source["id"])
     assert copy["recipe_id"] == recipe["id"]
     assert copy["slot_date"] == destination and copy["servings"] == 3
@@ -376,9 +384,9 @@ def test_copy_meal_preserves_portions_without_copying_logs_or_swipe_history(
     db_session.refresh(log)
     assert log.weekly_plan_slot_id == source["id"] and log.calories == 600
     assert db_session.query(MealSwipe).count() == 1
-    after_groceries = client.get(
-        "/api/v1/grocery-lists/current", headers=auth_headers
-    ).json()["items"]
+    after_groceries = client.get("/api/v1/grocery-lists/current", headers=auth_headers).json()[
+        "items"
+    ]
     assert len(before_groceries) == len(after_groceries) == 1
     assert after_groceries[0]["quantity"] == pytest.approx(before_groceries[0]["quantity"] * 2)
 
@@ -391,7 +399,9 @@ def test_copy_meal_rejects_invalid_portions_dates_and_inaccessible_recipes(
     recipe, plan, _ = add_meal(client, auth_headers)
     invalid_date = str(date.fromisoformat(plan["week_start"]) + timedelta(days=7))
     invalid_changes: list[dict[str, Any]] = [
-        {"servings": 0}, {"servings": 31}, {"slot_date": invalid_date}
+        {"servings": 0},
+        {"servings": 31},
+        {"slot_date": invalid_date},
     ]
     for change in invalid_changes:
         response = client.post(
@@ -400,24 +410,39 @@ def test_copy_meal_rejects_invalid_portions_dates_and_inaccessible_recipes(
             json={"recipe_id": recipe["id"], "servings": 2, **change},
         )
         assert response.status_code == 422
-    assert client.post(
-        "/api/v1/weekly-plans/current/slots", json={"recipe_id": recipe["id"], "servings": 2}
-    ).status_code == 401
+    assert (
+        client.post(
+            "/api/v1/weekly-plans/current/slots", json={"recipe_id": recipe["id"], "servings": 2}
+        ).status_code
+        == 401
+    )
     other = client.post(
         "/api/v1/auth/register",
         json={
-            "email": "other-copier@example.com", "password": "fixture-password",
-            "terms_accepted": True, "privacy_accepted": True,
+            "email": "other-copier@example.com",
+            "password": "fixture-password",
+            "terms_accepted": True,
+            "privacy_accepted": True,
         },
     ).json()
     grant_basic_access("other-copier@example.com")
-    assert client.post(
-        "/api/v1/weekly-plans/current/slots",
-        headers={"Authorization": f"Bearer {other['access_token']}"},
-        json={"recipe_id": recipe["id"], "servings": 2},
-    ).status_code == 404
+    assert (
+        client.post(
+            "/api/v1/weekly-plans/current/slots",
+            headers={"Authorization": f"Bearer {other['access_token']}"},
+            json={"recipe_id": recipe["id"], "servings": 2},
+        ).status_code
+        == 404
+    )
     after = client.get("/api/v1/weekly-plans/current", headers=auth_headers).json()
-    assert after["slots"] == plan["slots"]
+    # Delivery tokens rotate, but the underlying photo and plan must remain unchanged.
+    for returned, original in zip(after["slots"], plan["slots"], strict=True):
+        assert {key: value for key, value in returned.items() if key != "recipe_photo_url"} == {
+            key: value for key, value in original.items() if key != "recipe_photo_url"
+        }
+        assert (returned["recipe_photo_url"] or "").split("&token=")[0] == (
+            original["recipe_photo_url"] or ""
+        ).split("&token=")[0]
 
 
 def test_weekly_ate_skipped_and_remove_preserve_distinct_analytics(
@@ -428,9 +453,12 @@ def test_weekly_ate_skipped_and_remove_preserve_distinct_analytics(
     subscription.plan_key = PREMIUM_PLAN_KEY
     db_session.commit()
     payload = {
-        "recipe_id": recipe["id"], "weekly_plan_slot_id": slot["id"],
-        "meal_date": plan["week_start"], "servings_consumed": slot["servings"],
-        "calories": 500, "protein_g": 30,
+        "recipe_id": recipe["id"],
+        "weekly_plan_slot_id": slot["id"],
+        "meal_date": plan["week_start"],
+        "servings_consumed": slot["servings"],
+        "calories": 500,
+        "protein_g": 30,
     }
     ate = client.post(
         "/api/v1/macros/confirmations", headers=auth_headers, json={**payload, "status": "ate"}

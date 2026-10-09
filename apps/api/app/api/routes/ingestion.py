@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import timedelta
+from typing import cast
 
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
@@ -8,6 +9,7 @@ from sqlalchemy import func, select
 from app.api.deps import BasicUser, DbDep
 from app.models.entities import UrlIngestionCandidate
 from app.schemas.common import UrlApprovalRequest, UrlIngestRequest
+from app.services.private_media import photo_url
 from app.services.url_ingestion import (
     RECYCLED_CANDIDATE_STATUSES,
     URL_CANDIDATE_RECYCLE_DAYS,
@@ -41,7 +43,13 @@ def get_candidate(candidate_id: str, db: DbDep, current_user: BasicUser) -> dict
     candidate = db.get(UrlIngestionCandidate, candidate_id)
     if not candidate or candidate.user_id != current_user.id:
         return {"status": "not_found"}
-    return serialize_candidate(candidate)
+    result = serialize_candidate(candidate)
+    extracted = dict(candidate.extracted_data)
+    extracted["photo_url"] = photo_url(
+        db, current_user, "drafts", candidate.id, cast(str | None, extracted.get("photo_url"))
+    )
+    result["extracted_data"] = extracted
+    return result
 
 
 @router.get("")
@@ -57,7 +65,8 @@ def list_candidates(
                 UrlIngestionCandidate.rejected_at,
                 UrlIngestionCandidate.updated_at,
                 UrlIngestionCandidate.created_at,
-            ) > cutoff,
+            )
+            > cutoff,
         )
     else:
         query = query.where(UrlIngestionCandidate.status.notin_(RECYCLED_CANDIDATE_STATUSES))

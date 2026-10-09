@@ -24,8 +24,8 @@ from app.schemas.common import (
     RecipeOut,
     SwipeRequest,
 )
-from app.services.media_storage import get_media_storage
 from app.services.planning import planning_settings, week_bounds
+from app.services.private_media import canonical_photo, object_url, photo_url, store_image
 from app.services.recipes import (
     accessible_recipes_query,
     clear_plan_slot,
@@ -114,26 +114,23 @@ def create_recipe_route(
 
 
 @router.post("/photo-upload")
-async def upload_recipe_photo(file: UploadFile, current_user: BasicUser) -> dict[str, str]:
+async def upload_recipe_photo(
+    file: UploadFile, current_user: BasicUser, db: DbDep
+) -> dict[str, str]:
     suffix = ALLOWED_IMAGE_TYPES.get(file.content_type or "")
     if not suffix:
         raise HTTPException(status_code=400, detail="Only JPEG, PNG, and WebP images are supported")
     data = await file.read(settings.max_image_upload_size_bytes + 1)
     if len(data) > settings.max_image_upload_size_bytes:
         raise HTTPException(status_code=413, detail="Image is too large")
-    if suffix == ".jpg" and not data.startswith(b"\xff\xd8\xff"):
-        raise HTTPException(status_code=400, detail="Invalid JPEG image")
-    if suffix == ".png" and not data.startswith(b"\x89PNG\r\n\x1a\n"):
-        raise HTTPException(status_code=400, detail="Invalid PNG image")
-    if suffix == ".webp" and not (data.startswith(b"RIFF") and data[8:12] == b"WEBP"):
-        raise HTTPException(status_code=400, detail="Invalid WebP image")
-    stored = get_media_storage().save_recipe_image(
-        user_id=current_user.id,
-        data=data,
-        suffix=suffix,
-        content_type=file.content_type or "application/octet-stream",
-    )
-    return {"photo_url": stored.url, "image_status": "validated", "storage_backend": stored.backend}
+    from starlette.concurrency import run_in_threadpool
+
+    stored = await run_in_threadpool(store_image, db, current_user, data)
+    return {
+        "photo_url": photo_url(db, current_user, "objects", stored.id, object_url(stored.id)) or "",
+        "image_status": "validated",
+        "storage_backend": stored.backend,
+    }
 
 
 @router.put("/feedback-preferences", response_model=list[RecipeOut])
@@ -176,9 +173,9 @@ async def update_recipe_photo(
     recipe = db.get(Recipe, recipe_id)
     if not recipe or recipe.owner_user_id != current_user.id:
         raise HTTPException(404, "Recipe not found")
-    stored = await upload_recipe_photo(file, current_user)
-    recipe.photo_url = stored["photo_url"]
-    recipe.photo_source_url = stored["photo_url"]
+    stored = await upload_recipe_photo(file, current_user, db)
+    recipe.photo_url = canonical_photo(db, current_user, stored["photo_url"])
+    recipe.photo_source_url = recipe.photo_url
     recipe.image_status = "validated"
     recipe.validation_warnings = [
         warning

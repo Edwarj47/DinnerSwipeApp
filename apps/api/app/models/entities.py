@@ -38,12 +38,17 @@ class User(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     email: Mapped[str] = mapped_column(String(320), unique=True, index=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
+    session_version: Mapped[int] = mapped_column(
+        Integer, default=0, server_default="0", nullable=False
+    )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     email_verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     email_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     privacy_accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     legal_acceptance_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    fatsecret_terms_version: Mapped[str | None] = mapped_column(String(40), nullable=True)
+    fatsecret_terms_accepted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     profile: Mapped[UserProfile] = relationship(back_populates="user", uselist=False)
 
 

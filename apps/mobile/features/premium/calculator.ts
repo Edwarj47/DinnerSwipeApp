@@ -6,7 +6,7 @@ export type CalculatorItem = {
   source: "manual" | "fatsecret"; name: string; portions: number;
   food_id?: string; serving_id?: string; nutrition?: RecipeNutrition;
 };
-export type CalculatorRow = CalculatorItem & { key: string; values: RecipeNutrition; expires?: number; servingLabel?: string };
+export type CalculatorRow = CalculatorItem & { key: string; values: RecipeNutrition; expires?: number; servingLabel?: string; foodLabel?: string };
 export type Calculation = {
   id: string; recipe_id?: string | null; entry_id?: string | null; name: string;
   meal_label: MealLabel; meal_date?: string | null; servings: number; items: CalculatorItem[];

@@ -5,8 +5,10 @@ import time
 
 from sqlalchemy import select
 
+from app.core.rate_limit import auth_rate_limiter
 from app.database.session import SessionLocal
 from app.models.entities import User, UserProfile
+from app.services.media_maintenance import cleanup_media
 from app.services.planning import SETTINGS_KEY, reconcile_current_plan
 
 logger = logging.getLogger(__name__)
@@ -34,9 +36,15 @@ def process_weekly_resets() -> None:
 
 def main() -> None:
     logging.basicConfig(level=logging.INFO)
+    maintenance_at = 0.0
     while True:
         try:
             process_weekly_resets()
+            if time.monotonic() >= maintenance_at:
+                auth_rate_limiter.prune()
+                with SessionLocal() as db:
+                    cleanup_media(db)
+                maintenance_at = time.monotonic() + 3600
         except Exception:
             logger.exception("Weekly planning scan failed")
         time.sleep(60)

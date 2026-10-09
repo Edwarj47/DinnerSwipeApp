@@ -4,7 +4,7 @@ import { Platform, StyleSheet, Text, View } from "react-native";
 import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors } from "@/components/theme";
-import { API_URL, getToken } from "@/services/api";
+import { apiFetch } from "@/services/api";
 
 type UploadResult = { batch_id: string; headers: string[]; suggested_mapping: Record<string, string | null>; rows: Record<string, string>[] };
 type Preview = {
@@ -25,44 +25,31 @@ export function ImportPanel() {
   const [status, setStatus] = useTransientMessage();
 
   async function sendFile(file: File) {
-    const token = await getToken();
     const form = new FormData();
     form.append("file", file);
-    const response = await fetch(`${API_URL}/api/v1/imports/upload`, {
+    const result = await apiFetch<UploadResult>("/api/v1/imports/upload", {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined,
       body: form
     });
-    if (!response.ok) throw new Error(await response.text());
-    setUpload((await response.json()) as UploadResult);
+    setUpload(result);
     setStatus("File scanned. Review mapping, then validate.");
   }
 
   async function validate() {
     if (!upload) return;
-    const token = await getToken();
-    const response = await fetch(`${API_URL}/api/v1/imports/${upload.batch_id}/mapping`, {
+    await apiFetch(`/api/v1/imports/${upload.batch_id}/mapping`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       body: JSON.stringify({ mapping: upload.suggested_mapping, accept_missing_photo: true })
     });
-    if (!response.ok) throw new Error(await response.text());
-    await response.json();
-    const previewResponse = await fetch(`${API_URL}/api/v1/imports/${upload.batch_id}/preview`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined
-    });
-    setPreview((await previewResponse.json()) as Preview);
+    setPreview(await apiFetch<Preview>(`/api/v1/imports/${upload.batch_id}/preview`));
     setStatus("Preview generated. Valid rows can now be imported.");
   }
 
   async function confirm() {
     if (!upload) return;
-    const token = await getToken();
-    const response = await fetch(`${API_URL}/api/v1/imports/${upload.batch_id}/confirm`, {
+    await apiFetch(`/api/v1/imports/${upload.batch_id}/confirm`, {
       method: "POST",
-      headers: token ? { Authorization: `Bearer ${token}` } : undefined
     });
-    if (!response.ok) throw new Error(await response.text());
     setStatus("Valid rows imported. Invalid rows remain in review.");
   }
 

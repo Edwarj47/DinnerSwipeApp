@@ -9,6 +9,7 @@ from typing import Any
 
 import httpx
 
+from app.core.actor import current_actor
 from app.core.config import Settings
 from app.services.nutrition_budget import NutritionBudget, NutritionError
 from app.services.nutrition_cache import TemporaryNutritionCache
@@ -31,7 +32,14 @@ class FatSecretClient:
     def _reserve(self, kind: str, background: bool) -> str:
         for _ in range(3):
             try:
-                return self.budget.reserve(kind, background)
+                actor = current_actor.get()
+                if not background and (
+                    actor is None or not actor.premium or not actor.nutrition_consent
+                ):
+                    raise NutritionError("account_not_authorized")
+                return self.budget.reserve(
+                    kind, background, user_id=actor.user_id if actor and not background else None
+                )
             except NutritionError as error:
                 if error.code != "paced":
                     raise
@@ -143,6 +151,9 @@ class FatSecretClient:
         background: bool = False,
         refresh: bool = False,
     ) -> dict[str, Any]:
+        actor = current_actor.get()
+        if not background and (actor is None or not actor.premium or not actor.nutrition_consent):
+            raise NutritionError("account_not_authorized")
         if not self.config.fatsecret_configured:
             raise NutritionError("not_configured")
         if method not in ("foods.search", "food.get.v5"):

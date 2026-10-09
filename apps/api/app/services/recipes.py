@@ -10,6 +10,7 @@ from fastapi import HTTPException
 from sqlalchemy import Select, func, or_, select, true
 from sqlalchemy.orm import Session, selectinload
 
+from app.core.actor import current_actor
 from app.models.entities import (
     Favorite,
     GroceryList,
@@ -36,6 +37,7 @@ from app.services.pantry import (
     update_manual_pantry,
 )
 from app.services.parsing import normalize_name, parse_ingredients, recipe_hash
+from app.services.private_media import canonical_photo, photo_url
 from app.services.retailers import WalmartSearchLinkAdapter
 from app.services.validation import validate_recipe_payload
 
@@ -137,7 +139,9 @@ def serialize_recipe(
         "id": recipe.id,
         "name": recipe.name,
         "description": recipe.description,
-        "photo_url": recipe.photo_url,
+        "photo_url": photo_url(db, user, "recipes", recipe.id, recipe.photo_url)
+        if db and user_id and user
+        else None,
         "servings": recipe.servings,
         "prep_minutes": recipe.prep_minutes,
         "cook_minutes": recipe.cook_minutes,
@@ -220,6 +224,16 @@ def update_recipe(
     db: Session, recipe: Recipe, payload: RecipeCreate, *, commit: bool = True
 ) -> Recipe:
     from app.services.calculator import find_calculation, has_provider, resolve
+
+    actor = current_actor.get()
+    user = (
+        db.get(User, actor.user_id)
+        if actor
+        else db.get(User, recipe.owner_user_id)
+        if recipe.owner_user_id
+        else None
+    )
+    payload = payload.model_copy(update={"photo_url": canonical_photo(db, user, payload.photo_url)})
 
     calculation = find_calculation(db, recipe_id=recipe.id)
     if calculation:
@@ -315,6 +329,8 @@ def create_recipe(
     from app.models.nutrition import NutritionCalculation
     from app.services.billing import require_premium
     from app.services.calculator import has_provider, resolve
+
+    payload = payload.model_copy(update={"photo_url": canonical_photo(db, user, payload.photo_url)})
 
     source = None
     if payload.calculator_source_id:
@@ -585,11 +601,21 @@ def serialize_plan(db: Session, plan: WeeklyPlan) -> dict[str, Any]:
         recipe = db.get(Recipe, recipe_id)
         return {
             "recipe_name": recipe.name if recipe else None,
-            "recipe_photo_url": recipe.photo_url if recipe else None,
+            "recipe_photo_url": photo_url(db, viewer, "recipes", recipe.id, recipe.photo_url)
+            if recipe and viewer
+            else None,
             "recipe_total_minutes": recipe_total_minutes(recipe) if recipe else None,
             "recipe_difficulty": recipe.difficulty if recipe else None,
         }
 
+    actor = current_actor.get()
+    viewer = (
+        db.get(User, actor.user_id)
+        if actor
+        else db.get(User, plan.user_id)
+        if plan.user_id
+        else None
+    )
     owner = db.get(User, plan.user_id) if plan.user_id else None
     group = db.get(Household, plan.household_id) if plan.household_id else None
     return {

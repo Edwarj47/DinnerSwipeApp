@@ -166,9 +166,31 @@ def reset_password(db: Session, token: str, password: str) -> None:
     )
     if not row or row.used_at is not None or row.expires_at < datetime.utcnow():
         raise HTTPException(status_code=400, detail="Reset link is invalid or expired")
-    user = db.get(User, row.user_id)
+    user = db.scalar(
+        select(User)
+        .where(User.id == row.user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    row = db.scalar(
+        select(PasswordResetToken)
+        .where(PasswordResetToken.id == row.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if not row or row.used_at is not None or row.expires_at < datetime.utcnow():
+        raise HTTPException(status_code=400, detail="Reset link is invalid or expired")
     if not user or not user.is_active:
         raise HTTPException(status_code=400, detail="Reset link is invalid or expired")
     user.password_hash = hash_password(password)
-    row.used_at = datetime.utcnow()
+    from app.services.auth_tokens import invalidate_user_sessions
+
+    invalidate_user_sessions(db, user)
+    now = datetime.utcnow()
+    for reset in db.scalars(
+        select(PasswordResetToken).where(
+            PasswordResetToken.user_id == user.id, PasswordResetToken.used_at.is_(None)
+        )
+    ).all():
+        reset.used_at = now
     db.commit()

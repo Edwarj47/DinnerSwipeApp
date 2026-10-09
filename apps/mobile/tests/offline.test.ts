@@ -8,7 +8,7 @@ jest.mock("expo-secure-store", () => ({
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { apiFetch, clearAuthTokens, getRefreshToken, getToken, setAuthTokens, syncOffline } from "@/services/api";
 import { changeOffline, discardOfflineChange, loadOffline, macroAfter, offlineAccess, readOffline,
-  setDeviceOffline, setOfflineOwner, useOfflineStatus } from "@/services/offlineStore";
+  setDeviceOffline, setOfflineOwner, useOfflineStatus, forgetOfflineSession } from "@/services/offlineStore";
 import { MacroConfirmation, PremiumStatus } from "@/services/types";
 
 const owner = "offline-user-a";
@@ -44,6 +44,33 @@ beforeEach(async () => {
   global.fetch = jest.fn();
 });
 afterEach(() => { jest.restoreAllMocks(); });
+
+test("expired downloaded data is purged without dropping pending edits", async () => {
+  await connect();
+  setDeviceOffline(true);
+  await apiFetch("/api/v1/grocery-lists/items/milk", { method: "PATCH", body: JSON.stringify({ is_checked: true }) });
+  const stored = await loadOffline(owner);
+  stored.verifiedAt = Date.now() - 73 * 3600000;
+  await AsyncStorage.setItem(`dinnerSwipe.offline.v1.${owner}`, JSON.stringify(stored));
+  const expired = await loadOffline(owner);
+  expect(expired.cache).toEqual({});
+  expect(expired.session).toBeUndefined();
+  expect(expired.subscription).toBeUndefined();
+  expect(expired.edits).toHaveLength(1);
+});
+
+test("sign-out purging and concurrent writes preserve the outbox", async () => {
+  await connect();
+  const edit = { operation_id: "keep-me", kind: "grocery_update" as const, target_id: "milk", values: { is_checked: true }, label: "Milk" };
+  await Promise.all([
+    forgetOfflineSession(owner),
+    changeOffline(owner, data => { data.edits.push(edit); }),
+  ]);
+  const saved = await loadOffline(owner);
+  expect(saved.cache).toEqual({});
+  expect(saved.session).toBeUndefined();
+  expect(saved.edits).toEqual([edit]);
+});
 
 test.each([503, 429, "network"])("refresh failure %s retains credentials and downloaded data", async failure => {
   await connect();

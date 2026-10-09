@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app.api.routes import nutrition as routes
 from app.core.config import Settings
+from app.models.entities import User, UserSubscription
 from app.models.nutrition import (
     NutritionCall,
     NutritionFood,
@@ -20,9 +21,11 @@ from app.models.nutrition import (
     NutritionUsage,
 )
 from app.services import nutrition as service
+from app.services.billing import PREMIUM_PLAN_KEY
 from app.services.fatsecret import API_URL, TOKEN_URL, FatSecretClient
 from app.services.nutrition_budget import NutritionBudget, NutritionError, utcnow
 from app.services.nutrition_cache import TemporaryNutritionCache
+from app.services.nutrition_consent import FATSECRET_TERMS_VERSION, accept_nutrition_terms
 
 FOOD = {
     "food": {
@@ -78,9 +81,23 @@ def provider(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> FatSecretC
     return client
 
 
+@pytest.fixture()
+def authorized_nutrition(auth_headers: dict[str, str], db_session: Session) -> dict[str, str]:
+    user = db_session.query(User).filter_by(email="owner@example.com").one()
+    subscription = db_session.query(UserSubscription).filter_by(user_id=user.id).one()
+    subscription.plan_key = PREMIUM_PLAN_KEY
+    accept_nutrition_terms(user, FATSECRET_TERMS_VERSION)
+    db_session.commit()
+    return auth_headers
+
+
 def test_lookup_cache_identifier_only_and_usage_idempotency(
-    client: TestClient, db_session: Session, auth_headers: dict[str, str], provider: FatSecretClient
+    client: TestClient,
+    db_session: Session,
+    authorized_nutrition: dict[str, str],
+    provider: FatSecretClient,
 ) -> None:
+    auth_headers = authorized_nutrition
     result = client.get("/api/v1/nutrition/foods/42", headers=auth_headers)
     assert result.status_code == 200 and result.headers["cache-control"] == "no-store"
     assert result.json()["data"]["food"]["servings"]["serving"]["calories"] == "100"
@@ -107,8 +124,12 @@ def test_lookup_cache_identifier_only_and_usage_idempotency(
 
 
 def test_search_validation_auth_and_singleton_results(
-    client: TestClient, db_session: Session, auth_headers: dict[str, str], provider: FatSecretClient
+    client: TestClient,
+    db_session: Session,
+    authorized_nutrition: dict[str, str],
+    provider: FatSecretClient,
 ) -> None:
+    auth_headers = authorized_nutrition
     assert client.get("/api/v1/nutrition/foods/search?query=rice").status_code == 401
     result = client.get("/api/v1/nutrition/foods/search?query=rice", headers=auth_headers)
     assert result.status_code == 200 and db_session.get(NutritionFood, "42")
@@ -247,10 +268,11 @@ def test_cache_expiry_never_serves_stale_and_is_bounded() -> None:
 def test_refresh_only_used_identifiers_once_per_day(
     provider: FatSecretClient,
     db_session: Session,
-    auth_headers: dict[str, str],
+    authorized_nutrition: dict[str, str],
     client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    auth_headers = authorized_nutrition
     client.get("/api/v1/nutrition/foods/42", headers=auth_headers)
     client.post(
         "/api/v1/nutrition/usage",

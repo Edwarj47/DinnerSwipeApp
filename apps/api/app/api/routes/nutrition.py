@@ -16,6 +16,7 @@ from app.models.nutrition import (
     NutritionUsage,
 )
 from app.schemas.calculator import CalculatorPreview, CalculatorSave
+from app.services.billing import require_premium
 from app.services.calculator import (
     calculation_response,
     resolve_items,
@@ -25,9 +26,36 @@ from app.services.calculator import (
 from app.services.fatsecret import ATTRIBUTION
 from app.services.nutrition import nutrition_budget, nutrition_client, store_identifiers
 from app.services.nutrition_budget import NutritionError, utcnow
+from app.services.nutrition_consent import (
+    accept_nutrition_terms,
+    consent_status,
+    require_nutrition_consent,
+)
 
 router = APIRouter(prefix="/nutrition", tags=["nutrition"])
 Identifier = Annotated[str, Field(pattern=r"^[0-9]{1,20}$")]
+
+
+class ConsentInput(BaseModel):
+    terms_version: str = Field(min_length=1, max_length=40)
+
+
+@router.get("/consent")
+def get_consent(db: DbDep, user: BasicUser, response: Response) -> dict[str, object]:
+    require_premium(db, user)
+    response.headers["Cache-Control"] = "no-store"
+    return consent_status(user)
+
+
+@router.post("/consent")
+def accept_consent(
+    db: DbDep, user: BasicUser, payload: ConsentInput, response: Response
+) -> dict[str, object]:
+    require_premium(db, user)
+    accept_nutrition_terms(user, payload.terms_version)
+    db.commit()
+    response.headers["Cache-Control"] = "no-store"
+    return consent_status(user)
 
 
 class UsageInput(BaseModel):
@@ -44,6 +72,8 @@ def preview_calculation(
     from app.services.billing import require_premium
 
     require_premium(db, user)
+    if any(item.source == "fatsecret" for item in payload.items):
+        require_nutrition_consent(user)
     auth_rate_limiter.check(f"nutrition:lookup:{user.id}", 20, 60)
     for item in payload.items:
         if item.source == "fatsecret" and not db.get(
@@ -141,6 +171,8 @@ def search_foods(
     query: Annotated[str, Query(min_length=2, max_length=100)],
     page: Annotated[int, Query(ge=0, le=20)] = 0,
 ) -> dict[str, Any]:
+    require_premium(db, user)
+    require_nutrition_consent(user)
     auth_rate_limiter.check(f"nutrition:lookup:{user.id}", 20, 60)
     expression = " ".join(query.split())
     if len(expression) < 2:
@@ -157,6 +189,8 @@ def search_foods(
 def food_details(
     db: DbDep, user: BasicUser, response: Response, food_id: Identifier
 ) -> dict[str, Any]:
+    require_premium(db, user)
+    require_nutrition_consent(user)
     auth_rate_limiter.check(f"nutrition:lookup:{user.id}", 20, 60)
     return lookup(db, response, "food.get.v5", {"food_id": food_id})
 

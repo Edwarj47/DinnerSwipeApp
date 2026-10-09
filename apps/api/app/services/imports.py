@@ -3,16 +3,19 @@ from __future__ import annotations
 import csv
 import io
 import json
+import multiprocessing
 import tempfile
+import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, cast
 
-import pandas as pd
 from fastapi import HTTPException, UploadFile
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.concurrency import run_in_threadpool
 
 from app.core.config import settings
+from app.ingestion.spreadsheet import parse_worker
 from app.models.entities import (
     ImportBatch,
     ImportFile,
@@ -26,6 +29,8 @@ from app.schemas.common import ImportMappingRequest, RecipeCreate
 from app.services.parsing import parse_ingredients, parse_instructions, recipe_hash
 from app.services.recipes import create_recipe
 from app.services.validation import validate_recipe_payload
+
+PARSER_SLOTS = threading.BoundedSemaphore(2)
 
 CANONICAL_FIELDS = [
     "name",
@@ -72,10 +77,10 @@ async def save_upload(db: Session, user: User, file: UploadFile) -> dict[str, An
         raise HTTPException(status_code=413, detail="File too large")
     if suffix == ".xlsx" and not content.startswith(b"PK"):
         raise HTTPException(status_code=400, detail="Invalid XLSX file")
-    with tempfile.NamedTemporaryFile(delete=False, suffix=suffix, prefix="dinner-swipe-") as tmp:
+    with tempfile.NamedTemporaryFile(suffix=suffix, prefix="dinner-swipe-") as tmp:
         tmp.write(content)
-        path = tmp.name
-    rows, headers = read_rows(Path(path), suffix)
+        tmp.flush()
+        rows, headers = await run_in_threadpool(read_rows, Path(tmp.name), suffix)
     batch = ImportBatch(
         user_id=user.id, status="file_scanned", source_type=suffix.removeprefix(".")
     )
@@ -87,7 +92,7 @@ async def save_upload(db: Session, user: User, file: UploadFile) -> dict[str, An
             original_filename=file.filename or "upload",
             content_type=file.content_type or "application/octet-stream",
             size_bytes=len(content),
-            stored_path=path,
+            stored_path="discarded_after_parse",
             headers=headers,
         )
     )
@@ -104,32 +109,51 @@ async def save_upload(db: Session, user: User, file: UploadFile) -> dict[str, An
 
 
 def read_rows(path: Path, suffix: str) -> tuple[list[dict[str, Any]], list[str]]:
+    if not PARSER_SLOTS.acquire(blocking=False):
+        raise HTTPException(
+            429,
+            "Another import is being processed. Try again shortly.",
+            headers={"Retry-After": "15"},
+        )
+    context = multiprocessing.get_context("spawn")
+    parent, child = context.Pipe(duplex=False)
+    process = context.Process(
+        target=parse_worker,
+        args=(
+            child,
+            str(path),
+            suffix,
+            (
+                settings.max_import_rows,
+                settings.max_import_columns,
+                settings.max_cell_length,
+                settings.max_spreadsheet_expanded_bytes,
+                settings.max_upload_size_bytes,
+            ),
+        ),
+        daemon=True,
+    )
     try:
-        if suffix == ".csv":
-            frame = pd.read_csv(path, dtype=str, keep_default_na=False)
-        else:
-            workbook = pd.ExcelFile(path, engine="openpyxl")
-            if len(workbook.sheet_names) > 1:
-                raise HTTPException(
-                    status_code=400, detail="Multiple worksheets require splitting for MVP"
-                )
-            frame = pd.read_excel(path, dtype=str, keep_default_na=False, engine="openpyxl")
+        process.start()
+        child.close()
+        if not parent.poll(15):
+            raise HTTPException(400, "Spreadsheet processing exceeded the supported limits")
+        ok, result = parent.recv()
+        if not ok:
+            raise HTTPException(400, str(result))
+        return cast(tuple[list[dict[str, Any]], list[str]], result)
     except HTTPException:
         raise
     except Exception as exc:
         raise HTTPException(status_code=400, detail="Unreadable spreadsheet") from exc
-    if len(frame) > settings.max_import_rows:
-        frame = frame.head(settings.max_import_rows)
-    headers = [str(column).strip() for column in frame.columns]
-    for header in headers:
-        if len(header) > settings.max_cell_length:
-            raise HTTPException(status_code=400, detail="Oversized cell")
-    rows = frame.fillna("").to_dict(orient="records")
-    for row in rows:
-        for value in row.values():
-            if len(str(value)) > settings.max_cell_length:
-                raise HTTPException(status_code=400, detail="Oversized cell")
-    return rows, headers
+    finally:
+        if process.pid:
+            if process.is_alive():
+                process.terminate()
+            process.join(timeout=2)
+        parent.close()
+        child.close()
+        PARSER_SLOTS.release()
 
 
 def suggest_mapping(headers: list[str]) -> dict[str, str | None]:

@@ -63,3 +63,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: docker compose --profile production build
+        env:
+          DINNER_SWIPE_RUNTIME_DATABASE_URL: postgresql+psycopg://dinner_swipe_runtime:ci-placeholder@dinner-swipe-postgres:5432/dinner_swipe
+          DINNER_SWIPE_TRUSTED_PROXY_IPS: 127.0.0.1

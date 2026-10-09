@@ -9,9 +9,6 @@ export function NutritionAttribution() {
       <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL("https://platform.fatsecret.com"); }}>
         <Text style={styles.link}>Powered by fatsecret Platform API</Text>
       </Pressable>}
-    <Pressable accessibilityRole="link" onPress={() => { void Linking.openURL("https://platform.fatsecret.com/terms"); }}>
-      <Text style={styles.link}>Terms of Use</Text>
-    </Pressable>
   </View>;
 }
 const styles = StyleSheet.create({ row: { flexDirection: "row", flexWrap: "wrap", gap: 12 }, link: { color: Colors.basil, fontSize: 12, textDecorationLine: "underline", paddingVertical: 8 } });

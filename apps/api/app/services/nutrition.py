@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.database.session import SessionLocal
+from app.models.entities import User, UserSubscription
 from app.models.nutrition import (
     NutritionFood,
     NutritionProviderState,
@@ -18,8 +19,10 @@ from app.models.nutrition import (
     NutritionServing,
     NutritionUsage,
 )
+from app.services.billing import is_premium_active
 from app.services.fatsecret import FatSecretClient
 from app.services.nutrition_budget import NutritionBudget, NutritionError, utcnow
+from app.services.nutrition_consent import consent_status
 
 nutrition_budget = NutritionBudget(SessionLocal, settings)
 nutrition_client = FatSecretClient(settings, nutrition_budget)
@@ -110,6 +113,17 @@ def refresh_used_foods(client: FatSecretClient = nutrition_client) -> dict[str, 
                 select(NutritionFood.food_id)
                 .join(NutritionUsage, NutritionUsage.food_id == NutritionFood.food_id)
                 .where(
+                    NutritionUsage.user_id.in_(
+                        [
+                            user.id
+                            for user, subscription in db.execute(
+                                select(User, UserSubscription)
+                                .join(UserSubscription, UserSubscription.user_id == User.id)
+                                .where(User.is_active.is_(True))
+                            )
+                            if is_premium_active(subscription) and consent_status(user)["accepted"]
+                        ]
+                    ),
                     NutritionUsage.used_at >= now - timedelta(days=30),
                     or_(
                         NutritionFood.last_refreshed_at.is_(None),

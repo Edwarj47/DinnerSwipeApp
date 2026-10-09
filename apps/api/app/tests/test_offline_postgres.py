@@ -3,12 +3,13 @@
 import os
 from collections.abc import Generator
 from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
 from uuid import uuid4
 
 import pytest
 from alembic.config import Config
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, event, inspect
+from sqlalchemy import MetaData, Table, create_engine, event, inspect, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
@@ -17,7 +18,7 @@ from app.core.config import settings
 from app.core.security import create_access_token
 from app.database.session import get_db
 from app.main import app
-from app.models.entities import MealMacroConfirmation, OfflineReceipt, User, UserSubscription
+from app.models.entities import MealMacroConfirmation, OfflineReceipt, UserSubscription
 
 
 @pytest.mark.skipif(
@@ -33,14 +34,23 @@ def test_postgres_migration_concurrent_retry_and_atomic_rollback(
     config = Config("alembic.ini")
     command.upgrade(config, "d8126c4ab391")
     engine = create_engine(url)
+    legacy_users = Table("users", MetaData(), autoload_with=engine)
     with Session(engine) as db:
-        user = User(email=f"{uuid4()}@example.com", password_hash=str(uuid4()), email_verified=True)
-        db.add(user)
-        db.flush()
-        user_id = user.id
+        user_id = str(uuid4())
+        db.execute(
+            legacy_users.insert().values(
+                id=user_id,
+                email=f"{uuid4()}@example.com",
+                password_hash=str(uuid4()),
+                email_verified=True,
+                is_active=True,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+        )
         db.add(
             UserSubscription(
-                user_id=user.id,
+                user_id=user_id,
                 plan_key="macro_tracker_monthly",
                 status="active",
                 source="waiver_code",
@@ -53,7 +63,7 @@ def test_postgres_migration_concurrent_retry_and_atomic_rollback(
     command.downgrade(config, "d8126c4ab391")
     assert not inspect(engine).has_table("offline_receipts")
     with Session(engine) as db:
-        assert db.get(User, user_id) is not None
+        assert db.scalar(select(legacy_users.c.id).where(legacy_users.c.id == user_id)) == user_id
     # Current handlers require the current additive nutrition schema.
     command.upgrade(config, "head")
 

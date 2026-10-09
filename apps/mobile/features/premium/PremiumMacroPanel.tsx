@@ -46,11 +46,6 @@ export function PremiumMacroPanel() {
   const [notice, setNotice] = useState<{ message: string; error: boolean } | null>(null);
   const setStatus = (message: string) => setNotice({ message, error: false });
   const setError = (message: string) => setNotice({ message, error: true });
-  const [calories, setCalories] = useState("");
-  const [protein, setProtein] = useState("");
-  const [carbs, setCarbs] = useState("");
-  const [fat, setFat] = useState("");
-  const [goal, setGoal] = useState("");
   const [macroView, setMacroView] = useState<MacroView>("day");
   const [trendRange, setTrendRange] = useState("30");
   const [calendarRange, setCalendarRange] = useState("14");
@@ -133,34 +128,6 @@ export function PremiumMacroPanel() {
     return () => clearTimeout(timer);
   }, [notice]);
   useEffect(() => { setNotice(null); }, [macroView]);
-
-  useEffect(() => {
-    if (!targets.data) return;
-    setCalories(valueToInput(targets.data.daily_calories));
-    setProtein(valueToInput(targets.data.daily_protein_g));
-    setCarbs(valueToInput(targets.data.daily_carbs_g));
-    setFat(valueToInput(targets.data.daily_fat_g));
-    setGoal(targets.data.goal ?? "");
-  }, [targets.data]);
-
-  const saveTargets = useMutation({
-    mutationFn: () =>
-      apiFetch<MacroTarget>("/api/v1/macros/targets", {
-        method: "PUT",
-        body: JSON.stringify({
-          daily_calories: inputToNumber(calories),
-          daily_protein_g: inputToNumber(protein),
-          daily_carbs_g: inputToNumber(carbs),
-          daily_fat_g: inputToNumber(fat),
-          goal: goal.trim() || null
-        })
-      }),
-    onSuccess: async () => {
-      setStatus("Macro targets saved.");
-      await refreshPremium(queryClient);
-    },
-    onError: (error) => setError(error instanceof Error ? error.message : "Unable to save targets.")
-  });
 
   const saveEntry = useMutation({
     mutationFn: () => {
@@ -286,27 +253,7 @@ export function PremiumMacroPanel() {
             <Metric label="Protein" value={summary.data ? `${formatWeight(convertWeight(summary.data.totals.protein_g, "g", unit)!, unit)} ${unit}` : "-"} />
             <Metric label="Calories" value={summary.data ? String(summary.data.totals.calories) : "-"} />
           </View></TourTarget>
-          {summary.data?.temporary_nutrition ? <NutritionAttribution /> : null}
           {summary.data?.nutrition_unavailable_count ? <Text style={styles.error}>Some database nutrition is pending. Totals are incomplete.</Text> : null}
-
-          <View style={styles.targetBox}>
-            <Text style={styles.subsection}>Targets</Text>
-            <View style={styles.grid}>
-              <MacroField label="Calories"><TextInput accessibilityLabel="Daily calories target" value={calories} onChangeText={setCalories} keyboardType="number-pad" placeholder="Not set" style={styles.input} /></MacroField>
-              <MacroField label={`Protein (${unit})`}><WeightTextInput accessibilityLabel="Daily protein target" grams={protein} onChangeGrams={setProtein} unit={unit} placeholder="Not set" style={styles.input} /></MacroField>
-              <MacroField label={`Carbs (${units.carbs_g})`}><WeightTextInput accessibilityLabel="Daily carbs target" grams={carbs} onChangeGrams={setCarbs} unit={units.carbs_g} placeholder="Not set" style={styles.input} /></MacroField>
-              <MacroField label={`Fat (${units.fat_g})`}><WeightTextInput accessibilityLabel="Daily fat target" grams={fat} onChangeGrams={setFat} unit={units.fat_g} placeholder="Not set" style={styles.input} /></MacroField>
-            </View>
-            <Text style={styles.fieldLabel}>Goal</Text>
-            <TextInput accessibilityLabel="Macro goal" value={goal} onChangeText={setGoal} placeholder="Goal" style={styles.input} />
-            <Button
-              label="Save targets"
-              icon="save"
-              variant="primary"
-              disabled={saveTargets.isPending}
-              onPress={() => saveTargets.mutate()}
-            />
-          </View>
 
           <SegmentedControl
             adaptive
@@ -326,7 +273,6 @@ export function PremiumMacroPanel() {
             <Button label="Retry macros" icon="refresh" onPress={() => { void activeQuery.refetch(); }} />
           </View> : activeQuery.isLoading && (macroView !== "day" || isISODate(selectedDate)) ? <Text style={styles.meta}>Loading macros...</Text> : null}
 
-          {macroView !== "day" && (macroView === "analytics" ? analytics.data : calendarAnalytics.data)?.temporary_nutrition ? <NutritionAttribution /> : null}
           {macroView !== "day" && (macroView === "analytics" ? analytics.data : calendarAnalytics.data)?.nutrition_unavailable_count ? <Text style={styles.error}>Some database nutrition is pending. Totals are incomplete.</Text> : null}
           {macroView === "day" ? (
             <><Button label="Log a saved recipe" icon="restaurant-outline" onPress={() => setRecipeLog("new")} />
@@ -390,6 +336,8 @@ export function PremiumMacroPanel() {
               onExport={() => exportMacros.mutate()}
             />
           ) : null}
+          {summary.data?.temporary_nutrition || (macroView === "day" ? selectedEntries.some(entry => entry.temporary_nutrition) :
+            (macroView === "analytics" ? analytics.data : calendarAnalytics.data)?.temporary_nutrition) ? <NutritionAttribution /> : null}
         </>
       )}
       {summary.data?.unmatched_meals ? <Text style={styles.meta}>{summary.data.unmatched_meals} meals need macro review.</Text> : null}
@@ -501,14 +449,13 @@ function DayMacroView({
         <View style={styles.actions}>
           <Button label={editingEntryId ? "Update" : "Add"} icon={editingEntryId ? "save" : "add-circle"} variant="primary" disabled={savePending || !entryName.trim()} onPress={onSave} />
           <Button label="Clear" icon="close" onPress={onClear} />
-          <View style={styles.actions}><Button label={recipeSaved ? "Recipe saved" : "Save as recipe"} icon="book-outline" disabled={recipeSaveDisabled} onPress={onSaveRecipe} />
-            <Button label="" icon="calculator-outline" accessibilityLabel="Open macro calculator" onPress={onCalculator} /></View>
           {editingEntryId ? <Button label="Delete" icon="trash" variant="danger" disabled={deletePending} onPress={onDelete} /> : null}
         </View>
+        <View style={styles.recipeActions}><View style={styles.recipeAction}><Button label={recipeSaved ? "Recipe saved" : "Save as recipe"} icon="book-outline" disabled={recipeSaveDisabled} onPress={onSaveRecipe} /></View>
+          <Button label="" icon="calculator-outline" accessibilityLabel="Open macro calculator" onPress={onCalculator} /></View>
       </View>
 
       <View style={styles.entryList}>
-        {selectedEntries.some(entry => entry.temporary_nutrition) ? <NutritionAttribution /> : null}
         {selectedEntries.some(entry => entry.nutrition_unavailable) ? <Text style={styles.error}>Some database nutrition is pending. Today's totals are incomplete.</Text> : null}
         <Text style={styles.subsection}>Logged on {selectedDate}</Text>
         {selectedEntries.length === 0 ? <Text style={styles.meta}>No macro entries for this date yet.</Text> : null}
@@ -817,7 +764,8 @@ const styles = StyleSheet.create({
   metric: { flexGrow: 1, flexShrink: 0, maxWidth: "100%", borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10 },
   metricValue: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
   metricLabel: { color: Colors.muted, fontWeight: "800", fontSize: 12 },
-  targetBox: { borderTopWidth: 1, borderColor: Colors.border, paddingTop: 12, gap: 8 },
+  recipeActions: { flexDirection: "row", alignItems: "center", gap: 8 },
+  recipeAction: { flex: 1, minWidth: 0 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   field: { flexBasis: "45%", flexGrow: 1, minWidth: 0, gap: 4 },
   fieldLabel: { color: Colors.ink, fontWeight: "700", fontSize: 14 },

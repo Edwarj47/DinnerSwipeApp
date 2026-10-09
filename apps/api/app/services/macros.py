@@ -259,7 +259,7 @@ def macro_summary(
     except OverflowError as error:
         raise HTTPException(422, "Choose a later end date") from error
     target = db.scalar(select(MacroProfileTarget).where(MacroProfileTarget.user_id == user.id))
-    rows = _rows_for_window(db, user, start_date, end_date)
+    rows = _rows_for_window(db, user, start_date, end_date) if active else []
     totals = {
         "calories": _sum_macro(rows, "calories"),
         "protein_g": _sum_macro(rows, "protein_g"),

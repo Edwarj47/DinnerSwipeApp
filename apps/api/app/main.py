@@ -3,9 +3,9 @@ from __future__ import annotations
 import structlog
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
 
 from app.api.router import api_router
+from app.core.body_limits import RequestBodyLimitMiddleware
 from app.core.config import settings
 from app.services.media_storage import get_media_storage
 
@@ -21,10 +21,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+app.add_middleware(RequestBodyLimitMiddleware)
 app.include_router(api_router)
-app.mount(
-    "/media", StaticFiles(directory=settings.image_storage_path, check_dir=False), name="media"
-)
 
 
 @app.on_event("startup")

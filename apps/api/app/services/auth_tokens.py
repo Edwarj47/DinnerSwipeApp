@@ -49,13 +49,27 @@ def issue_refresh_token(db: Session, user: User, request: Request | None = None)
 def rotate_refresh_token(
     db: Session, raw_token: str, request: Request | None = None
 ) -> tuple[User, str] | None:
-    row = db.scalar(
+    lookup = db.scalar(
         select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(raw_token))
     )
-    if not row:
+    if not lookup:
         return None
-    user = db.get(User, row.user_id)
+    # Lock account first in every session-revocation path to avoid lock-order races.
+    user = db.scalar(
+        select(User)
+        .where(User.id == lookup.user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if not user or not user.is_active:
+        return None
+    row = db.scalar(
+        select(RefreshToken)
+        .where(RefreshToken.id == lookup.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if not row:
         return None
     now = datetime.utcnow()
     if row.revoked_at is not None:
@@ -83,16 +97,42 @@ def rotate_refresh_token(
 
 
 def revoke_refresh_token(db: Session, raw_token: str, user: User) -> bool:
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
     row = db.scalar(
         select(RefreshToken).where(
             RefreshToken.user_id == user.id,
             RefreshToken.token_hash == hash_refresh_token(raw_token),
         )
+        .execution_options(populate_existing=True)
     )
+    # Native logout may have refreshed an expired access token while its payload
+    # still contains the preceding refresh token. Revoke that same token lineage.
+    for _ in range(64):
+        if not row or row.revoked_at is None or not row.replaced_by_token_id:
+            break
+        row = db.scalar(
+            select(RefreshToken)
+            .where(
+                RefreshToken.id == row.replaced_by_token_id,
+                RefreshToken.user_id == user.id,
+            )
+            .execution_options(populate_existing=True)
+        )
     if not row or row.revoked_at is not None:
         return False
     row.revoked_at = datetime.utcnow()
     return True
+
+
+def revoke_browser_refresh_token(db: Session, raw_token: str) -> None:
+    lookup = db.scalar(
+        select(RefreshToken).where(RefreshToken.token_hash == hash_refresh_token(raw_token))
+    )
+    if not lookup:
+        return
+    user = db.scalar(select(User).where(User.id == lookup.user_id).with_for_update())
+    if user:
+        revoke_refresh_token(db, raw_token, user)
 
 
 def revoke_user_refresh_tokens(db: Session, user: User) -> int:
@@ -106,3 +146,8 @@ def revoke_user_refresh_tokens(db: Session, user: User) -> int:
     for row in rows:
         row.revoked_at = now
     return len(rows)
+
+
+def invalidate_user_sessions(db: Session, user: User) -> None:
+    user.session_version += 1
+    revoke_user_refresh_tokens(db, user)

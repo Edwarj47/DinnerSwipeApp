@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
+import { SearchField } from "@/components/SearchField";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { useTransientMessage } from "@/components/useTransientMessage";
@@ -64,7 +65,7 @@ function GroupLibrary({ household, editing }: { household: Household; editing: b
   }
   const dirty = bulk !== null || Object.keys(changes).length > 0;
   return <View style={styles.section}>
-    <TextInput accessibilityLabel="Search group recipes" placeholder="Search group recipes" editable={!bulk && !save.isPending} value={search} onChangeText={setSearch} style={styles.input} />
+    <SearchField accessibilityLabel="Search group recipes" placeholder="Search group recipes" editable={!bulk && !save.isPending} value={search} onChangeText={setSearch} />
     <View style={styles.row}><Text style={styles.meta}>{recipes.data?.pages[0]?.enabled_count ?? 0} enabled for Discover</Text>
       {editing ? <View style={styles.buttons}><Button label="Select all matches" icon="checkbox-outline" disabled={save.isPending} onPress={() => selectMatches("enable")} /><Button label="Clear" icon="close" disabled={save.isPending} onPress={() => selectMatches("disable")} /></View> : null}
     </View>

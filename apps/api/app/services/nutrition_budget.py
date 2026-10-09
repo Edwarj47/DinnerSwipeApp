@@ -26,7 +26,7 @@ class NutritionBudget:
         self.sessions = sessions
         self.settings = settings
 
-    def reserve(self, kind: str, background: bool = False) -> str:
+    def reserve(self, kind: str, background: bool = False, user_id: str | None = None) -> str:
         with self.sessions() as db:
             state = db.scalar(
                 select(NutritionProviderState)
@@ -57,6 +57,12 @@ class NutritionBudget:
                 or 0
             )
             background_calls = db.scalar(calls.where(NutritionCall.background == 1)) or 0
+            if (
+                user_id
+                and (db.scalar(calls.where(NutritionCall.user_id == user_id)) or 0)
+                >= self.settings.fatsecret_user_daily_budget
+            ):
+                raise NutritionError("account_budget_exhausted", 3600)
             if max(rolling, today) >= self.settings.fatsecret_daily_budget:
                 raise NutritionError("daily_budget_exhausted", 3600)
             if background and background_calls >= min(
@@ -70,7 +76,9 @@ class NutritionBudget:
             state.next_request_at = now + timedelta(
                 seconds=self.settings.fatsecret_min_interval_seconds
             )
-            call = NutritionCall(reserved_at=now, background=int(background), kind=kind)
+            call = NutritionCall(
+                reserved_at=now, background=int(background), kind=kind, user_id=user_id
+            )
             db.add(call)
             db.commit()
             return call.id

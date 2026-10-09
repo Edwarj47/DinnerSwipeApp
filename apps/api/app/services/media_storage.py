@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol, cast
 from uuid import uuid4
 
 from app.core.config import settings
@@ -20,6 +21,10 @@ class MediaStorageAdapter(Protocol):
 
     def ensure_ready(self) -> None: ...
 
+    def read(self, key: str) -> bytes: ...
+
+    def delete(self, key: str) -> None: ...
+
     def save_recipe_image(
         self, *, user_id: str, data: bytes, suffix: str, content_type: str
     ) -> StoredMedia: ...
@@ -34,15 +39,38 @@ class LocalMediaStorageAdapter:
 
     def ensure_ready(self) -> None:
         self.root.mkdir(parents=True, exist_ok=True)
+        directories = [self.root]
+        uploads = self.root / "uploads"
+        if uploads.exists():
+            directories.append(uploads)
+            directories.extend(path for path in uploads.iterdir() if path.is_dir())
+        if any(not os.access(path, os.R_OK | os.W_OK | os.X_OK) for path in directories):
+            raise RuntimeError(
+                "Media volume ownership must be prepared for the runtime UID before deployment"
+            )
+
+    def _path(self, key: str) -> Path:
+        path = (self.root / key).resolve()
+        if not path.is_relative_to(self.root.resolve()) or not key.startswith("uploads/"):
+            raise ValueError("Invalid media key")
+        return path
+
+    def read(self, key: str) -> bytes:
+        with self._path(key).open("rb") as source:
+            return source.read(settings.max_image_upload_size_bytes + 1)
+
+    def delete(self, key: str) -> None:
+        self._path(key).unlink(missing_ok=True)
 
     def save_recipe_image(
         self, *, user_id: str, data: bytes, suffix: str, content_type: str
     ) -> StoredMedia:
         del content_type
         key = f"uploads/{user_id}/{uuid4().hex}{suffix}"
-        target = self.root / key
+        target = self._path(key)
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_bytes(data)
+        target.chmod(0o600)
         return StoredMedia(key=key, url=f"{self.public_api_url}/media/{key}", backend=self.backend)
 
 
@@ -60,6 +88,28 @@ class AzureBlobMediaStorageAdapter:
                 "Azure media storage requires AZURE_STORAGE_CONNECTION_STRING, "
                 "AZURE_STORAGE_CONTAINER, and MEDIA_PUBLIC_BASE_URL"
             )
+        if (
+            self._service()
+            .get_container_client(self.container)
+            .get_container_properties()
+            .get("public_access")
+        ):
+            raise RuntimeError("Recipe media requires a private Azure container")
+
+    def _service(self) -> Any:
+        from azure.storage.blob import BlobServiceClient
+
+        return BlobServiceClient.from_connection_string(self.connection_string)
+
+    def read(self, key: str) -> bytes:
+        blob = self._service().get_blob_client(container=self.container, blob=key)
+        stream = blob.download_blob()
+        if stream.size > settings.max_image_upload_size_bytes:
+            raise ValueError("Image is too large")
+        return cast(bytes, stream.readall())
+
+    def delete(self, key: str) -> None:
+        self._service().get_blob_client(container=self.container, blob=key).delete_blob()
 
     def save_recipe_image(
         self, *, user_id: str, data: bytes, suffix: str, content_type: str

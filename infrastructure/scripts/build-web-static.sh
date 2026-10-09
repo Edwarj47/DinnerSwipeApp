@@ -24,6 +24,7 @@ docker run --rm \
   bash -lc "npm run build:web -w apps/mobile"
 
 cp infrastructure/docker/nginx.conf "$tmp_context/nginx.conf"
+cp infrastructure/docker/nginx-main.conf "$tmp_context/nginx-main.conf"
 cp -R apps/mobile/dist "$tmp_context/dist"
 
 docker build \

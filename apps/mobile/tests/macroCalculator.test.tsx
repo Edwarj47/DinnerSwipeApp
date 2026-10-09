@@ -15,6 +15,7 @@ const row: CalculatorRow = { key: "one", source: "manual", name: "My egg", porti
 beforeEach(() => {
   useOfflineStatus.setState({ offline: false });
   request.mockReset().mockImplementation(async (path, init) => {
+    if (path.endsWith("/consent")) return { accepted: true, terms_version: "fatsecret-terms-v1" };
     if (path.includes("foods/search")) return { data: { foods: { food: { food_id: "3092", food_name: "Egg", food_description: "74 calories per large egg" } } } };
     if (path.includes("foods/3092")) return { data: { food: { servings: { serving: { serving_id: "11206", serving_description: "1 large", calories: "74", protein: "6.29", carbohydrate: ".38", fat: "4.97", fiber: "0" } } } } };
     if (path.endsWith("calculations/preview")) return { resolved_items: [values], serving_labels: ["1 large"], nutrition_unavailable: false };
@@ -22,10 +23,11 @@ beforeEach(() => {
     return {};
   });
 });
-function mount() {
+async function mount(ready = true, calculationId?: string) {
   const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false } } });
   const saved = jest.fn(), close = jest.fn();
-  const screen = render(<QueryClientProvider client={client}><MacroCalculator onClose={close} onSaved={saved} /></QueryClientProvider>);
+  const screen = render(<QueryClientProvider client={client}><MacroCalculator calculationId={calculationId} onClose={close} onSaved={saved} /></QueryClientProvider>);
+  if (ready) await screen.findByLabelText(calculationId ? "Update calculation" : "Calculator item name");
   return { ...screen, saved, close, cleanup: () => { screen.unmount(); client.clear(); } };
 }
 
@@ -36,7 +38,7 @@ test("portion math preserves zeros, unknown nutrients and expired provider views
   expect(servingNutrition({ calories: "0", protein: "not readable" })).toMatchObject({ calories: 0, protein_g: null, fiber_g: null });
 });
 test("database save payload strips all temporary nutrition and UI-only fields", () => {
-  expect(calculationItems([{ ...row, source: "fatsecret", food_id: "3092", serving_id: "11206", expires: 1000 }])).toEqual([
+  expect(calculationItems([{ ...row, source: "fatsecret", food_id: "3092", serving_id: "11206", expires: 1000, foodLabel: "Provider food name", servingLabel: "Provider description" }])).toEqual([
     { source: "fatsecret", name: "My egg", portions: 2, food_id: "3092", serving_id: "11206" }
   ]);
   expect(calculationItems([row])[0].nutrition).toEqual(values);
@@ -52,7 +54,7 @@ test("expired query data drops provider values but keeps references", () => {
   expect(hasTemporaryNutrition(expired)).toBe(false);
 });
 test("stack supports add, edit, remove, naming and logging to today", async () => {
-  const screen = mount();
+  const screen = await mount();
   try {
     fireEvent.changeText(screen.getByLabelText("Calculator item name"), "My eggs");
     fireEvent.changeText(screen.getByLabelText("Calories"), "74");
@@ -75,16 +77,17 @@ test("stack supports add, edit, remove, naming and logging to today", async () =
   } finally { screen.cleanup(); }
 });
 test("explicit search selects serving inside calculator and saves IDs rather than macros", async () => {
-  const screen = mount();
+  const screen = await mount();
   try {
     fireEvent.press(screen.getByLabelText("Search Database"));
     fireEvent.changeText(screen.getByLabelText("Search food database"), "eggs");
     expect(request.mock.calls.some(([path]) => path.includes("foods/search"))).toBe(false);
-    fireEvent.press(screen.getByRole("checkbox"));
+    expect(screen.queryByRole("checkbox")).toBeNull();
     fireEvent.press(screen.getByLabelText("Search"));
     fireEvent.press(await screen.findByText("Egg", { exact: true }));
     fireEvent.press(await screen.findByText("1 large", { exact: true }));
     expect(screen.getByLabelText("Calculator item name").props.value).toBe("eggs");
+    expect(screen.getByText("Egg", { exact: true })).toBeTruthy();
     expect(screen.queryByLabelText("Calories")).toBeNull();
     fireEvent.press(screen.getByLabelText("Add item"));
     fireEvent.press(screen.getByLabelText("Refresh database nutrition"));
@@ -103,6 +106,105 @@ test("explicit search selects serving inside calculator and saves IDs rather tha
     expect(JSON.parse(String(call[1]?.body)).items[0].nutrition).toBeUndefined();
   } finally { screen.cleanup(); }
 });
+
+test("finishing includes an unfinished item instead of discarding it", async () => {
+  const screen = await mount();
+  try {
+    fireEvent.changeText(screen.getByLabelText("Calculator item name"), "Toast");
+    fireEvent.changeText(screen.getByLabelText("Calories"), "100");
+    fireEvent.press(screen.getByLabelText("Add item"));
+    fireEvent.press(screen.getByLabelText("New item"));
+    fireEvent.changeText(screen.getByLabelText("Calculator item name"), "My eggs");
+    fireEvent.changeText(screen.getByLabelText("Calories"), "74");
+    fireEvent.press(screen.getByLabelText("Half serving more"));
+    expect(screen.getByLabelText("Calculator item servings").props.value).toBe("1.5");
+    fireEvent.press(screen.getByLabelText("Save as recipe"));
+    fireEvent.changeText(screen.getByLabelText("Calculation name"), "Breakfast");
+    fireEvent.press(screen.getByLabelText("Save recipe"));
+    await waitFor(() => expect(screen.saved).toHaveBeenCalled());
+    const call = request.mock.calls.find(([path, init]) => path.endsWith("calculations") && init?.method === "POST")!;
+    expect(JSON.parse(String(call[1]?.body)).items).toMatchObject([
+      { name: "Toast", portions: 1, nutrition: { calories: 100 } },
+      { name: "My eggs", portions: 1.5, nutrition: { calories: 74 } }
+    ]);
+  } finally { screen.cleanup(); }
+});
+
+test("invalid pending portions keep the editor and cannot finish", async () => {
+  const screen = await mount();
+  try {
+    fireEvent.changeText(screen.getByLabelText("Calculator item name"), "Egg");
+    fireEvent.changeText(screen.getByLabelText("Calculator item servings"), "0");
+    fireEvent.press(screen.getByLabelText("Save as recipe"));
+    expect(screen.getByText("Use more than 0 and up to 100 servings.")).toBeTruthy();
+    expect(screen.queryByLabelText("Calculation name")).toBeNull();
+    expect(screen.getByLabelText("Calculator item name").props.value).toBe("Egg");
+  } finally { screen.cleanup(); }
+});
+
+test("New item retains the current item and the total previews pending changes", async () => {
+  const screen = await mount();
+  try {
+    fireEvent.changeText(screen.getByLabelText("Calculator item name"), "Toast");
+    fireEvent.changeText(screen.getByLabelText("Calories"), "100");
+    expect(screen.getByText("Total with this item")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("New item"));
+    expect(screen.getByText("Items (1)")).toBeTruthy();
+    expect(screen.getByLabelText("Calculator item name").props.value).toBe("");
+    fireEvent.changeText(screen.getByLabelText("Calculator item name"), "Egg");
+    fireEvent.changeText(screen.getByLabelText("Calories"), "74");
+    expect(screen.getByText("174")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Add item"));
+    expect(screen.getByText("Items (2)")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Edit Egg"));
+    fireEvent.changeText(screen.getByLabelText("Calculator item servings"), "2");
+    expect(screen.getByText("248")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Cancel item"));
+    expect(screen.getByText("174")).toBeTruthy();
+  } finally { screen.cleanup(); }
+});
+
+test("clearing database search clears results without a provider call", async () => {
+  const screen = await mount();
+  try {
+    fireEvent.press(screen.getByLabelText("Search Database"));
+    fireEvent.changeText(screen.getByLabelText("Search food database"), "eggs");
+    fireEvent.press(screen.getByLabelText("Search"));
+    await screen.findByText("Egg", { exact: true });
+    const calls = request.mock.calls.length;
+    fireEvent.press(screen.getByLabelText("Clear search"));
+    expect(screen.getByLabelText("Search food database").props.value).toBe("");
+    expect(screen.queryByText("Egg", { exact: true })).toBeNull();
+    expect(request.mock.calls).toHaveLength(calls);
+  } finally { screen.cleanup(); }
+});
+
+test("a logged calculation saves a separate recipe using references, without changing the diary", async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init) => {
+    if (path.endsWith("calculations/old") && !init?.method) return {
+      id: "old", entry_id: "entry", recipe_id: null, name: "My egg", meal_label: "breakfast", meal_date: todayISO(), servings: 1,
+      items: [{ source: "fatsecret", name: "Egg", portions: 2, food_id: "3092", serving_id: "11206" }],
+      resolved_items: [values], serving_labels: ["1 large"]
+    };
+    return original(path, init);
+  });
+  const screen = await mount(true, "old");
+  try {
+    fireEvent.press(screen.getByLabelText("Save as recipe"));
+    fireEvent.changeText(screen.getByLabelText("Calculation name"), "Egg breakfast");
+    fireEvent.press(screen.getByLabelText("Save recipe"));
+    await waitFor(() => expect(screen.saved).toHaveBeenCalled());
+    const writes = request.mock.calls.filter(([, init]) => init?.method);
+    expect(writes).toHaveLength(1);
+    expect(writes[0][0]).toBe("/api/v1/nutrition/calculations");
+    expect(writes[0][1]?.method).toBe("POST");
+    expect(JSON.parse(String(writes[0][1]?.body))).toMatchObject({ destination: "recipe", items: [
+      { source: "fatsecret", name: "Egg", portions: 2, food_id: "3092", serving_id: "11206" }
+    ] });
+    expect(JSON.parse(String(writes[0][1]?.body)).items[0].nutrition).toBeUndefined();
+  } finally { screen.cleanup(); }
+});
 test("failed save retains stack and reuses idempotency key for retry", async () => {
   const original = request.getMockImplementation()!;
   let failures = 1;
@@ -110,7 +212,7 @@ test("failed save retains stack and reuses idempotency key for retry", async () 
     if (path.endsWith("calculations") && failures-- > 0) throw new Error("Try again");
     return original(path, init);
   });
-  const screen = mount();
+  const screen = await mount();
   try {
     fireEvent.changeText(screen.getByLabelText("Calculator item name"), "My toast");
     fireEvent.press(screen.getByLabelText("Add item"));
@@ -123,4 +225,27 @@ test("failed save retains stack and reuses idempotency key for retry", async () 
     const calls = request.mock.calls.filter(([path, init]) => path.endsWith("calculations") && init?.method === "POST");
     expect(JSON.parse(String(calls[0][1]?.body)).request_id).toBe(JSON.parse(String(calls[1][1]?.body)).request_id);
   } finally { screen.cleanup(); }
+});
+
+test("terms are accepted once on the account before opening the calculator", async () => {
+  let accepted = false;
+  request.mockImplementation(async (path, init) => {
+    if (path.endsWith("/consent")) {
+      if (init?.method === "POST") accepted = true;
+      return { accepted, terms_version: "fatsecret-terms-v1" };
+    }
+    return {};
+  });
+  const first = await mount(false);
+  try {
+    await first.findByLabelText("Agree and continue");
+    expect(first.queryByLabelText("Search Database")).toBeNull();
+    expect(request.mock.calls.every(([path]) => path.endsWith("/consent"))).toBe(true);
+    fireEvent.press(first.getByLabelText("Agree and continue"));
+    await first.findByLabelText("Calculator item name");
+    expect(first.queryByRole("checkbox")).toBeNull();
+  } finally { first.cleanup(); }
+  const again = await mount();
+  try { expect(again.queryByLabelText("Agree and continue")).toBeNull(); }
+  finally { again.cleanup(); }
 });

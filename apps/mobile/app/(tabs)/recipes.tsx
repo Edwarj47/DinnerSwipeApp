@@ -1,11 +1,12 @@
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
-import { Modal, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
+import { SearchField } from "@/components/SearchField";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { AiRecipePanel } from "@/features/recipes/AiRecipePanel";
@@ -159,7 +160,7 @@ export default function RecipesScreen() {
       {pageMode === "review" ? <UrlRecycleBinPanel /> : null}
       {pageMode !== "add" ? (
         <>
-          <TextInput accessibilityLabel="Search recipes" value={q} onChangeText={value => { setQ(value); setSelectedFeedbackIds([]); }} placeholder="Search saved recipes" style={styles.search} />
+          <SearchField accessibilityLabel="Search recipes" value={q} onChangeText={value => { setQ(value); setSelectedFeedbackIds([]); }} placeholder="Search saved recipes" />
         </>
       ) : null}
       {pageMode === "library" ? (["library", "hidden", "archived"] as const).map(collection => <RecipeLibrarySection

@@ -13,14 +13,15 @@ import { apiFetch, clearAuthTokens, getRefreshToken, getToken, setAuthTokens } f
 import { BiometricSettings, BiometricTimeout, authenticateForUnlock, getBiometricSettings, setBiometricPreference, setBiometricTimeout } from "@/services/biometrics";
 import { saveProfilePreferences, shouldConfirmPlanReset } from "@/services/profilePreferences";
 import { openTutorial } from "@/services/tutorial";
-import { UserProfile } from "@/services/types";
+import { PremiumStatus, UserProfile } from "@/services/types";
+import { MacroTargetSettings } from "@/features/premium/MacroTargetSettings";
 import { TourTarget } from "@/features/onboarding/TourTarget";
 import { MeasurementSettings } from "@/features/preferences/MeasurementSettings";
 import { WeeklyPlanningSettings } from "@/features/preferences/WeeklyPlanningSettings";
 
 import { SettingsSection } from "./SettingsSection";
 
-type UserSection = "account" | "meals";
+type UserSection = "account" | "meals" | "macros";
 type AccountAction = "overview" | "reset" | "data" | "delete";
 type GroceryRetailer = UserProfile["preferred_grocery_retailer"];
 
@@ -75,6 +76,9 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
     queryFn: () => apiFetch<UserProfile>("/api/v1/profile"),
     retry: false
   });
+  const subscription = useQuery({ queryKey: ["subscription-status"],
+    queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status"), retry: false });
+  const premiumActive = Boolean(subscription.data?.premium_active ?? subscription.data?.active);
   useEffect(() => {
     if (!profile.data) return;
     setDisplayName(profile.data.display_name ?? "");
@@ -131,10 +135,13 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
   });
   const confirmReset = useMutation({
     mutationFn: () => apiFetch<{ status: string }>("/api/v1/auth/password-reset/confirm", { method: "POST", body: JSON.stringify({ token: resetToken, password: newPassword }) }),
-    onSuccess: () => {
+    onSuccess: async () => {
       setResetToken("");
       setNewPassword("");
       setStatus("Password reset. Sign in with the new password.");
+      await clearAuthTokens();
+      queryClient.clear();
+      onExit?.();
     },
     onError: (error) => setStatus(String(error))
   });
@@ -395,6 +402,9 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
           <Button label="Save preferences" icon="save" variant="primary" disabled={!profile.data || saveProfile.isPending || resetPreference.isPending} onPress={() => saveProfile.mutate()} />
         </View></TourTarget>
       </SettingsSection>
+      {premiumActive ? <SettingsSection title="Macro settings" icon="speedometer-outline" expanded={section === "macros"} onToggle={() => setSection(section === "macros" ? null : "macros")}>
+        <SettingsSection title="Macro targets" icon="flag-outline"><MacroTargetSettings /></SettingsSection>
+      </SettingsSection> : null}
     </View>
   );
 }

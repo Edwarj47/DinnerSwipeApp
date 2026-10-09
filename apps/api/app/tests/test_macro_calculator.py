@@ -26,6 +26,7 @@ from app.models.nutrition import NutritionCalculation, NutritionUsage
 from app.services import calculator
 from app.services.billing import PREMIUM_PLAN_KEY
 from app.services.fatsecret import FatSecretClient
+from app.services.nutrition_consent import FATSECRET_TERMS_VERSION, accept_nutrition_terms
 from app.tests.test_nutrition_service import provider as provider_fixture
 
 provider = provider_fixture
@@ -41,6 +42,9 @@ def premium(
     subscription = db_session.scalar(select(UserSubscription))
     assert subscription
     subscription.plan_key = PREMIUM_PLAN_KEY
+    user = db_session.get(User, subscription.user_id)
+    assert user
+    accept_nutrition_terms(user, FATSECRET_TERMS_VERSION)
     db_session.commit()
     monkeypatch.setattr(calculator, "nutrition_client", provider)
     return auth_headers
@@ -402,6 +406,7 @@ def test_shared_recipe_references_can_be_read_and_logged_but_not_edited(
     member = User(
         email="calculator-member@example.com", password_hash=str(uuid4()), email_verified=True
     )
+    accept_nutrition_terms(member, FATSECRET_TERMS_VERSION)
     db_session.add_all([group, member])
     db_session.flush()
     db_session.add_all(

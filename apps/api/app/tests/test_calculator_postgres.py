@@ -2,12 +2,12 @@ from __future__ import annotations
 
 import os
 from concurrent.futures import ThreadPoolExecutor
-from datetime import date
+from datetime import date, datetime
 from uuid import uuid4
 
 import pytest
 from alembic.config import Config
-from sqlalchemy import create_engine, func, inspect, select
+from sqlalchemy import MetaData, Table, create_engine, func, inspect, select
 from sqlalchemy.engine import make_url
 from sqlalchemy.orm import Session
 
@@ -33,18 +33,28 @@ def test_calculator_additive_migration_and_concurrent_save(monkeypatch: pytest.M
     config = Config("alembic.ini")
     command.upgrade(config, "b981fc2a7610")
     engine = create_engine(url)
+    legacy_users = Table("users", MetaData(), autoload_with=engine)
     with Session(engine) as db:
-        user = User(email=f"{uuid4()}@example.com", password_hash=str(uuid4()), email_verified=True)
-        db.add(user)
-        db.flush()
-        user_id = user.id
+        user_id = str(uuid4())
+        email, password_hash = f"{uuid4()}@example.com", str(uuid4())
+        db.execute(
+            legacy_users.insert().values(
+                id=user_id,
+                email=email,
+                password_hash=password_hash,
+                email_verified=True,
+                is_active=True,
+                created_at=datetime.utcnow(),
+                updated_at=datetime.utcnow(),
+            )
+        )
         db.add(
             UserSubscription(
                 user_id=user_id, plan_key=PREMIUM_PLAN_KEY, status="active", source="waiver_code"
             )
         )
         db.commit()
-        before = (user.id, user.email, user.password_hash)
+        before = (user_id, email, password_hash)
     command.upgrade(config, "head")
     assert inspect(engine).has_table("nutrition_calculations")
     payload = CalculatorSave.model_validate(

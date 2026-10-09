@@ -6,6 +6,7 @@ import { clearPlanningReminders } from "./planningReminders";
 import { MacroConfirmation, PremiumStatus } from "./types";
 import { cacheable, changeOffline, deviceOffline, findMacro, loadOffline, macroAfter, offlineAccess, offlineOwner,
   OfflineEdit, overlay, readOffline, setDeviceOffline, setOfflineOwner, useOfflineStatus } from "./offlineStore";
+import { forgetOfflineSession } from "./offlineStore";
 
 export const API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
@@ -15,6 +16,11 @@ export const API_URL =
 const ACCESS_TOKEN_KEY = "dinnerSwipeAccessToken";
 const REFRESH_TOKEN_KEY = "dinnerSwipeRefreshToken";
 const OFFLINE_OWNER_KEY = "dinnerSwipeOfflineOwner";
+const WEB_SESSION_KEY = "dinnerSwipeWebSession";
+const COOKIE_SESSION = "cookie-session";
+let webAccess: string | null = null;
+let webRefresh: string | null = null;
+let webMigration: Promise<void> | null = null;
 let sessionEpoch = 0;
 let syncInFlight: Promise<void> | null = null;
 export class ApiError extends Error {
@@ -29,6 +35,7 @@ export type AuthTokenPair = {
   access_token: string;
   refresh_token?: string;
   token_type?: string;
+  web_session?: boolean;
 };
 
 function webStorage() {
@@ -75,31 +82,61 @@ export function addAuthChangeListener(listener: () => void) {
 export async function setAuthTokens(tokens: AuthTokenPair, refreshing = false) {
   if (!refreshing) {
     sessionEpoch++;
+    const previousOwner = offlineOwner() ?? await getStorageItem(OFFLINE_OWNER_KEY);
+    if (previousOwner) await forgetOfflineSession(previousOwner).catch(() => undefined);
     setOfflineOwner(null);
     await deleteStorageItem(OFFLINE_OWNER_KEY);
   }
-  await setStorageItem(ACCESS_TOKEN_KEY, tokens.access_token);
-  if (tokens.refresh_token) {
-    await setStorageItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+  if (Platform.OS === "web") {
+    webAccess = tokens.web_session ? null : tokens.access_token;
+    webRefresh = tokens.web_session ? null : tokens.refresh_token ?? null;
+    if (tokens.web_session) webStorage()?.setItem(WEB_SESSION_KEY, "1");
+    else webStorage()?.removeItem(WEB_SESSION_KEY);
+    await deleteStorageItem(ACCESS_TOKEN_KEY);
+    await deleteStorageItem(REFRESH_TOKEN_KEY);
+  } else {
+    await setStorageItem(ACCESS_TOKEN_KEY, tokens.access_token);
+    if (tokens.refresh_token) await setStorageItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
   }
   emitAuthChanged();
 }
 
 export async function setToken(token: string) {
-  await setStorageItem(ACCESS_TOKEN_KEY, token);
+  if (Platform.OS === "web") webAccess = token;
+  else await setStorageItem(ACCESS_TOKEN_KEY, token);
   emitAuthChanged();
 }
 
 export async function getToken() {
+  if (Platform.OS === "web") {
+    if (webStorage()?.getItem(ACCESS_TOKEN_KEY) || webStorage()?.getItem(REFRESH_TOKEN_KEY)) {
+      webMigration ??= (async () => {
+        webAccess = webStorage()?.getItem(ACCESS_TOKEN_KEY) ?? null;
+        webRefresh = webStorage()?.getItem(REFRESH_TOKEN_KEY) ?? null;
+        await Promise.all([deleteStorageItem(ACCESS_TOKEN_KEY), deleteStorageItem(REFRESH_TOKEN_KEY)]);
+        await refreshAuthTokens().catch((error) => { if (!(error instanceof ConnectionError)) throw error; });
+      })().finally(() => { webMigration = null; });
+      await webMigration;
+    }
+    return webAccess ?? (webStorage()?.getItem(WEB_SESSION_KEY) ? COOKIE_SESSION : null);
+  }
   return getStorageItem(ACCESS_TOKEN_KEY);
 }
 
 export async function getRefreshToken() {
+  if (Platform.OS === "web") return webStorage()?.getItem(REFRESH_TOKEN_KEY) ?? webRefresh ?? (webStorage()?.getItem(WEB_SESSION_KEY) ? COOKIE_SESSION : null);
   return getStorageItem(REFRESH_TOKEN_KEY);
 }
 
 export async function clearAuthTokens() {
   sessionEpoch++;
+  const previousOwner = offlineOwner() ?? await getStorageItem(OFFLINE_OWNER_KEY);
+  if (Platform.OS === "web" && webStorage()?.getItem(WEB_SESSION_KEY)) {
+    await request("/api/v1/auth/logout", { method: "POST", body: "{}", headers: { "Content-Type": "application/json" } }).catch(() => undefined);
+  }
+  webAccess = null; webRefresh = null;
+  webStorage()?.removeItem(WEB_SESSION_KEY);
+  if (previousOwner) await forgetOfflineSession(previousOwner).catch(() => undefined);
   setOfflineOwner(null);
   await clearPlanningReminders().catch(() => undefined);
   await Promise.all([deleteStorageItem(ACCESS_TOKEN_KEY), deleteStorageItem(REFRESH_TOKEN_KEY), deleteStorageItem(OFFLINE_OWNER_KEY)]);
@@ -113,7 +150,7 @@ async function doRefreshAuthTokens() {
   const response = await request("/api/v1/auth/refresh", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ refresh_token: refreshToken })
+    body: JSON.stringify(refreshToken === COOKIE_SESSION ? {} : { refresh_token: refreshToken })
   });
   if (epoch !== sessionEpoch) throw new ApiError("Account changed. Try again.", 409);
   if (!response.ok) {
@@ -121,6 +158,7 @@ async function doRefreshAuthTokens() {
       await clearAuthTokens();
       return false;
     }
+    if (response.status === 429) throw new ConnectionError("Sign-in is temporarily busy. Try again shortly.");
     throw new ApiError(await responseErrorMessage(response), response.status);
   }
   await setAuthTokens((await response.json()) as AuthTokenPair, true);
@@ -128,7 +166,8 @@ async function doRefreshAuthTokens() {
 }
 
 export async function refreshAuthTokens() {
-  refreshInFlight ??= doRefreshAuthTokens().finally(() => {
+  refreshInFlight ??= (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.locks
+    ? navigator.locks.request("dinnerSwipe.sessionRefresh", doRefreshAuthTokens) : doRefreshAuthTokens()).finally(() => {
     refreshInFlight = null;
   });
   return refreshInFlight;
@@ -271,9 +310,11 @@ async function authorizedFetch<T>(path: string, init: RequestInit, canRefresh: b
   if (!headers.has("Content-Type") && shouldSetJsonContentType(init)) {
     headers.set("Content-Type", "application/json");
   }
-  if (token) {
+  if (token && token !== COOKIE_SESSION) {
     headers.set("Authorization", `Bearer ${token}`);
   }
+  const owner = offlineOwner();
+  if (owner && path !== "/api/v1/auth/status" && !path.startsWith("/api/v1/auth/")) headers.set("X-Dinner-Account", owner);
   const response = await request(path, { ...init, headers });
   if (epoch !== sessionEpoch) throw new ApiError("Account changed. Try again.", 409);
   if (response.status === 401 && canRefresh && path !== "/api/v1/auth/refresh" && path !== "/api/v1/auth/login" && path !== "/api/v1/auth/register") {
@@ -281,6 +322,7 @@ async function authorizedFetch<T>(path: string, init: RequestInit, canRefresh: b
     if (refreshed) return authorizedFetch<T>(path, init, false);
   }
   if (!response.ok) {
+    if (response.status === 409) emitAuthChanged();
     if (response.status === 401 && !path.startsWith("/api/v1/auth/")) await clearAuthTokens();
     throw new ApiError(await responseErrorMessage(response), response.status);
   }
@@ -295,8 +337,14 @@ async function request(path: string, init: RequestInit): Promise<Response> {
   const slowAction = init.body instanceof FormData || path.includes("ingestion") || path.includes("ai-recipes");
   const timer = setTimeout(abort, slowAction ? 120000 : path.includes("/nutrition/") ? 30000 : 12000);
   try {
-    const response = await fetch(`${API_URL}${path}`, { ...init, signal: controller.signal });
-    if (!path.includes("/nutrition/") && (response.status >= 500 || response.status === 408 || response.status === 429)) throw new ConnectionError("Unable to reach Dinner Swipe. Your saved work is still on this device.");
+    const headers = new Headers(init.headers);
+    if (Platform.OS === "web") {
+      headers.set("X-Dinner-Web-Session", "cookie");
+      const csrf = typeof document === "undefined" ? null : document.cookie.split(";").map(value => value.trim()).find(value => value.startsWith("__Host-ds_csrf=") || value.startsWith("ds_csrf="))?.split("=").slice(1).join("=");
+      if (csrf) headers.set("X-CSRF-Token", decodeURIComponent(csrf));
+    }
+    const response = await fetch(`${API_URL}${path}`, { ...init, headers, ...(Platform.OS === "web" ? { credentials: "include" as const } : {}), signal: controller.signal });
+    if (!path.includes("/nutrition/") && (response.status >= 500 || response.status === 408)) throw new ConnectionError("Unable to reach Dinner Swipe. Your saved work is still on this device.");
     return response;
   } catch (error) {
     if (init.signal?.aborted) throw error;

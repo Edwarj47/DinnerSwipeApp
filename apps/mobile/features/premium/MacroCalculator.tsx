@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import * as Crypto from "expo-crypto";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { AppState, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
+import { SearchField } from "@/components/SearchField";
 import { Colors } from "@/components/theme";
 import { NutritionFields } from "@/features/recipes/NutritionFields";
 import { EMPTY_NUTRITION, NUTRIENTS, nutritionInputs, parseNutrition } from "@/features/recipes/recipeNutrition";
@@ -34,13 +35,13 @@ export function MacroCalculator({ calculationId, onClose, onSaved }: {
   const [providerItem, setProviderItem] = useState<CalculatorRow | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [accepted, setAccepted] = useState(false);
   const [results, setResults] = useState<Record<string, unknown>[] | null>(null);
   const [foodId, setFoodId] = useState("");
   const [servings, setServings] = useState<Record<string, unknown>[]>([]);
+  const [foodName, setFoodName] = useState("");
   const [searchedLabel, setSearchedLabel] = useState("");
   const [lookupExpires, setLookupExpires] = useState(0);
-  const [busy, setBusy] = useState<string | null>(calculationId ? "Loading calculation..." : null);
+  const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
   const [destination, setDestination] = useState<"entry" | "recipe" | null>(null);
   const [existing, setExisting] = useState<Pick<Calculation, "recipe_id" | "meal_date"> | null>(null);
@@ -48,10 +49,25 @@ export function MacroCalculator({ calculationId, onClose, onSaved }: {
   const [mealLabel, setMealLabel] = useState<MealLabel>("dinner");
   const [recipeServings, setRecipeServings] = useState("1");
   const request = useRef<{ payload: string; id: string } | null>(null);
-  const total = calculationTotal(rows);
+  const previewRow = currentItemPreview();
+  const previewRows = previewRow ? editing ? rows.map(row => row.key === editing ? previewRow : row) : [...rows, previewRow] : rows;
+  const total = calculationTotal(previewRows);
+  const pendingItem = itemOpen && Boolean(editing || providerItem || itemName.trim() || Object.values(fields).some(value => value.trim()));
+  const copyingEntry = Boolean(calculationId && existing && !existing.recipe_id && destination === "recipe");
+  const consent = useQuery({ queryKey: ["nutrition-consent"],
+    queryFn: () => apiFetch<{ accepted: boolean; terms_version: string; terms_url: string }>("/api/v1/nutrition/consent"), retry: false });
+  const accepted = consent.data?.accepted === true;
+  const accept = useMutation({
+    mutationFn: () => apiFetch<typeof consent.data>("/api/v1/nutrition/consent", {
+      method: "POST", body: JSON.stringify({ terms_version: consent.data?.terms_version })
+    }),
+    onSuccess: result => { client.setQueryData(["nutrition-consent"], result); setError(""); },
+    onError: reason => setError(message(reason))
+  });
 
   useEffect(() => {
-    if (!calculationId) return;
+    if (!calculationId || !accepted) return;
+    setBusy("Loading calculation...");
     const abort = new AbortController();
     void apiFetch<Calculation>(`/api/v1/nutrition/calculations/${calculationId}`, { signal: abort.signal }).then(result => {
       setExisting({ recipe_id: result.recipe_id, meal_date: result.meal_date }); setName(result.name); setMealLabel(result.meal_label);
@@ -63,14 +79,14 @@ export function MacroCalculator({ calculationId, onClose, onSaved }: {
     }).catch(reason => { if (!abort.signal.aborted) setError(message(reason)); })
       .finally(() => { if (!abort.signal.aborted) setBusy(null); });
     return () => abort.abort();
-  }, [calculationId]);
+  }, [calculationId, accepted]);
 
   // Clear expired provider views, including after the app resumes from background.
   useEffect(() => {
     function expire() {
       const now = Date.now();
-      setRows(current => current.map(row => row.expires && row.expires <= now ? { ...row, values: emptyValues(), servingLabel: undefined } : row));
-      if (providerItem?.expires && providerItem.expires <= now) { setProviderItem(current => current ? { ...current, values: emptyValues(), servingLabel: undefined } : null); setFields(EMPTY_NUTRITION); }
+      setRows(current => current.map(row => row.expires && row.expires <= now ? { ...row, values: emptyValues(), servingLabel: undefined, foodLabel: undefined } : row));
+      if (providerItem?.expires && providerItem.expires <= now) { setProviderItem(current => current ? { ...current, values: emptyValues(), servingLabel: undefined, foodLabel: undefined } : null); setFields(EMPTY_NUTRITION); }
       if (lookupExpires && lookupExpires <= now) { setResults(null); setServings([]); setFoodId(""); setSearchOpen(false); }
     }
     const timer = setInterval(expire, 30000);
@@ -81,6 +97,14 @@ export function MacroCalculator({ calculationId, onClose, onSaved }: {
   function clearItem(open = true) {
     setEditing(null); setItemName(""); setPortions("1"); setFields(EMPTY_NUTRITION);
     setProviderItem(null); setError(""); setItemOpen(open);
+  }
+  function currentItemPreview(): CalculatorRow | null {
+    const amount = Number(portions);
+    if (!itemOpen || !itemName.trim() || !portions.trim() || !Number.isFinite(amount) || amount <= 0 || amount > 100) return null;
+    try {
+      return { ...(providerItem ?? { source: "manual" as const }), key: editing ?? "pending", name: itemName.trim(),
+        portions: amount, values: providerItem?.values ?? parseNutrition(fields) };
+    } catch { return null; }
   }
   function addItem() {
     try {
@@ -94,9 +118,19 @@ export function MacroCalculator({ calculationId, onClose, onSaved }: {
         name: itemName.trim(), portions: amount, values };
       setRows(current => editing ? current.map(item => item.key === editing ? row : item) : [...current, row]);
       clearItem(false);
-    } catch (reason) { setError(message(reason)); }
+      return true;
+    } catch (reason) { setError(message(reason)); return false; }
+  }
+  function finish(next: "entry" | "recipe") {
+    if (pendingItem && !addItem()) return;
+    if (!pendingItem && !rows.length) return;
+    setError(""); setDestination(next);
+  }
+  function changeSearch(value: string) {
+    setQuery(value); setResults(null); setServings([]); setFoodId(""); setFoodName(""); setSearchedLabel(""); setLookupExpires(0); setError("");
   }
   async function search() {
+    if (busy || offline || !accepted || query.trim().length < 2) return;
     setBusy("Searching..."); setError(""); setResults(null); setServings([]);
     try {
       const result = await apiFetch<Lookup>(`/api/v1/nutrition/foods/search?query=${encodeURIComponent(query.trim())}`);
@@ -105,7 +139,7 @@ export function MacroCalculator({ calculationId, onClose, onSaved }: {
     } catch (reason) { setError(message(reason)); }
     finally { setBusy(null); }
   }
-  async function chooseFood(id: string) {
+  async function chooseFood(id: string, selectedName: string) {
     setBusy("Loading servings..."); setError("");
     try {
       const result = await apiFetch<Lookup>(`/api/v1/nutrition/foods/${id}`);
@@ -113,14 +147,15 @@ export function MacroCalculator({ calculationId, onClose, onSaved }: {
       const container = food?.servings as Record<string, unknown> | undefined;
       const options = objects(container?.serving);
       if (!options.length) throw new Error("No servings found for this food. Try another result.");
-      setServings(options); setFoodId(id); setLookupExpires(Date.now() + PROVIDER_VIEW_MS);
+      setServings(options); setFoodId(id); setFoodName(String(food?.food_name ?? selectedName)); setLookupExpires(Date.now() + PROVIDER_VIEW_MS);
     } catch (reason) { setError(message(reason)); }
     finally { setBusy(null); }
   }
   function chooseServing(serving: Record<string, unknown>) {
     const values = servingNutrition(serving);
     const row: CalculatorRow = { key: editing ?? Crypto.randomUUID(), source: "fatsecret", name: searchedLabel,
-      portions: 1, food_id: foodId, serving_id: String(serving.serving_id), servingLabel: String(serving.serving_description ?? "Serving"), values, expires: lookupExpires };
+      portions: 1, food_id: foodId, serving_id: String(serving.serving_id), foodLabel: foodName,
+      servingLabel: String(serving.serving_description ?? "Serving"), values, expires: lookupExpires };
     setProviderItem(row); setItemName(searchedLabel); setPortions("1"); setSearchOpen(false);
     setItemOpen(true);
     setFields(nutritionInputs(values)); setResults(null); setServings([]);
@@ -148,8 +183,9 @@ export function MacroCalculator({ calculationId, onClose, onSaved }: {
         meal_date: existing?.meal_date ?? todayISO(), items: calculationItems(rows) };
       const fingerprint = JSON.stringify(payload);
       if (request.current?.payload !== fingerprint) request.current = { payload: fingerprint, id: Crypto.randomUUID() };
-      const result = await apiFetch<Calculation>(calculationId ? `/api/v1/nutrition/calculations/${calculationId}` : "/api/v1/nutrition/calculations", {
-        method: calculationId ? "PUT" : "POST", body: JSON.stringify({ ...payload, request_id: request.current.id })
+      const updating = calculationId && !copyingEntry;
+      const result = await apiFetch<Calculation>(updating ? `/api/v1/nutrition/calculations/${calculationId}` : "/api/v1/nutrition/calculations", {
+        method: updating ? "PUT" : "POST", body: JSON.stringify({ ...payload, request_id: request.current.id })
       });
       await client.invalidateQueries({ predicate: item => ["recipes", "weekly-plan", "grocery"].includes(String(item.queryKey[0])) || String(item.queryKey[0]).startsWith("macro-") });
       onSaved?.(result); onClose();
@@ -163,50 +199,64 @@ export function MacroCalculator({ calculationId, onClose, onSaved }: {
         <View style={styles.header}><Ionicons name="calculator-outline" size={22} color={Colors.basil} />
           <Text style={styles.heading}>Macro calculator</Text><Button label="" icon="close" accessibilityLabel="Close macro calculator" disabled={!!busy} onPress={onClose} /></View>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
-          {searchOpen ? <>
+          {!accepted ? <>
+            <Text style={styles.subheading}>Food database terms</Text>
+            <Button label="Terms of Use" icon="open-outline" onPress={() => { void Linking.openURL("https://platform.fatsecret.com/terms"); }} />
+            {consent.isLoading ? <Text style={styles.meta}>Checking acceptance...</Text> : consent.isError ?
+              <Button label="Retry" icon="refresh" onPress={() => { void consent.refetch(); }} /> :
+              <View style={styles.actions}><Button label="Agree and continue" icon="checkmark" variant="primary" disabled={offline || accept.isPending} onPress={() => accept.mutate()} />
+                <Button label="Not now" icon="close" onPress={onClose} /></View>}
+          </> : searchOpen ? <>
             <View style={styles.header}><Text style={styles.subheading}>Search Database</Text><Button label="" icon="arrow-back" accessibilityLabel="Back to calculator" disabled={!!busy} onPress={() => setSearchOpen(false)} /></View>
-            <TextInput accessibilityLabel="Search food database" value={query} onChangeText={setQuery} placeholder="Food or brand" style={styles.input} maxLength={100} />
-            <NutritionAttribution />
-            <Pressable accessibilityRole="checkbox" accessibilityState={{ checked: accepted }} aria-checked={accepted} onPress={() => setAccepted(!accepted)} style={styles.check}>
-              <Ionicons name={accepted ? "checkbox" : "square-outline"} size={22} color={Colors.tomato} /><Text style={styles.meta}>I agree to fatsecret's Terms of Use.</Text></Pressable>
+            <SearchField accessibilityLabel="Search food database" value={query} onChangeText={changeSearch} placeholder="Food or brand" maxLength={100}
+              editable={!busy} returnKeyType="search" onSubmitEditing={() => { void search(); }} />
             <Button label="Search" icon="search" variant="primary" disabled={!!busy || offline || !accepted || query.trim().length < 2} onPress={() => { void search(); }} />
-            {servings.length ? <><Text style={styles.subheading}>Choose a serving</Text>{servings.map(serving => <Pressable key={String(serving.serving_id)} accessibilityRole="button" style={styles.result} onPress={() => chooseServing(serving)}>
+            {servings.length ? <><Text style={styles.name}>{foodName}</Text><Text style={styles.subheading}>Choose a serving</Text>{servings.map(serving => <Pressable key={String(serving.serving_id)} accessibilityRole="button" style={styles.result} onPress={() => chooseServing(serving)}>
               <Text style={styles.name}>{String(serving.serving_description ?? "Serving")}</Text><Text style={styles.meta}>{serving.calories == null ? "Calories unavailable" : `${serving.calories} cal`}</Text>
-            </Pressable>)}</> : results?.map(food => <Pressable key={String(food.food_id)} accessibilityRole="button" disabled={!!busy} style={styles.result} onPress={() => { void chooseFood(String(food.food_id)); }}>
+            </Pressable>)}</> : results?.map(food => <Pressable key={String(food.food_id)} accessibilityRole="button" disabled={!!busy} style={styles.result} onPress={() => { void chooseFood(String(food.food_id), String(food.food_name ?? "Food")); }}>
               <Text style={styles.name}>{String(food.food_name ?? "Food")}</Text><Text style={styles.meta}>{String(food.food_description ?? "")}</Text></Pressable>)}
             {results?.length === 0 ? <Text style={styles.meta}>No foods found. Try a different name.</Text> : null}
           </> : destination ? <>
-            <Text style={styles.subheading}>{calculationId ? "Update calculation" : destination === "recipe" ? "Save as recipe" : "Add to today"}</Text>
+            <Text style={styles.subheading}>{calculationId && !copyingEntry ? "Update calculation" : destination === "recipe" ? "Save as recipe" : "Add to today"}</Text>
             <TextInput accessibilityLabel="Calculation name" placeholder="Meal or recipe name" value={name} onChangeText={setName} maxLength={160} style={styles.input} />
             <MacroChoice label="Meal type" value={mealLabel} onChange={setMealLabel} options={MEAL_LABEL_OPTIONS} disabled={!!busy} />
             {destination === "recipe" ? <><Text style={styles.name}>Recipe servings</Text><TextInput accessibilityLabel="Calculation recipe servings" value={recipeServings} onChangeText={setRecipeServings} keyboardType="number-pad" style={styles.input} /></> : <Text style={styles.meta}>{existing?.meal_date ?? todayISO()}</Text>}
             <Totals value={total} />
-            {rows.some(row => row.source === "fatsecret") ? <><Text style={styles.meta}>Database nutrition refreshes when viewed. Ingredients and portions stay saved.</Text><NutritionAttribution /></> : null}
+            {rows.some(row => row.source === "fatsecret") ? <Text style={styles.meta}>Database nutrition refreshes when viewed. Ingredients and portions stay saved.</Text> : null}
             <View style={styles.actions}><Button label="Back" icon="arrow-back" disabled={!!busy} onPress={() => setDestination(null)} />
-              <Button label={calculationId ? "Update" : destination === "recipe" ? "Save recipe" : "Add to today"} icon="checkmark" variant="primary" disabled={!!busy || offline || name.trim().length < 2} onPress={() => { void save(); }} /></View>
+              <Button label={calculationId && !copyingEntry ? "Update" : destination === "recipe" ? "Save recipe" : "Add to today"} icon="checkmark" variant="primary" disabled={!!busy || offline || name.trim().length < 2} onPress={() => { void save(); }} /></View>
           </> : <>
             <View style={styles.actions}><Button label="Search Database" icon="search" disabled={!!busy || offline} onPress={() => { setError(""); setSearchOpen(true); }} />
-              <Button label="New item" icon="add" disabled={!!busy} onPress={() => clearItem()} /></View>
+              <Button label="New item" icon="add" disabled={!!busy} onPress={() => { if (pendingItem && !addItem()) return; clearItem(); }} /></View>
             {itemOpen ? <>
+            <Text style={styles.subheading}>{editing ? "Edit item" : "Add an item"}</Text>
             <TextInput accessibilityLabel="Calculator item name" placeholder="Item name" value={itemName} maxLength={160} onChangeText={setItemName} style={styles.input} />
-            <View style={styles.header}><Text style={styles.name}>Servings</Text><TextInput accessibilityLabel="Calculator item servings" value={portions} onChangeText={setPortions} keyboardType="decimal-pad" style={[styles.input, styles.portions]} /></View>
+            {providerItem?.foodLabel ? <Text style={styles.meta}>{providerItem.foodLabel}</Text> : null}
+            <Text style={styles.name}>Servings</Text><View style={styles.header}>
+              <Button label="" icon="remove" accessibilityLabel="Half serving less" disabled={!!busy || !Number.isFinite(Number(portions)) || Number(portions) <= 0.5} onPress={() => setPortions(String(Math.max(0.5, Number(portions) - 0.5)))} />
+              <TextInput accessibilityLabel="Calculator item servings" value={portions} onChangeText={setPortions} keyboardType="decimal-pad" style={[styles.input, styles.portions]} />
+              <Button label="" icon="add" accessibilityLabel="Half serving more" disabled={!!busy || !Number.isFinite(Number(portions)) || Number(portions) >= 100} onPress={() => setPortions(String(Math.min(100, Number(portions) + 0.5)))} />
+            </View>
             {providerItem?.servingLabel ? <Text style={styles.meta}>1 serving: {providerItem.servingLabel}</Text> : null}
             <Text style={styles.name}>Nutrition per serving</Text>
-            {providerItem ? <><Totals value={providerItem.values} /><NutritionAttribution /></> : <NutritionFields value={fields} onChange={setFields} />}
+            {providerItem ? <Totals value={providerItem.values} /> : <NutritionFields value={fields} onChange={setFields} />}
             <View style={styles.actions}><Button label={editing ? "Update item" : "Add item"} icon={editing ? "checkmark" : "add"} variant="primary" disabled={!!busy || !itemName.trim()} onPress={addItem} />
               {rows.length ? <Button label="" icon="close" accessibilityLabel="Cancel item" disabled={!!busy} onPress={() => clearItem(false)} /> : null}</View>
             </> : null}
             <View style={styles.divider}><Text style={styles.subheading}>Items ({rows.length})</Text></View>
-            {rows.map(row => <View key={row.key} style={styles.item}><View style={styles.itemInfo}><Text style={styles.name}>{row.name}</Text><Text style={styles.meta}>{row.portions} servings · {row.values.calories == null || (row.expires != null && row.expires <= Date.now()) ? "Nutrition pending" : `${Math.round(row.values.calories * row.portions * 100) / 100} cal`}</Text>{row.servingLabel ? <Text style={styles.meta}>1 serving: {row.servingLabel}</Text> : null}</View>
+            {rows.map(row => <View key={row.key} style={styles.item}><View style={styles.itemInfo}><Text style={styles.name}>{row.name}</Text>{row.foodLabel ? <Text style={styles.meta}>{row.foodLabel}</Text> : null}<Text style={styles.meta}>{row.portions} {row.portions === 1 ? "serving" : "servings"} · {row.values.calories == null || (row.expires != null && row.expires <= Date.now()) ? "Nutrition pending" : `${Math.round(row.values.calories * row.portions * 100) / 100} cal`}</Text>{row.servingLabel ? <Text style={styles.meta}>1 serving: {row.servingLabel}</Text> : null}</View>
               <Button label="" icon="create-outline" accessibilityLabel={`Edit ${row.name}`} disabled={!!busy} onPress={() => { setItemOpen(true); setEditing(row.key); setItemName(row.name); setPortions(String(row.portions)); setFields(nutritionInputs(row.values)); setProviderItem(row.source === "fatsecret" ? row : null); setError(""); }} />
               <Button label="" icon="trash-outline" accessibilityLabel={`Remove ${row.name}`} variant="quiet-danger" disabled={!!busy} onPress={() => { setRows(current => current.filter(item => item.key !== row.key)); if (editing === row.key) clearItem(); }} /></View>)}
-            <View style={styles.divider}><View style={styles.header}><Text style={styles.subheading}>Total</Text>
+            <View style={styles.divider}><View style={styles.header}><Text style={styles.subheading}>{previewRow ? "Total with this item" : "Total"}</Text><Text style={styles.meta}>{previewRows.length} {previewRows.length === 1 ? "item" : "items"}</Text>
               {rows.some(row => row.source === "fatsecret") ? <Button label="" icon="refresh" accessibilityLabel="Refresh database nutrition" disabled={!!busy || offline} onPress={() => { void refreshValues(); }} /> : null}</View><Totals value={total} /></View>
-            {rows.some(row => row.source === "fatsecret") ? <NutritionAttribution /> : null}
-            <View style={styles.actions}>{existing ? <Button label="Update calculation" icon="save-outline" variant="primary" disabled={!rows.length || !!busy || offline} onPress={() => { clearItem(); setDestination(existing.recipe_id ? "recipe" : "entry"); }} /> : <>
-              <Button label="Add to today" icon="checkmark" variant="primary" disabled={!rows.length || !!busy || offline} onPress={() => { clearItem(); setDestination("entry"); }} />
-              <Button label="Save as recipe" icon="book-outline" disabled={!rows.length || !!busy || offline} onPress={() => { clearItem(); setDestination("recipe"); }} /></>}</View>
+            <View style={styles.actions}>{existing ? <>
+              <Button label="Update calculation" icon="save-outline" variant="primary" disabled={(!rows.length && !itemName.trim()) || !!busy || offline} onPress={() => finish(existing.recipe_id ? "recipe" : "entry")} />
+              {!existing.recipe_id ? <Button label="Save as recipe" icon="book-outline" disabled={(!rows.length && !itemName.trim()) || !!busy || offline} onPress={() => finish("recipe")} /> : null}
+            </> : <>
+              <Button label="Add to today" icon="checkmark" variant="primary" disabled={(!rows.length && !itemName.trim()) || !!busy || offline} onPress={() => finish("entry")} />
+              <Button label="Save as recipe" icon="book-outline" disabled={(!rows.length && !itemName.trim()) || !!busy || offline} onPress={() => finish("recipe")} /></>}</View>
           </>}
+          {accepted && (searchOpen || providerItem || rows.some(row => row.source === "fatsecret")) ? <NutritionAttribution /> : null}
           {offline ? <Text style={styles.error}>Reconnect to search or save this calculation.</Text> : null}
           {busy ? <Text accessibilityLiveRegion="polite" style={styles.meta}>{busy}</Text> : null}
           {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
@@ -232,7 +282,7 @@ const styles = StyleSheet.create({
   content: { gap: 12, paddingBottom: 12 }, subheading: { fontSize: 17, fontWeight: "700", color: Colors.ink, flex: 1 },
   name: { fontSize: 14, fontWeight: "700", color: Colors.ink }, meta: { fontSize: 13, color: Colors.muted, flexShrink: 1 },
   input: { minHeight: 48, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, color: Colors.ink },
-  portions: { width: 100, marginLeft: "auto" }, actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  portions: { flex: 1, minWidth: 0, width: 0, textAlign: "center" }, actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   item: { backgroundColor: Colors.softRed, borderRadius: 6, padding: 10, flexDirection: "row", alignItems: "center", gap: 4 },
   itemInfo: { flex: 1, gap: 4, minWidth: 0 }, result: { paddingVertical: 12, borderBottomWidth: 1, borderColor: Colors.border, gap: 4 },
   divider: { borderTopWidth: 1, borderColor: Colors.border, paddingTop: 12, gap: 12 },

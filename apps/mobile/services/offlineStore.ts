@@ -44,7 +44,7 @@ export function offlineOwner() { return owner; }
 export function deviceOffline() { return useOfflineStatus.getState().offline; }
 export function setDeviceOffline(offline: boolean) { useOfflineStatus.setState({ offline }); }
 
-export async function loadOffline(id: string): Promise<OfflineData> {
+async function readStoredOffline(id: string): Promise<OfflineData> {
   const raw = await AsyncStorage.getItem(PREFIX + id);
   if (!raw) return { version: 1, seenAt: 0, cache: {}, edits: [] };
   const data = JSON.parse(raw) as OfflineData;
@@ -52,12 +52,29 @@ export async function loadOffline(id: string): Promise<OfflineData> {
   return data;
 }
 
+function expired(data: OfflineData) { return Boolean((data.verifiedAt ?? data.seenAt) && Date.now() - (data.verifiedAt ?? data.seenAt) > 72 * 60 * 60 * 1000); }
+function clearDownloaded(data: OfflineData) { data.cache = {}; data.session = undefined; data.subscription = undefined; data.verifiedAt = undefined; }
+
+export async function loadOffline(id: string): Promise<OfflineData> {
+  const data = await readStoredOffline(id);
+  if (!expired(data)) return data;
+  return changeOffline(id, current => { if (expired(current)) clearDownloaded(current); return current; });
+}
+
+export async function forgetOfflineSession(id: string) {
+  await changeOffline(id, data => {
+    // Pending edits belong to this account and must not be lost on sign-out.
+    clearDownloaded(data);
+  });
+}
+
 // One atomic document keeps the outbox and its read snapshots consistent after a crash.
 // Web Locks also prevent two PWA tabs from losing one another's queued changes.
 export async function changeOffline<T>(id: string, change: (data: OfflineData) => T): Promise<T> {
   const task = async () => {
     const apply = async () => {
-      const data = await loadOffline(id);
+      const data = await readStoredOffline(id);
+      if (expired(data)) clearDownloaded(data);
       const result = change(data);
       data.seenAt = Math.max(data.seenAt, Date.now());
       const oldest = Object.keys(data.cache).sort((a, b) => data.cache[a].at - data.cache[b].at);

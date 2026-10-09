@@ -4,16 +4,15 @@ from __future__ import annotations
 
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, HTTPException, Request, Response, status
 from fastapi.responses import HTMLResponse
 from sqlalchemy import select
 
-from app.api.deps import CurrentUser, DbDep
+from app.api.deps import CurrentUser, DbDep, LogoutUser
 from app.core.config import settings
 from app.core.rate_limit import check_auth_rate_limit
 from app.core.security import (
     create_access_token,
-    decode_token,
     hash_password,
     verify_password,
 )
@@ -48,7 +47,9 @@ from app.schemas.common import (
     VerifyEmailRequest,
 )
 from app.services.auth_tokens import (
+    invalidate_user_sessions,
     issue_refresh_token,
+    revoke_browser_refresh_token,
     revoke_refresh_token,
     rotate_refresh_token,
 )
@@ -59,12 +60,24 @@ from app.services.email_auth import (
     verify_email_token,
 )
 from app.services.groups import restore_default_household
+from app.services.web_sessions import (
+    REFRESH_COOKIE,
+    clear_session_cookies,
+    cookie_mode,
+    session_response,
+    verify_csrf,
+    verify_web_origin,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 
 @router.post("/register", response_model=TokenPair)
-def register(payload: RegisterRequest, request: Request, db: DbDep) -> TokenPair:
+def register(
+    payload: RegisterRequest, request: Request, response: Response, db: DbDep
+) -> TokenPair:
+    if cookie_mode(request):
+        verify_web_origin(request)
     email = payload.email.lower()
     check_auth_rate_limit(request, "register", email, subject_limit=4)
     if not payload.terms_accepted or not payload.privacy_accepted:
@@ -106,13 +119,27 @@ def register(payload: RegisterRequest, request: Request, db: DbDep) -> TokenPair
     create_email_verification(db, user)
     refresh_token = issue_refresh_token(db, user, request)
     db.commit()
-    return TokenPair(access_token=create_access_token(user.id), refresh_token=refresh_token)
+    return session_response(
+        TokenPair(
+            access_token=create_access_token(user.id, user.session_version),
+            refresh_token=refresh_token,
+        ),
+        request,
+        response,
+    )
 
 
 @router.post("/login", response_model=TokenPair)
-def login(payload: LoginRequest, request: Request, db: DbDep) -> TokenPair:
+def login(payload: LoginRequest, request: Request, response: Response, db: DbDep) -> TokenPair:
+    if cookie_mode(request):
+        verify_web_origin(request)
     check_auth_rate_limit(request, "login", str(payload.email), subject_limit=8)
-    user = db.scalar(select(User).where(User.email == payload.email.lower()))
+    user = db.scalar(
+        select(User)
+        .where(User.email == payload.email.lower())
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if not user or not user.is_active or not verify_password(payload.password, user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password"
@@ -120,37 +147,68 @@ def login(payload: LoginRequest, request: Request, db: DbDep) -> TokenPair:
     restore_default_household(db, user)
     refresh_token = issue_refresh_token(db, user, request)
     db.commit()
-    return TokenPair(access_token=create_access_token(user.id), refresh_token=refresh_token)
+    return session_response(
+        TokenPair(
+            access_token=create_access_token(user.id, user.session_version),
+            refresh_token=refresh_token,
+        ),
+        request,
+        response,
+    )
 
 
 @router.post("/refresh", response_model=TokenPair)
-def refresh(payload: RefreshRequest, request: Request, db: DbDep) -> TokenPair:
-    rotated = rotate_refresh_token(db, payload.refresh_token, request)
+def refresh(payload: RefreshRequest, request: Request, response: Response, db: DbDep) -> TokenPair:
+    if cookie_mode(request):
+        verify_web_origin(request)
+        if request.cookies.get(REFRESH_COOKIE):
+            verify_csrf(request)
+    raw_token = (
+        request.cookies.get(REFRESH_COOKIE) if cookie_mode(request) else payload.refresh_token
+    )
+    # One-time migration of an existing browser session into HttpOnly cookies.
+    raw_token = raw_token or payload.refresh_token
+    if not raw_token:
+        raise HTTPException(401, "Invalid refresh token")
+    rotated = rotate_refresh_token(db, raw_token, request)
     if rotated:
         user, refresh_token = rotated
         db.commit()
-        return TokenPair(access_token=create_access_token(user.id), refresh_token=refresh_token)
-    legacy_user_id = decode_token(payload.refresh_token, "refresh")
-    legacy_user = db.get(User, legacy_user_id) if legacy_user_id else None
-    if not legacy_user or not legacy_user.is_active:
-        db.commit()
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token"
+        return session_response(
+            TokenPair(
+                access_token=create_access_token(user.id, user.session_version),
+                refresh_token=refresh_token,
+            ),
+            request,
+            response,
         )
-    refresh_token = issue_refresh_token(db, legacy_user, request)
     db.commit()
-    return TokenPair(access_token=create_access_token(legacy_user.id), refresh_token=refresh_token)
+    raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
 
 
 @router.post("/logout")
 def logout(
-    current_user: CurrentUser,
+    current_user: LogoutUser,
     db: DbDep,
+    request: Request,
+    response: Response,
     payload: LogoutRequest | None = None,
 ) -> dict[str, str]:
-    if payload and payload.refresh_token:
-        revoke_refresh_token(db, payload.refresh_token, current_user)
+    if cookie_mode(request):
+        verify_csrf(request)
+    raw_token = (
+        request.cookies.get(REFRESH_COOKIE)
+        if cookie_mode(request)
+        else (payload.refresh_token if payload else None)
+    )
+    if raw_token:
+        if cookie_mode(request):
+            revoke_browser_refresh_token(db, raw_token)
+        elif current_user:
+            revoke_refresh_token(db, raw_token, current_user)
         db.commit()
+    if cookie_mode(request):
+        clear_session_cookies(response)
     return {"status": "ok"}
 
 
@@ -219,6 +277,12 @@ def password_reset_confirm(payload: PasswordResetConfirm, db: DbDep) -> dict[str
 def change_password(
     payload: ChangePasswordRequest, db: DbDep, current_user: CurrentUser
 ) -> dict[str, str]:
+    current_user = db.scalars(
+        select(User)
+        .where(User.id == current_user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    ).one()
     if not verify_password(payload.current_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect"
@@ -226,6 +290,7 @@ def change_password(
     if payload.current_password == payload.new_password:
         raise HTTPException(status_code=400, detail="New password must be different")
     current_user.password_hash = hash_password(payload.new_password)
+    invalidate_user_sessions(db, current_user)
     db.add(
         AuditEvent(
             user_id=current_user.id,
@@ -317,11 +382,19 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
     return {
         "exported_at": datetime.now(UTC).isoformat(),
         "ai_recipe_activity": [
-            {"created_at": job.created_at.isoformat(), "status": job.status,
-             "draft": job.progress.get("draft"), "recipe_id": job.progress.get("recipe_id")}
-            for job in db.scalars(select(IngestionJob).where(
-                IngestionJob.user_id == current_user.id, IngestionJob.job_type == "ai_recipe"
-            ).order_by(IngestionJob.created_at)).all()
+            {
+                "created_at": job.created_at.isoformat(),
+                "status": job.status,
+                "draft": job.progress.get("draft"),
+                "recipe_id": job.progress.get("recipe_id"),
+            }
+            for job in db.scalars(
+                select(IngestionJob)
+                .where(
+                    IngestionJob.user_id == current_user.id, IngestionJob.job_type == "ai_recipe"
+                )
+                .order_by(IngestionJob.created_at)
+            ).all()
         ],
         "export_format_version": "2026-08-09",
         "export_scope": "Authenticated account export. Password hashes, tokens, token identifiers, provider keys, and other household members' private identifiers are excluded.",
@@ -349,7 +422,9 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
             "favorite_proteins": profile.favorite_proteins if profile else [],
             "budget_preference": profile.budget_preference if profile else None,
             "walmart_zip": profile.walmart_zip if profile else None,
-            "preferred_grocery_retailer": profile.preferred_grocery_retailer if profile else "walmart",
+            "preferred_grocery_retailer": profile.preferred_grocery_retailer
+            if profile
+            else "walmart",
             "notification_preferences": profile.notification_preferences if profile else {},
         },
         "household": {
@@ -445,19 +520,29 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
             for entry in macro_entries
         ],
         "meal_choices": [
-            {"recipe_id": choice.recipe_id, "action": choice.action,
-             "selected_at": choice.created_at.isoformat(),
-             "undone_at": choice.undone_at.isoformat() if choice.undone_at else None}
-            for choice in db.scalars(select(MealSwipe).where(
-                MealSwipe.user_id == current_user.id
-            ).order_by(MealSwipe.created_at)).all()
+            {
+                "recipe_id": choice.recipe_id,
+                "action": choice.action,
+                "selected_at": choice.created_at.isoformat(),
+                "undone_at": choice.undone_at.isoformat() if choice.undone_at else None,
+            }
+            for choice in db.scalars(
+                select(MealSwipe)
+                .where(MealSwipe.user_id == current_user.id)
+                .order_by(MealSwipe.created_at)
+            ).all()
         ],
         "offline_sync_receipts": [
-            {"operation_id": receipt.operation_id, "result": receipt.result,
-             "created_at": receipt.created_at.isoformat()}
-            for receipt in db.scalars(select(OfflineReceipt).where(
-                OfflineReceipt.user_id == current_user.id
-            ).order_by(OfflineReceipt.created_at)).all()
+            {
+                "operation_id": receipt.operation_id,
+                "result": receipt.result,
+                "created_at": receipt.created_at.isoformat(),
+            }
+            for receipt in db.scalars(
+                select(OfflineReceipt)
+                .where(OfflineReceipt.user_id == current_user.id)
+                .order_by(OfflineReceipt.created_at)
+            ).all()
         ],
         "account_activity": [_audit_event_for_account_export(event) for event in audit_events],
     }

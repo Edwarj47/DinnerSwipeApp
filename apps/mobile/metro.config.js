@@ -50,6 +50,9 @@ config.resolver.extraNodeModules = new Proxy(
 
 const upstreamResolveRequest = config.resolver.resolveRequest;
 config.resolver.resolveRequest = (context, moduleName, platform) => {
+  if (moduleName === "decode-uri-component") {
+    return { type: "sourceFile", filePath: path.resolve(workspaceRoot, "packages/uri-decoder/index.cjs") };
+  }
   const workspaceNodeModule = resolveWorkspaceNodeModule(moduleName);
   if (workspaceNodeModule) {
     return { type: "sourceFile", filePath: workspaceNodeModule };

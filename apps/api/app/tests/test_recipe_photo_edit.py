@@ -1,9 +1,11 @@
+from io import BytesIO
 from pathlib import Path
 from typing import Any, cast
 from unittest.mock import Mock
 
 import pytest
 from fastapi.testclient import TestClient
+from PIL import Image
 from sqlalchemy.orm import Session
 
 from app.core.config import settings
@@ -37,11 +39,14 @@ def test_owner_can_add_replace_and_keep_nutrition(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    storage = LocalMediaStorageAdapter(tmp_path, "https://example.test")
-    monkeypatch.setattr("app.api.routes.recipes.get_media_storage", lambda: storage)
+    storage = LocalMediaStorageAdapter(tmp_path, settings.public_api_url)
+    monkeypatch.setattr("app.services.private_media.get_media_storage", lambda: storage)
     path = f"/api/v1/recipes/{recipe['id']}/photo"
     urls = []
-    for body in (b"\xff\xd8\xfffirst", b"\xff\xd8\xffreplacement"):
+    for color in ("red", "green"):
+        image = BytesIO()
+        Image.new("RGB", (16, 16), color).save(image, "JPEG")
+        body = image.getvalue()
         response = client.put(
             path, headers=auth_headers, files={"file": ("photo.jpg", body, "image/jpeg")}
         )
@@ -53,11 +58,18 @@ def test_owner_can_add_replace_and_keep_nutrition(
         urls.append(data["photo_url"])
     assert urls[0] != urls[1]
     assert (
-        client.get(f"/api/v1/recipes/{recipe['id']}", headers=auth_headers).json()["photo_url"]
-        == urls[1]
+        client.get(f"/api/v1/recipes/{recipe['id']}", headers=auth_headers)
+        .json()["photo_url"]
+        .split("&token=")[0]
+        == urls[1].split("&token=")[0]
     )
     row = db_session.get(Recipe, recipe["id"])
-    assert row is not None and row.photo_source_url == urls[1]
+    assert row is not None and row.photo_source_url == row.photo_url
+    assert (
+        row.photo_url
+        and "/api/v1/media/objects/" in row.photo_url
+        and "token=" not in row.photo_url
+    )
     assert len(list(tmp_path.rglob("*.jpg"))) == 2
 
 
@@ -69,7 +81,7 @@ def test_nonowner_and_invalid_images_do_not_write(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     storage = Mock()
-    monkeypatch.setattr("app.api.routes.recipes.get_media_storage", lambda: storage)
+    monkeypatch.setattr("app.services.private_media.get_media_storage", lambda: storage)
     path = f"/api/v1/recipes/{recipe['id']}/photo"
     assert (
         client.put(

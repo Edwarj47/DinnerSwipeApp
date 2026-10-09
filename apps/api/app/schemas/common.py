@@ -42,6 +42,7 @@ class TokenPair(ApiModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    web_session: bool = False
 
 
 class RegisterRequest(ApiModel):
@@ -58,7 +59,7 @@ class LoginRequest(ApiModel):
 
 
 class RefreshRequest(ApiModel):
-    refresh_token: str
+    refresh_token: str | None = Field(default=None, max_length=1024)
 
 
 class LogoutRequest(ApiModel):
@@ -514,7 +515,7 @@ class ImportMappingRequest(ApiModel):
 
 
 class UrlIngestRequest(ApiModel):
-    urls: list[HttpUrl]
+    urls: list[HttpUrl] = Field(min_length=1, max_length=5)
 
 
 class UrlApprovalRequest(ApiModel):

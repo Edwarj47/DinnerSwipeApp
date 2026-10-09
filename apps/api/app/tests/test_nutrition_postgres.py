@@ -51,5 +51,23 @@ def test_nutrition_concurrent_global_quota(monkeypatch: pytest.MonkeyPatch) -> N
         assert results.count("daily_budget_exhausted") == 23
         with Session(engine) as db:
             assert db.scalar(select(func.count()).select_from(NutritionCall)) == 7
+        with sessions() as db:
+            db.execute(delete(NutritionCall))
+            db.commit()
+        config.fatsecret_user_daily_budget = 2
+
+        def reserve_account(_: int) -> str:
+            try:
+                budget.reserve("foods.search", user_id="limited-nutrition-account")
+                return "reserved"
+            except NutritionError as error:
+                return error.code
+
+        with ThreadPoolExecutor(max_workers=8) as pool:
+            account_results = list(pool.map(reserve_account, range(8)))
+        assert account_results.count("reserved") == 2
+        assert account_results.count("account_budget_exhausted") == 6
+        with Session(engine) as db:
+            assert db.scalar(select(func.count()).select_from(NutritionCall)) == 2
     finally:
         engine.dispose()

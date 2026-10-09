@@ -2,9 +2,10 @@ import { Ionicons } from "@expo/vector-icons";
 import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { RecipePhoto } from "@/features/recipes/RecipePhoto";
-import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
+import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 
 import { Button } from "@/components/Button";
+import { SearchField } from "@/components/SearchField";
 import { Colors } from "@/components/theme";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { apiFetch, reconnectOffline } from "@/services/api";
@@ -93,13 +94,10 @@ function GroupRecipePicker({ household, onClose, onShared }: {
           <View style={styles.copy}><Text style={styles.title}>Share recipes</Text><Text numberOfLines={2} style={styles.meta}>{household.name}</Text></View>
           <Button label="" icon="close" accessibilityLabel="Close recipe sharing" disabled={share.isPending} onPress={close} />
         </View>
-        <View style={styles.search}>
-          <Ionicons name="search-outline" size={20} color={Colors.muted} />
-          <TextInput accessibilityLabel="Search your recipes" placeholder="Search your recipes" value={search} maxLength={200} editable={!share.isPending} onChangeText={value => {
+        <SearchField showSearchIcon containerStyle={styles.search} accessibilityLabel="Search your recipes" placeholder="Search your recipes" value={search} maxLength={200} editable={!share.isPending} onChangeText={value => {
             if (selectAll) clearSelection();
             share.reset(); setSearch(value);
-          }} style={styles.input} />
-        </View>
+          }} />
         <View style={styles.toolbar}>
           <Pressable accessibilityRole="checkbox" accessibilityLabel={search.trim() ? "Select all matching recipes" : "Select all recipes"}
             accessibilityState={{ checked: selectAll && !excluded.size ? true : count ? "mixed" : false, disabled: !available || recipes.isFetching || share.isPending }}
@@ -140,8 +138,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", gap: 12, alignItems: "center", padding: 18, paddingBottom: 12 },
   title: { fontSize: 20, fontWeight: "800", color: Colors.ink }, copy: { flex: 1, minWidth: 0 },
   meta: { color: Colors.muted, fontSize: 13, lineHeight: 20 },
-  search: { flexDirection: "row", alignItems: "center", gap: 10, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, marginHorizontal: 18, paddingHorizontal: 12, minHeight: 48 },
-  input: { flex: 1, minWidth: 0, minHeight: 46, fontSize: 15, color: Colors.ink },
+  search: { marginHorizontal: 18 },
   toolbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: 18, minHeight: 52, gap: 8 },
   selectAll: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44 }, selectLabel: { color: Colors.ink, fontWeight: "600", fontSize: 14 },
   list: { flex: 1 }, row: { flexDirection: "row", gap: 12, alignItems: "center", minHeight: 80, paddingVertical: 14, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: Colors.border },

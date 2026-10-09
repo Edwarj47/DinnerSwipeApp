@@ -4,7 +4,7 @@ import { RecipeMacroLogger } from "@/features/recipes/RecipeMacroLogger";
 import { RecipeLibrarySection } from "@/features/recipes/RecipeLibrarySection";
 import { EMPTY_NUTRITION, nutritionInputs, parseNutrition } from "@/features/recipes/recipeNutrition";
 import { apiFetch } from "@/services/api";
-import { Recipe } from "@/services/types";
+import { MacroConfirmation, Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
@@ -40,6 +40,52 @@ test("recipe logging scales portions, permits individual overrides and saves its
     const payload = JSON.parse(request.mock.calls.find(([path]) => path === "/api/v1/macros/entries")![1]!.body as string);
     expect(payload).toMatchObject({ recipe_id: "recipe-1", servings_consumed: 1.5, meal_date: "2026-09-28", protein_g: 33 });
     expect(payload).toMatchObject({ calories: 600, fat_g: 0, carbs_g: null, fiber_g: null });
+  } finally { screen.close(); }
+});
+
+test("logged-meal editor saves reviewed nutrition as a recipe without changing the diary entry", async () => {
+  const entry = { id: "entry-1", entry_name: "Rice bowl", recipe_id: "recipe-1", meal_date: "2026-09-28", meal_label: "dinner",
+    servings_consumed: 1, calories: 400, protein_g: 20, carbs_g: null, fat_g: 0, fiber_g: null } as MacroConfirmation;
+  const close = jest.fn();
+  const screen = mount(<RecipeMacroLogger entry={entry} onClose={close} />);
+  try {
+    fireEvent.changeText(screen.getByLabelText("Servings eaten"), "1.5");
+    fireEvent.changeText(screen.getByLabelText("Protein (g)"), "33");
+    fireEvent.changeText(screen.getByLabelText("Recipe log notes"), "My lunch");
+    fireEvent.press(screen.getByLabelText("Save as recipe"));
+    fireEvent.changeText(screen.getByLabelText("Logged meal recipe name"), "My rice bowl");
+    fireEvent.press(screen.getByLabelText("Save recipe"));
+    await screen.findByText("Recipe saved to your library.");
+    const writes = request.mock.calls.filter(([, init]) => init?.method);
+    expect(writes).toHaveLength(1);
+    expect(writes[0][0]).toBe("/api/v1/recipes");
+    expect(JSON.parse(String(writes[0][1]?.body))).toMatchObject({
+      name: "My rice bowl", description: "My lunch", meal_type: "dinner", servings: 1,
+      nutrition: { calories: 600, protein_g: 33, carbs_g: null, fat_g: 0, fiber_g: null }
+    });
+    expect(close).not.toHaveBeenCalled();
+    expect(screen.getByLabelText("Recipe saved").props.accessibilityState.disabled).toBe(true);
+  } finally { screen.close(); }
+});
+
+test("logged database items copy references and portions, never the temporary nutrition totals", async () => {
+  const entry = { id: "entry-1", calculator_id: "calc-1", entry_name: "My eggs", meal_date: "2026-09-28", meal_label: "breakfast",
+    servings_consumed: 2, calories: 148, protein_g: 12.58 } as MacroConfirmation;
+  request.mockImplementation(async (path) => path.endsWith("calc-1") ? {
+    items: [{ source: "fatsecret", name: "Egg", portions: 2, food_id: "3092", serving_id: "11206" }]
+  } : {});
+  const screen = mount(<RecipeMacroLogger entry={entry} onClose={jest.fn()} />);
+  try {
+    fireEvent.changeText(screen.getByLabelText("Servings eaten"), "3");
+    fireEvent.press(screen.getByLabelText("Save as recipe"));
+    fireEvent.press(screen.getByLabelText("Save recipe"));
+    await screen.findByText("Recipe saved to your library.");
+    const call = request.mock.calls.find(([, init]) => init?.method === "POST")!;
+    expect(call[0]).toBe("/api/v1/nutrition/calculations");
+    const payload = JSON.parse(String(call[1]?.body));
+    expect(payload).toMatchObject({ name: "My eggs", destination: "recipe", servings: 1,
+      items: [{ source: "fatsecret", name: "Egg", portions: 3, food_id: "3092", serving_id: "11206" }] });
+    expect(payload.items[0].nutrition).toBeUndefined();
   } finally { screen.close(); }
 });
 

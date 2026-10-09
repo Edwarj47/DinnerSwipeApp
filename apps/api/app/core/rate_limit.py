@@ -1,55 +1,84 @@
 from __future__ import annotations
 
+import hashlib
+import hmac
+import ipaddress
 import time
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from datetime import UTC, datetime
 
-from fastapi import HTTPException, Request, status
+from fastapi import HTTPException, Request
+from sqlalchemy import delete, select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.orm import Session
+
+from app.core.config import settings
+from app.database.session import SessionLocal
+from app.models.security import RateLimitCounter
 
 
-@dataclass
-class WindowCounter:
-    reset_at: float
-    count: int = 0
-
-
-@dataclass
-class InMemoryRateLimiter:
-    counters: dict[str, WindowCounter] = field(default_factory=dict)
+class DatabaseRateLimiter:
+    def __init__(self, sessions: Callable[[], Session]) -> None:
+        self.sessions = sessions
 
     def check(self, key: str, limit: int, window_seconds: int) -> None:
-        now = time.monotonic()
-        counter = self.counters.get(key)
-        if not counter or counter.reset_at <= now:
-            self.counters[key] = WindowCounter(reset_at=now + window_seconds, count=1)
-            self._prune(now)
-            return
-        counter.count += 1
-        if counter.count > limit:
-            retry_after = max(1, int(counter.reset_at - now))
-            raise HTTPException(
-                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-                detail="Too many attempts. Please wait and try again.",
-                headers={"Retry-After": str(retry_after)},
+        self.reserve([(key, limit, window_seconds)])
+
+    def reserve(self, limits: list[tuple[str, int, int]]) -> None:
+        now = time.time()
+        with self.sessions() as db:
+            insert = pg_insert if db.get_bind().dialect.name == "postgresql" else sqlite_insert
+            reservations = []
+            for key, limit, window in limits:
+                bucket = int(now // window)
+                digest = hmac.new(
+                    settings.jwt_secret.encode(),
+                    f"{key}:{window}:{bucket}".encode(),
+                    hashlib.sha256,
+                ).hexdigest()
+                reset = datetime.fromtimestamp((bucket + 1) * window, UTC).replace(tzinfo=None)
+                reservations.append((digest, limit, reset))
+            for digest, limit, reset in sorted(reservations):
+                db.execute(
+                    insert(RateLimitCounter)
+                    .values(key=digest, count=0, reset_at=reset)
+                    .on_conflict_do_nothing(index_elements=["key"])
+                )
+                counter = db.scalars(
+                    select(RateLimitCounter).where(RateLimitCounter.key == digest).with_for_update()
+                ).one()
+                if counter.count >= limit:
+                    raise HTTPException(
+                        429,
+                        "Too many attempts. Please wait and try again.",
+                        headers={
+                            "Retry-After": str(
+                                max(1, int((reset - datetime.utcnow()).total_seconds()))
+                            )
+                        },
+                    )
+                counter.count += 1
+            db.commit()
+
+    def prune(self) -> None:
+        with self.sessions() as db:
+            db.execute(
+                delete(RateLimitCounter).where(RateLimitCounter.reset_at < datetime.utcnow())
             )
-
-    def _prune(self, now: float) -> None:
-        if len(self.counters) < 10_000:
-            return
-        expired = [key for key, counter in self.counters.items() if counter.reset_at <= now]
-        for key in expired:
-            self.counters.pop(key, None)
+            db.commit()
 
 
-auth_rate_limiter = InMemoryRateLimiter()
+auth_rate_limiter = DatabaseRateLimiter(SessionLocal)
 
 
 def client_identifier(request: Request) -> str:
-    forwarded_for = request.headers.get("x-forwarded-for", "")
-    if forwarded_for:
-        return forwarded_for.split(",", maxsplit=1)[0].strip()
-    if request.client and request.client.host:
-        return request.client.host
-    return "unknown"
+    # Uvicorn rewrites request.client only for configured trusted proxy peers.
+    raw = request.client.host if request.client else "unknown"
+    try:
+        return str(ipaddress.ip_address(raw))
+    except ValueError:
+        return "unknown"
 
 
 def check_auth_rate_limit(
@@ -63,7 +92,9 @@ def check_auth_rate_limit(
 ) -> None:
     ip = client_identifier(request)
     normalized_subject = subject.lower().strip() or "anonymous"
-    auth_rate_limiter.check(f"auth:{action}:ip:{ip}", ip_limit, window_seconds)
-    auth_rate_limiter.check(
-        f"auth:{action}:subject:{ip}:{normalized_subject}", subject_limit, window_seconds
+    auth_rate_limiter.reserve(
+        [
+            (f"auth:{action}:ip:{ip}", ip_limit, window_seconds),
+            (f"auth:{action}:subject:{normalized_subject}", subject_limit, window_seconds),
+        ]
     )

@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { SearchField } from "@/components/SearchField";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Household } from "@/services/types";
@@ -29,7 +30,7 @@ export function SpaceSelector({ label = "Planning for", purpose = "switch" }: { 
     <Modal visible={open} transparent animationType="slide" onRequestClose={() => { if (!change.isPending) setOpen(false); }}>
       <View style={styles.backdrop}><View style={styles.sheet} accessibilityViewIsModal>
         <View style={styles.header}><Text style={styles.title}>Choose a group</Text><Pressable accessibilityRole="button" accessibilityLabel="Close group selection" disabled={change.isPending} onPress={() => setOpen(false)} style={styles.icon}><Ionicons name="close" size={24} color={Colors.ink} /></Pressable></View>
-        <TextInput accessibilityLabel="Search groups" placeholder="Search groups" value={search} onChangeText={setSearch} style={styles.input} />
+        <SearchField accessibilityLabel="Search groups" placeholder="Search groups" value={search} onChangeText={setSearch} editable={!change.isPending} />
         <ScrollView keyboardShouldPersistTaps="handled" style={styles.list}>
           {matches.map(g => <Pressable key={g.id} accessibilityRole="radio" accessibilityLabel={g.is_personal ? "My Kitchen" : g.name} accessibilityState={{ checked: g.id === selected?.id }} aria-checked={g.id === selected?.id} disabled={change.isPending} onPress={() => change.mutate(g.id)} style={styles.row}>
             <Ionicons name={g.is_personal ? "home-outline" : "people-outline"} size={22} color={Colors.basil} />

@@ -26,6 +26,14 @@ class Settings(BaseSettings):
     ai_ingestion_enabled: bool = False
     ai_recipe_enabled: bool = False
     ai_recipe_model: str = "gpt-5.4-mini"
+    ai_basic_daily_attempts: int = Field(default=10, ge=1, le=1000)
+    ai_premium_daily_attempts: int = Field(default=100, ge=1, le=10000)
+    ai_daily_dispatch_budget: int = Field(default=500, ge=1, le=10000)
+    ai_max_output_tokens: int = Field(default=6000, ge=1000, le=16000)
+    max_import_columns: int = 100
+    max_spreadsheet_expanded_bytes: int = 52_428_800
+    media_account_quota_bytes: int = 524_288_000
+    media_cleanup_enabled: bool = False
     max_upload_size_bytes: int = 10_485_760
     max_import_rows: int = 2_000
     max_cell_length: int = 10_000
@@ -65,6 +73,7 @@ class Settings(BaseSettings):
     fatsecret_client_id: SecretStr = SecretStr("")
     fatsecret_client_secret: SecretStr = SecretStr("")
     fatsecret_daily_budget: int = Field(default=1000, ge=1, le=4000)
+    fatsecret_user_daily_budget: int = Field(default=100, ge=1, le=1000)
     fatsecret_background_budget: int = Field(default=100, ge=0, le=500)
     fatsecret_min_interval_seconds: float = Field(default=1, ge=0.5, le=60)
     fatsecret_cache_seconds: int = Field(default=82800, ge=1, le=82800)
@@ -136,18 +145,12 @@ class Settings(BaseSettings):
 
     @property
     def basic_waiver_code_list(self) -> list[str]:
-        return [
-            code.strip().lower()
-            for code in self.basic_waiver_codes.split(",")
-            if code.strip()
-        ]
+        return [code.strip().lower() for code in self.basic_waiver_codes.split(",") if code.strip()]
 
     @property
     def premium_waiver_code_list(self) -> list[str]:
         return [
-            code.strip().lower()
-            for code in self.premium_waiver_codes.split(",")
-            if code.strip()
+            code.strip().lower() for code in self.premium_waiver_codes.split(",") if code.strip()
         ]
 
 

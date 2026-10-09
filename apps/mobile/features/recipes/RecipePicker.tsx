@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Button } from "@/components/Button";
+import { SearchField } from "@/components/SearchField";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
@@ -41,7 +42,7 @@ export function RecipePicker({ title, visible, busy, error, ownedOnly = false, w
           {weeklyChoices ? <SegmentedControl value={tab} onChange={setTab} accessibilityLabel="Meal collection" options={[
             { label: "This week's picks", value: "weekly" }, { label: "All recipes", value: "all" }
           ]} /> : null}
-          <TextInput accessibilityLabel="Search meals" placeholder="Search meals" value={search} onChangeText={setSearch} style={styles.search} />
+          <SearchField accessibilityLabel="Search meals" placeholder="Search meals" value={search} onChangeText={setSearch} editable={!busy} />
           <ScrollView keyboardShouldPersistTaps="handled" style={styles.list}>
             {recipes.isLoading ? <Text style={styles.meta}>Loading meals...</Text> : null}
             {recipes.isError ? <Button label="Retry" icon="refresh" onPress={() => { void recipes.refetch(); }} /> : null}

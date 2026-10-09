@@ -67,6 +67,7 @@ class NutritionCall(Base):
     background: Mapped[int] = mapped_column(Integer)
     kind: Mapped[str] = mapped_column(String(20))
     outcome: Mapped[str] = mapped_column(String(30), default="reserved")
+    user_id: Mapped[str | None] = mapped_column(String(36), nullable=True)
 
 
 class NutritionRefreshRun(Base):

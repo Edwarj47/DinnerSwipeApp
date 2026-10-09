@@ -82,10 +82,12 @@ async def generate(
         return serialize(job)
     try:
         draft = await service.generate(description.strip(), data, mime)
-    except Exception:
+    except Exception as error:
         job.status = "failed"
         job.error_message = "No recipe generated. No use was charged."
         db.commit()
+        if isinstance(error, HTTPException) and error.status_code == 429:
+            raise
         raise HTTPException(
             502,
             "We couldn't read a recipe. Try a clearer photo or more detail. No use was charged.",

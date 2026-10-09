@@ -12,6 +12,7 @@ from app.api.routes import (
     health,
     imports,
     ingestion,
+    media,
     nutrition,
     offline,
     plans,
@@ -38,3 +39,4 @@ api_router.include_router(group_planning.reminder_router)
 api_router.include_router(premium.router)
 api_router.include_router(offline.router)
 api_router.include_router(nutrition.router)
+api_router.include_router(media.router)

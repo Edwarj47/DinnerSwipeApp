@@ -12,6 +12,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
 
+from app.core.actor import RequestActor, acting_as
 from app.core.rate_limit import auth_rate_limiter
 from app.database.session import get_db
 from app.main import app
@@ -21,10 +22,14 @@ from app.models.entities import User, UserSubscription
 
 
 @pytest.fixture(autouse=True)
-def reset_rate_limiter() -> Generator[None, None, None]:
-    auth_rate_limiter.counters.clear()
-    yield
-    auth_rate_limiter.counters.clear()
+def reset_rate_limiter(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> Generator[None, None, None]:
+    monkeypatch.setattr(
+        auth_rate_limiter, "sessions", sessionmaker(bind=db_session.get_bind(), autoflush=False)
+    )
+    with acting_as(RequestActor("test-provider-account", True, True)):
+        yield
 
 
 @pytest.fixture()
