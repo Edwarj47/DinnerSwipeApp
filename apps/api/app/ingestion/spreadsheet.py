@@ -107,12 +107,21 @@ def collect(
 def parse_worker(
     connection: object, path: str, suffix: str, limits: tuple[int, int, int, int, int]
 ) -> None:
+    import os
     import resource
     from multiprocessing.connection import Connection
     from typing import cast
 
     pipe = cast(Connection, connection)
     try:
+        # Optional NumPy imports must not create CPU-dependent thread pools.
+        for name in (
+            "OPENBLAS_NUM_THREADS",
+            "OMP_NUM_THREADS",
+            "MKL_NUM_THREADS",
+            "NUMEXPR_NUM_THREADS",
+        ):
+            os.environ[name] = "1"
         resource.setrlimit(resource.RLIMIT_AS, (268435456, 268435456))
         resource.setrlimit(resource.RLIMIT_CPU, (10, 10))
         pipe.send((True, parse_spreadsheet(path, suffix, limits)))

@@ -511,6 +511,50 @@ def test_dimensionless_xlsx_preserves_columns(tmp_path: Path) -> None:
     assert rows == [{"name": "Eggs", "ingredients": "2 eggs", "instructions": "Cook"}]
 
 
+def test_parser_worker_bounds_optional_thread_pools(monkeypatch: pytest.MonkeyPatch) -> None:
+    import os
+    import resource
+
+    from app.ingestion import spreadsheet
+
+    names = (
+        "OPENBLAS_NUM_THREADS",
+        "OMP_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+    )
+    for name in names:
+        monkeypatch.setenv(name, "32")
+    limits_seen = []
+    monkeypatch.setattr(
+        resource, "setrlimit", lambda kind, value: limits_seen.append((kind, value))
+    )
+
+    def parse(*_: object) -> tuple[list[dict[str, str]], list[str]]:
+        assert all(os.environ[name] == "1" for name in names)
+        return [{"name": "Eggs"}], ["name"]
+
+    monkeypatch.setattr(spreadsheet, "parse_spreadsheet", parse)
+
+    class Pipe:
+        value: object = None
+        closed = False
+
+        def send(self, value: object) -> None:
+            self.value = value
+
+        def close(self) -> None:
+            self.closed = True
+
+    pipe = Pipe()
+    spreadsheet.parse_worker(pipe, "fixture.xlsx", ".xlsx", (2000, 100, 10000, 50000000, 10000000))
+    assert pipe.value == (True, ([{"name": "Eggs"}], ["name"])) and pipe.closed
+    assert limits_seen == [
+        (resource.RLIMIT_AS, (268435456, 268435456)),
+        (resource.RLIMIT_CPU, (10, 10)),
+    ]
+
+
 def test_slow_dns_does_not_block_async_requests(monkeypatch: pytest.MonkeyPatch) -> None:
     def resolve(_: str) -> str:
         time.sleep(0.15)

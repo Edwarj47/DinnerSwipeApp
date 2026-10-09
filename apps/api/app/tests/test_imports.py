@@ -17,7 +17,7 @@ def test_csv_import_partial_flow(client: TestClient, auth_headers: dict[str, str
         headers=auth_headers,
         files={"file": ("recipes.csv", io.BytesIO(csv_data.encode()), "text/csv")},
     )
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     batch_id = response.json()["batch_id"]
     mapping = response.json()["suggested_mapping"]
     validation = client.post(
@@ -57,7 +57,7 @@ def test_xlsx_import_preview(client: TestClient, auth_headers: dict[str, str]) -
             )
         },
     )
-    assert response.status_code == 200
+    assert response.status_code == 200, response.text
     mapping = response.json()["suggested_mapping"]
     assert mapping["name"] == "title"
     validation = client.post(
