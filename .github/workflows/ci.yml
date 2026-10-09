@@ -21,7 +21,30 @@ jobs:
           python -m pip show SQLAlchemy mypy pydantic
       - run: cd apps/api && ruff check app
       - run: cd apps/api && mypy app
-      - run: cd apps/api && pytest
+      - name: Run backend tests
+        run: cd apps/api && pytest --junitxml="$RUNNER_TEMP/backend-tests.xml"
+      - name: Annotate backend test failures
+        if: failure()
+        env:
+          TEST_RESULTS: ${{ runner.temp }}/backend-tests.xml
+        run: |
+          python <<'PY'
+          import os
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+
+          path = Path(os.environ["TEST_RESULTS"])
+          if path.exists():
+              for case in ET.parse(path).iter("testcase"):
+                  for failure in list(case):
+                      if failure.tag not in {"failure", "error"}:
+                          continue
+                      message = f"{case.get('classname')}.{case.get('name')}\n{failure.text or failure.get('message', '')}"
+                      if len(message) > 6000:
+                          message = message[:3000] + "\n...\n" + message[-3000:]
+                      message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                      print(f"::error title=Backend test failure::{message}")
+          PY
 
   frontend:
     runs-on: ubuntu-latest
@@ -35,7 +58,7 @@ jobs:
       - run: npm run lint -w apps/mobile
       - run: npm run typecheck -w apps/mobile
       - name: Run mobile tests with a cold transform cache
-        run: npm test -w apps/mobile -- --runInBand --no-cache --json --outputFile="$RUNNER_TEMP/mobile-tests.json"
+        run: npm test -w apps/mobile -- --runInBand --no-cache --forceExit --json --outputFile="$RUNNER_TEMP/mobile-tests.json"
       - name: Annotate mobile test failures
         if: failure()
         env:
