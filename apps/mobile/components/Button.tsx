@@ -11,9 +11,10 @@ type Props = {
   onPress: () => void;
   accessibilityLabel?: string;
   disabled?: boolean;
+  compact?: boolean;
 };
 
-export function Button({ label, icon, variant = "secondary", onPress, accessibilityLabel, disabled = false }: Props) {
+export function Button({ label, icon, variant = "secondary", onPress, accessibilityLabel, disabled = false, compact = false }: Props) {
   const ref = useRef<View>(null);
   useEffect(() => {
     // RN Web filters title props, so attach the browser tooltip to the DOM node.
@@ -28,10 +29,10 @@ export function Button({ label, icon, variant = "secondary", onPress, accessibil
       accessibilityState={{ disabled }}
       disabled={disabled}
       onPress={onPress}
-      style={[styles.button, styles[variant], icon && !label ? styles.iconOnly : null, disabled ? styles.disabled : null]}
+      style={[styles.button, styles[variant], compact ? styles.compact : null, icon && !label ? styles.iconOnly : null, disabled ? styles.disabled : null]}
     >
-      {icon ? <Ionicons name={icon} size={18} color={color} /> : null}
-      {label ? <Text style={[styles.label, { color }]}>{label}</Text> : null}
+      {icon ? <Ionicons name={icon} size={compact ? 16 : 18} color={color} /> : null}
+      {label ? <Text style={[styles.label, compact ? styles.compactLabel : null, { color }]}>{label}</Text> : null}
     </Pressable>
   );
 }
@@ -54,5 +55,7 @@ const styles = StyleSheet.create({
   quiet: { backgroundColor: "transparent" },
   "quiet-danger": { backgroundColor: "transparent" },
   disabled: { opacity: 0.45 },
+  compact: { paddingHorizontal: 4, gap: 4 },
+  compactLabel: { fontSize: 12 },
   label: { color: Colors.ink, fontWeight: "700", fontSize: 14, flexShrink: 1, textAlign: "center", paddingVertical: 8 }
 });

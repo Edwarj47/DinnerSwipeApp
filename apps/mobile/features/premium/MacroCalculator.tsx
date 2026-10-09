@@ -61,7 +61,10 @@ export function MacroCalculator({ calculationId, onClose, onSaved }: {
     mutationFn: () => apiFetch<typeof consent.data>("/api/v1/nutrition/consent", {
       method: "POST", body: JSON.stringify({ terms_version: consent.data?.terms_version })
     }),
-    onSuccess: result => { client.setQueryData(["nutrition-consent"], result); setError(""); },
+    onSuccess: result => {
+      client.setQueryData(["nutrition-consent"], result); setError("");
+      void client.invalidateQueries({ predicate: query => String(query.queryKey[0]).startsWith("macro-") });
+    },
     onError: reason => setError(message(reason))
   });
 

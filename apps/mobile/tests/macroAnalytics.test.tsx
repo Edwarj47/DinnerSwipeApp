@@ -1,9 +1,10 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { MacroAnalyticsPanel } from "@/features/premium/MacroAnalyticsPanel";
 import { analyticsDays, trendBuckets } from "@/features/premium/analytics";
 import { apiFetch } from "@/services/api";
-import { MacroDayTotal } from "@/services/types";
+import { MacroAnalytics, MacroDayTotal } from "@/services/types";
+import { useOfflineStatus } from "@/services/offlineStore";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("@/services/api", () => ({ apiFetch: jest.fn() }));
@@ -31,6 +32,7 @@ function mount() {
   return { ...screen, close: () => { screen.unmount(); client.clear(); } };
 }
 beforeEach(() => {
+  useOfflineStatus.setState({ offline: false });
   request.mockReset();
   request.mockImplementation(async (path, init) => {
     if (path === "/api/v1/profile") return init?.method === "PUT" ? JSON.parse(String(init.body)) : {
@@ -64,4 +66,49 @@ test("empty analytics stays useful without presenting fabricated charts", async 
     await screen.findByText("No entries in this period");
     expect(screen.queryByTestId("analytics-chart-calories")).toBeNull();
   } finally { screen.close(); }
+});
+
+test("incomplete food nutrition is explicit, refreshable, and clears when values return", async () => {
+  const original = request.getMockImplementation()!;
+  let refresh: ((value: unknown) => void) | undefined;
+  let count = 0;
+  request.mockImplementation(async (path, init) => {
+    const data = await original(path, init);
+    if (!path.includes("/macros/analytics")) return data;
+    if (++count === 1) return { ...(data as MacroAnalytics), nutrition_unavailable_count: 1,
+      daily_totals: [{ ...day("2026-10-08", 0), nutrition_unavailable_count: 1 }] };
+    return new Promise(resolve => { refresh = resolve; });
+  });
+  const screen = mount();
+  try {
+    await screen.findByText("Some food nutrition couldn't be refreshed. Totals are incomplete.");
+    expect(screen.queryByText(/Some database nutrition/)).toBeNull();
+    expect(screen.getByLabelText("Calories, 2026-10-08: Pending")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Refresh food nutrition"));
+    await screen.findByText("Refreshing food nutrition... Totals are incomplete.");
+    expect(screen.getByLabelText("Refresh food nutrition").props.accessibilityState.disabled).toBe(true);
+    await waitFor(() => expect(refresh).toBeDefined());
+    await act(async () => { refresh!({ ...(await original("/api/v1/macros/analytics") as MacroAnalytics), nutrition_unavailable_count: 0 }); });
+    await waitFor(() => expect(screen.queryByLabelText("Refresh food nutrition")).toBeNull());
+    expect(screen.getByLabelText("Calories, 2026-10-08: 100 cal")).toBeTruthy();
+    expect(count).toBe(2);
+  } finally { screen.close(); }
+});
+
+test("offline nutrition notices do not offer a working network refresh", async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init) => {
+    const data = await original(path, init);
+    return path.includes("/macros/analytics") ? { ...(data as MacroAnalytics), nutrition_unavailable_count: 1 } : data;
+  });
+  const screen = mount();
+  try {
+    await screen.findByLabelText("Refresh food nutrition");
+    act(() => useOfflineStatus.setState({ offline: true }));
+    expect(screen.getByText("Connect to refresh food nutrition. Totals are incomplete.")).toBeTruthy();
+    expect(screen.getByLabelText("Refresh food nutrition").props.accessibilityState.disabled).toBe(true);
+    const count = request.mock.calls.length;
+    fireEvent.press(screen.getByLabelText("Refresh food nutrition"));
+    expect(request.mock.calls).toHaveLength(count);
+  } finally { screen.close(); useOfflineStatus.setState({ offline: false }); }
 });

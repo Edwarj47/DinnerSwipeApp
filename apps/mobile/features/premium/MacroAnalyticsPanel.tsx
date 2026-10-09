@@ -11,6 +11,7 @@ import { convertWeight, formatWeight } from "@/services/weightUnits";
 import { analyticsDays, TrendBucket, trendBuckets } from "./analytics";
 import { todayISO } from "./macroDates";
 import { NutritionAttribution } from "./NutritionAttribution";
+import { NutritionPendingNotice } from "./NutritionPendingNotice";
 import { SummaryPeriod } from "./SummaryPeriod";
 
 export function MacroAnalyticsPanel() {
@@ -37,7 +38,7 @@ export function MacroAnalyticsPanel() {
     {analytics.isLoading ? <Text style={styles.meta}>Loading analytics...</Text> : analytics.isError ? <>
       <Text accessibilityRole="alert" style={styles.error}>Couldn't load your analytics.</Text><Button label="Retry analytics" icon="refresh" onPress={() => { void analytics.refetch(); }} />
     </> : data ? <>
-      {data.nutrition_unavailable_count ? <Text accessibilityRole="alert" style={styles.error}>Some database nutrition is pending. Totals are incomplete.</Text> : null}
+      {data.nutrition_unavailable_count ? <NutritionPendingNotice refreshing={analytics.isFetching} onRefresh={() => { void analytics.refetch(); }} /> : null}
       <View style={styles.metrics}>
         <Metric label="Consumed" value={String(data.eaten_meals)} />
         <Metric label="Days logged" value={String(data.days_logged)} />

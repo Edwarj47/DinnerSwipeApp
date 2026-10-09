@@ -28,8 +28,32 @@ async function mount(ready = true, calculationId?: string) {
   const saved = jest.fn(), close = jest.fn();
   const screen = render(<QueryClientProvider client={client}><MacroCalculator calculationId={calculationId} onClose={close} onSaved={saved} /></QueryClientProvider>);
   if (ready) await screen.findByLabelText(calculationId ? "Update calculation" : "Calculator item name");
-  return { ...screen, saved, close, cleanup: () => { screen.unmount(); client.clear(); } };
+  return { ...screen, client, saved, close, cleanup: () => { screen.unmount(); client.clear(); } };
 }
+
+test("accepting nutrition consent invalidates macro views that may have unresolved values", async () => {
+  let accepted = false;
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init) => {
+    if (!path.endsWith("/consent")) return original(path, init);
+    if (init?.method === "POST") accepted = true;
+    return { accepted, terms_version: "fatsecret-terms-v1" };
+  });
+  const screen = await mount(false);
+  try {
+    await screen.findByLabelText("Agree and continue");
+    for (const key of ["macro-summary", "macro-analytics", "recipes"]) screen.client.setQueryDefaults([key], { gcTime: 60000 });
+    screen.client.setQueryData(["macro-summary", 7], { nutrition_unavailable_count: 1 });
+    screen.client.setQueryData(["macro-analytics", "dashboard"], { nutrition_unavailable_count: 1 });
+    screen.client.setQueryData(["recipes"], []);
+    fireEvent.press(screen.getByLabelText("Agree and continue"));
+    await screen.findByLabelText("Calculator item name");
+    expect(screen.client.getQueryState(["macro-summary", 7])?.isInvalidated).toBe(true);
+    expect(screen.client.getQueryState(["macro-analytics", "dashboard"])?.isInvalidated).toBe(true);
+    expect(screen.client.getQueryState(["recipes"])?.isInvalidated).toBe(false);
+    expect(screen.queryByLabelText("Agree and continue")).toBeNull();
+  } finally { screen.cleanup(); }
+});
 
 test("portion math preserves zeros, unknown nutrients and expired provider views", () => {
   expect(calculationTotal([row])).toEqual({ calories: 148, protein_g: 12.58, carbs_g: .76, fat_g: 9.94, fiber_g: 0 });

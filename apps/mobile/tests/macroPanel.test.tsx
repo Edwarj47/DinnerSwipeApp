@@ -63,6 +63,32 @@ test("Save as recipe preserves the form, canonical grams and zero values without
   } finally { screen.close(); }
 });
 
+test("entry actions label the calculator and retain update, clear, recipe save and delete when editing", async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init) => {
+    if (path.includes("/entries")) return init?.method === "DELETE" ? { status: "deleted" } : [{
+      id: "manual-entry", meal_date: todayISO(), entry_name: "My snack", meal_label: "snack", status: "ate",
+      servings_consumed: 1, calories: 100, protein_g: 2
+    }];
+    return original(path, init);
+  });
+  const screen = mount();
+  try {
+    await screen.findByLabelText("Entry name");
+    expect(screen.getByText("Calculator", { exact: true })).toBeTruthy();
+    expect(screen.getByLabelText("Add").props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByLabelText("Clear")).toBeTruthy();
+    expect(screen.getByLabelText("Open macro calculator")).toBeTruthy();
+    fireEvent.press(await screen.findByText("My snack", { exact: true }));
+    expect(screen.getByLabelText("Update")).toBeTruthy();
+    expect(screen.getByLabelText("Save as recipe")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Delete"));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/macros/entries/manual-entry", { method: "DELETE" }));
+    await screen.findByText("Macro entry removed.");
+    expect(screen.getByLabelText("Entry name").props.value).toBe("");
+  } finally { screen.close(); }
+});
+
 test("recipe-save errors preserve the form and offline recipe creation is disabled", async () => {
   const original = request.getMockImplementation()!;
   request.mockImplementation(async (path, init) => {

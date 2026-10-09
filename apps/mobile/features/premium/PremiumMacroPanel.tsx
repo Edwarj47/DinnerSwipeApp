@@ -22,6 +22,7 @@ import { RecipeMacroLogger } from "@/features/recipes/RecipeMacroLogger";
 import { MacroDatePicker } from "./MacroDatePicker";
 import { MacroCalculator } from "./MacroCalculator";
 import { NutritionAttribution } from "./NutritionAttribution";
+import { NutritionPendingNotice } from "./NutritionPendingNotice";
 import { TourTarget } from "@/features/onboarding/TourTarget";
 import { CalendarSort, calendarDays, isISODate, macroRangeQuery, shiftISODate, todayISO } from "./macroDates";
 import {
@@ -253,7 +254,7 @@ export function PremiumMacroPanel() {
             <Metric label="Protein" value={summary.data ? `${formatWeight(convertWeight(summary.data.totals.protein_g, "g", unit)!, unit)} ${unit}` : "-"} />
             <Metric label="Calories" value={summary.data ? String(summary.data.totals.calories) : "-"} />
           </View></TourTarget>
-          {summary.data?.nutrition_unavailable_count ? <Text style={styles.error}>Some database nutrition is pending. Totals are incomplete.</Text> : null}
+          {summary.data?.nutrition_unavailable_count ? <NutritionPendingNotice refreshing={summary.isFetching} onRefresh={() => { void summary.refetch(); }} /> : null}
 
           <SegmentedControl
             adaptive
@@ -273,7 +274,7 @@ export function PremiumMacroPanel() {
             <Button label="Retry macros" icon="refresh" onPress={() => { void activeQuery.refetch(); }} />
           </View> : activeQuery.isLoading && (macroView !== "day" || isISODate(selectedDate)) ? <Text style={styles.meta}>Loading macros...</Text> : null}
 
-          {macroView !== "day" && (macroView === "analytics" ? analytics.data : calendarAnalytics.data)?.nutrition_unavailable_count ? <Text style={styles.error}>Some database nutrition is pending. Totals are incomplete.</Text> : null}
+          {macroView !== "day" && (macroView === "analytics" ? analytics.data : calendarAnalytics.data)?.nutrition_unavailable_count ? <NutritionPendingNotice refreshing={activeQuery.isFetching} onRefresh={() => { void activeQuery.refetch(); }} /> : null}
           {macroView === "day" ? (
             <><Button label="Log a saved recipe" icon="restaurant-outline" onPress={() => setRecipeLog("new")} />
             <DayMacroView
@@ -281,6 +282,8 @@ export function PremiumMacroPanel() {
               setSelectedDate={setSelectedDate}
               selectedTotal={selectedTotal}
               selectedEntries={selectedEntries}
+              nutritionRefreshing={entries.isFetching}
+              onRefreshNutrition={() => { void entries.refetch(); }}
               entryName={entryName}
               setEntryName={setEntryName}
               mealLabel={mealLabel}
@@ -351,6 +354,8 @@ function DayMacroView({
   setSelectedDate,
   selectedTotal,
   selectedEntries,
+  nutritionRefreshing,
+  onRefreshNutrition,
   entryName,
   setEntryName,
   mealLabel,
@@ -383,6 +388,8 @@ function DayMacroView({
   setSelectedDate: (value: string) => void;
   selectedTotal?: { calories: number; protein_g: number; entry_count: number };
   selectedEntries: MacroConfirmation[];
+  nutritionRefreshing: boolean;
+  onRefreshNutrition: () => void;
   entryName: string;
   setEntryName: (value: string) => void;
   mealLabel: MealLabel;
@@ -446,17 +453,17 @@ function DayMacroView({
         </View>
         <Text style={styles.fieldLabel}>Notes</Text>
         <TextInput accessibilityLabel="Entry notes" value={entryNotes} onChangeText={setEntryNotes} placeholder="Notes" style={styles.input} />
-        <View style={styles.actions}>
-          <Button label={editingEntryId ? "Update" : "Add"} icon={editingEntryId ? "save" : "add-circle"} variant="primary" disabled={savePending || !entryName.trim()} onPress={onSave} />
-          <Button label="Clear" icon="close" onPress={onClear} />
-          {editingEntryId ? <Button label="Delete" icon="trash" variant="danger" disabled={deletePending} onPress={onDelete} /> : null}
+        <View style={styles.entryActions}>
+          <View style={styles.entryAction}><Button compact label={editingEntryId ? "Update" : "Add"} icon={editingEntryId ? "save" : "add-circle"} variant="primary" disabled={savePending || !entryName.trim()} onPress={onSave} /></View>
+          <View style={styles.entryAction}><Button compact label="Clear" icon="close" onPress={onClear} /></View>
+          <View style={styles.entryAction}><Button compact label="Calculator" icon="calculator-outline" accessibilityLabel="Open macro calculator" onPress={onCalculator} /></View>
         </View>
-        <View style={styles.recipeActions}><View style={styles.recipeAction}><Button label={recipeSaved ? "Recipe saved" : "Save as recipe"} icon="book-outline" disabled={recipeSaveDisabled} onPress={onSaveRecipe} /></View>
-          <Button label="" icon="calculator-outline" accessibilityLabel="Open macro calculator" onPress={onCalculator} /></View>
+        <Button label={recipeSaved ? "Recipe saved" : "Save as recipe"} icon="book-outline" disabled={recipeSaveDisabled} onPress={onSaveRecipe} />
+        {editingEntryId ? <Button label="Delete" icon="trash" variant="danger" disabled={deletePending} onPress={onDelete} /> : null}
       </View>
 
       <View style={styles.entryList}>
-        {selectedEntries.some(entry => entry.nutrition_unavailable) ? <Text style={styles.error}>Some database nutrition is pending. Today's totals are incomplete.</Text> : null}
+        {selectedEntries.some(entry => entry.nutrition_unavailable) ? <NutritionPendingNotice refreshing={nutritionRefreshing} onRefresh={onRefreshNutrition} /> : null}
         <Text style={styles.subsection}>Logged on {selectedDate}</Text>
         {selectedEntries.length === 0 ? <Text style={styles.meta}>No macro entries for this date yet.</Text> : null}
         {selectedEntries.map((entry) => (
@@ -764,8 +771,8 @@ const styles = StyleSheet.create({
   metric: { flexGrow: 1, flexShrink: 0, maxWidth: "100%", borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10 },
   metricValue: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
   metricLabel: { color: Colors.muted, fontWeight: "800", fontSize: 12 },
-  recipeActions: { flexDirection: "row", alignItems: "center", gap: 8 },
-  recipeAction: { flex: 1, minWidth: 0 },
+  entryActions: { flexDirection: "row", gap: 8 },
+  entryAction: { flex: 1, minWidth: 0 },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   field: { flexBasis: "45%", flexGrow: 1, minWidth: 0, gap: 4 },
   fieldLabel: { color: Colors.ink, fontWeight: "700", fontSize: 14 },
