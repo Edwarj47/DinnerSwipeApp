@@ -23,3 +23,11 @@ A read-only production check on 2026-10-09 found successful recorded provider ca
 Android uses version code 27 with the existing package and signing identity. The release includes only mobile/web changes; no API rebuild, database migration, credential change, or provider request is needed for deployment.
 
 Before replacing only the Dinner Swipe web container, save its image and static assets, a verified database dump, and a selected container inventory in the ignored private release backup directory. Roll back by restoring the saved web image and recreating only `dinner-swipe-web`; do not restore the database over newer user activity. Verify GitHub CI, the live static bundle and public health endpoint, and the APK's package, version, source, signing identity, and integrity. Physical-device testing remains separate.
+
+## Local APK Distribution
+
+Expo rejected the cloud build because the monthly Android allowance was exhausted. No billing or credentials were changed. The alternative uses the [supported EAS local build](https://docs.expo.dev/build-reference/local-builds/) with the existing preview profile and managed signing credentials, inside a non-root isolated container capped at 1.5 CPUs and 2304 MiB. Its Android SDK/NDK come from Google's repository; dependencies remain pinned by the existing npm lockfile. Build work and credentials stay in a private, ignored release directory, not the public download directory.
+
+Only verified APKs and their checksum files belong in `backups/android-public/`. Nginx mounts that specific directory read-only at `/downloads/`; it does not expose the rest of `backups/`. Directory listing is disabled, unknown download paths return 404 instead of the SPA, and existing response security headers are inherited. Preserve versioned filenames instead of overwriting prior releases. This mount keeps downloads available through later web image replacements.
+
+The published APK must match the source commit recorded when the local build began. Later distribution-only commits may differ, provided `apps/mobile`, `packages`, and the npm lockfile are unchanged. Check the actual Android manifest, all existing ABIs/permissions, cryptographic signing verification, the previous signing certificate, and ZIP integrity before publication. A successful local build is not an Expo cloud build or a store submission.
