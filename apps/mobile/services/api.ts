@@ -244,7 +244,10 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
         data.edits.push(prepared);
         return prepared;
       });
-      if (!deviceOffline()) await syncOffline();
+      if (!deviceOffline()) {
+        if (edit.kind === "grocery_update") void syncGroceryInBackground(owner, epoch);
+        else await syncOffline();
+      }
       return (macroAfter(edit) ?? { status: "saved_on_device" }) as T;
     }
   }
@@ -389,6 +392,19 @@ function makeOfflineEdit(path: string, init: RequestInit, data: Awaited<ReturnTy
       revision: row.revision, values, before: row, label: row.entry_name ?? row.recipe_name ?? "Macro entry" };
   }
   return null;
+}
+
+async function syncGroceryInBackground(owner: string, epoch: number) {
+  try {
+    if (offlineOwner() !== owner || epoch !== sessionEpoch) return;
+    await syncOffline();
+    if (offlineOwner() !== owner || epoch !== sessionEpoch || deviceOffline()) return;
+    // A new write can join a sync that is just finishing its last empty read.
+    const next = (await loadOffline(owner)).edits[0];
+    if (next && !next.issue && offlineOwner() === owner && epoch === sessionEpoch) await syncOffline();
+  } catch {
+    if (offlineOwner() === owner && epoch === sessionEpoch) useOfflineStatus.setState({ storageError: "Unable to sync saved changes on this device. Try again." });
+  }
 }
 
 export async function syncOffline(): Promise<void> {

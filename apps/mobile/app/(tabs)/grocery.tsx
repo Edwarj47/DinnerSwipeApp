@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocalSearchParams } from "expo-router";
 import { Linking, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
@@ -10,6 +10,7 @@ import { Screen } from "@/components/Screen";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { Colors } from "@/components/theme";
 import { apiFetch as remoteFetch } from "@/services/api";
+import { useOfflineStatus } from "@/services/offlineStore";
 import { useSpace } from "@/features/groups/useSpace";
 import { SpaceSelector } from "@/features/groups/SpaceSelector";
 import { TourTarget } from "@/features/onboarding/TourTarget";
@@ -38,6 +39,7 @@ type PantryItem = { id: string; normalized_name: string; category: string; cover
 type RecipeGroup = { recipe_id: string | null; recipe_name: string; items: GroceryItem[] };
 type GroceryListResponse = { items: GroceryItem[]; recipe_groups?: RecipeGroup[]; retailer_display_name?: string; pantry_coverage_version?: number };
 type GroceryMode = "list" | "add" | "pantry";
+type GroceryPatch = { sequence: number; item: GroceryItem; patch: Partial<GroceryItem> };
 
 export default function GroceryScreen() {
   const space = useSpace();
@@ -62,9 +64,23 @@ function GroceryContent() {
   const [manualUnit, setManualUnit] = useState("");
   const [pantryName, setPantryName] = useState("");
   const [pantrySelection, setPantrySelection] = useState<PantrySelection | null>(null);
-  const { data, error: loadError } = useQuery<GroceryListResponse>({ queryKey: space.queryKey("grocery"), queryFn: () => apiFetch<GroceryListResponse>("/api/v1/grocery-lists/current"), enabled: !space.isLoading && !space.isError, refetchInterval: space.groupId ? 30_000 : false });
+  const [pendingPatches, setPendingPatches] = useState<GroceryPatch[]>([]);
+  const pendingRef = useRef(pendingPatches);
+  const sequence = useRef(0);
+  const queuedEdits = useOfflineStatus(state => state.edits);
+  const groceryKey = space.queryKey("grocery");
+  const { data, error: loadError } = useQuery<GroceryListResponse>({ queryKey: groceryKey, queryFn: ({ signal }) => apiFetch<GroceryListResponse>("/api/v1/grocery-lists/current", { signal }), enabled: !space.isLoading && !space.isError, refetchInterval: space.groupId ? 30_000 : false });
   const { data: pantry } = useQuery<PantryItem[]>({ queryKey: space.queryKey("pantry"), queryFn: () => apiFetch<PantryItem[]>("/api/v1/grocery-lists/pantry"), enabled: !space.isLoading && !space.isError, refetchInterval: space.groupId ? 30_000 : false });
-  const list = data as GroceryListResponse | undefined;
+  const list = useMemo<GroceryListResponse | undefined>(() => {
+    const current = data as GroceryListResponse | undefined;
+    if (!current) return undefined;
+    const changes = new Map<string, Partial<GroceryItem>>();
+    for (const edit of queuedEdits) if (edit.kind === "grocery_update" && edit.household_id === space.groupId && edit.target_id) {
+      changes.set(edit.target_id, { ...changes.get(edit.target_id), ...edit.values });
+    }
+    for (const { item, patch } of pendingPatches) changes.set(item.id, { ...changes.get(item.id), ...patch });
+    return { ...current, items: current.items.map(item => changes.has(item.id) ? { ...item, ...changes.get(item.id) } : item) };
+  }, [data, queuedEdits, pendingPatches, space.groupId]);
   const pantryReady = list?.pantry_coverage_version === 1;
   const grouped = useMemo<RecipeGroup[]>(() => {
     if (!list) return [];
@@ -79,7 +95,7 @@ function GroceryContent() {
       queryClient.invalidateQueries({ queryKey: ["grocery"] })
     ]);
   };
-  const itemsLeft = data?.items.filter((item: GroceryItem) => !item.is_checked && item.quantity !== 0).length ?? 0;
+  const itemsLeft = list?.items.filter((item: GroceryItem) => !item.is_checked && item.quantity !== 0).length ?? 0;
   const regen = useMutation({
     mutationFn: () => apiFetch("/api/v1/grocery-lists/current/regenerate", { method: "POST" }),
     onSuccess: async () => {
@@ -89,10 +105,42 @@ function GroceryContent() {
     }
   });
   const patchItem = useMutation({
-    mutationFn: ({ item, patch }: { item: GroceryItem; patch: Partial<GroceryItem> }) =>
-      apiFetch(`/api/v1/grocery-lists/items/${item.id}`, { method: "PATCH", body: JSON.stringify(patch) }),
-    onSuccess: async () => queryClient.invalidateQueries({ queryKey: ["grocery"] })
+    networkMode: "always",
+    scope: { id: `grocery-update:${space.key}` },
+    mutationFn: ({ item, patch }: GroceryPatch) =>
+      apiFetch<{ status?: string }>(`/api/v1/grocery-lists/items/${item.id}`, { method: "PATCH", body: JSON.stringify(patch) }),
+    onMutate: () => {
+      const query = queryClient.getQueryCache().find({ queryKey: groceryKey, exact: true });
+      void queryClient.cancelQueries({ queryKey: groceryKey, exact: true });
+      return query;
+    },
+    onSuccess: async (result, { item, patch }, query) => {
+      // Do not recreate a cleared account cache or let an older poll undo this save.
+      if (!query || queryClient.getQueryCache().find({ queryKey: groceryKey, exact: true }) !== query) return;
+      await queryClient.cancelQueries({ queryKey: groceryKey, exact: true });
+      if (queryClient.getQueryCache().find({ queryKey: groceryKey, exact: true }) !== query) return;
+      queryClient.setQueryData<GroceryListResponse>(groceryKey, (previous: GroceryListResponse | undefined) => previous ? {
+        ...previous, items: previous.items.map(row => row.id === item.id ? { ...row, ...patch } : row)
+      } : previous);
+      if (result?.status !== "saved_on_device") void queryClient.invalidateQueries({ queryKey: groceryKey, exact: true });
+    },
+    onSettled: (_result, _error, change) => {
+      pendingRef.current = pendingRef.current.filter(pending => pending.sequence !== change.sequence);
+      setPendingPatches(pendingRef.current);
+    }
   });
+  const updateItem = (item: GroceryItem, patch: Partial<GroceryItem>) => {
+    const change = { sequence: ++sequence.current, item, patch };
+    pendingRef.current = [...pendingRef.current, change];
+    setPendingPatches(pendingRef.current);
+    patchItem.mutate(change);
+  };
+  const toggleItem = (item: GroceryItem) => {
+    let checked = queryClient.getQueryData<GroceryListResponse>(groceryKey)?.items.find(row => row.id === item.id)?.is_checked ?? item.is_checked;
+    for (const edit of useOfflineStatus.getState().edits) if (edit.kind === "grocery_update" && edit.household_id === space.groupId && edit.target_id === item.id && typeof edit.values.is_checked === "boolean") checked = edit.values.is_checked;
+    for (const change of pendingRef.current) if (change.item.id === item.id && change.patch.is_checked !== undefined) checked = change.patch.is_checked;
+    updateItem(item, { is_checked: !checked });
+  };
   const deleteItem = useMutation({
     mutationFn: (item: GroceryItem) => apiFetch(`/api/v1/grocery-lists/items/${item.id}`, { method: "DELETE" }),
     onSuccess: async () => {
@@ -204,7 +252,7 @@ function GroceryContent() {
             return (
             <View key={item.id} style={[styles.item, isExpanded ? styles.itemExpanded : null]}>
               <View style={styles.itemTop}>
-              <Pressable accessibilityRole="checkbox" accessibilityLabel={item.display_name} aria-checked={item.is_checked} accessibilityState={{ checked: item.is_checked }} onPress={() => patchItem.mutate({ item, patch: { is_checked: !item.is_checked } })} style={styles.checkboxTarget}>
+              <Pressable accessibilityRole="checkbox" accessibilityLabel={item.display_name} aria-checked={item.is_checked} accessibilityState={{ checked: item.is_checked }} onPress={() => toggleItem(item)} style={styles.checkboxTarget}>
                 <View style={[styles.checkbox, item.is_checked && styles.checkboxChecked]}>{item.is_checked ? <Ionicons name="checkmark" size={19} color="#fff" /> : null}</View>
               </Pressable>
               <View style={styles.itemBody}>
@@ -227,8 +275,8 @@ function GroceryContent() {
                   <>
                   <Text style={styles.meta}>Buy total: {formatQuantity(item, weightUnit)}</Text>
                   <View style={styles.itemControls}>
-                  <Button label="" icon="remove" accessibilityLabel={`Decrease ${item.display_name} quantity`} disabled={patchItem.isPending || item.quantity === 0} onPress={() => patchItem.mutate({ item, patch: { quantity: Math.max(0, (item.quantity ?? 1) - quantityStep(item.unit, weightUnit)) } })} />
-                  <Button label="" icon="add" accessibilityLabel={`Increase ${item.display_name} quantity`} disabled={patchItem.isPending} onPress={() => patchItem.mutate({ item, patch: { quantity: (item.quantity ?? 0) + quantityStep(item.unit, weightUnit) } })} />
+                  <Button label="" icon="remove" accessibilityLabel={`Decrease ${item.display_name} quantity`} disabled={patchItem.isPending || item.quantity === 0} onPress={() => updateItem(item, { quantity: Math.max(0, (item.quantity ?? 1) - quantityStep(item.unit, weightUnit)) })} />
+                  <Button label="" icon="add" accessibilityLabel={`Increase ${item.display_name} quantity`} disabled={patchItem.isPending} onPress={() => updateItem(item, { quantity: (item.quantity ?? 0) + quantityStep(item.unit, weightUnit) })} />
                   {retailerUrl(item) ? (
                     <Button
                       label={item.retailer_display_name ?? data?.retailer_display_name ?? "Walmart"}

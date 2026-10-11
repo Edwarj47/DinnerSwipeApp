@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { onlineManager, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { StyleSheet } from "react-native";
 
@@ -9,6 +9,7 @@ import { PantryCoverageEditor } from "@/features/grocery/PantryCoverageEditor";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { GRAMS_PER_OUNCE } from "@/services/weightUnits";
+import { useOfflineStatus } from "@/services/offlineStore";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-image", () => ({ Image: () => null }));
@@ -29,7 +30,155 @@ function mount(child: React.ReactNode, preferences: Record<string, unknown> = {}
   const screen = render(<QueryClientProvider client={client}>{child}</QueryClientProvider>);
   return { ...screen, client, close: () => { screen.unmount(); client.clear(); } };
 }
-beforeEach(() => request.mockReset());
+beforeEach(() => {
+  request.mockReset();
+  onlineManager.setOnline(true);
+  useOfflineStatus.setState({ edits: [], offline: false, syncing: false, storageError: "", noticeSince: null });
+});
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: Error) => void;
+  const promise = new Promise<T>((yes, no) => { resolve = yes; reject = no; });
+  return { promise, resolve, reject };
+}
+const testOnion = { id: "onion", display_name: "Red onion", quantity: 3, unit: null, category: "produce", is_checked: false, match_status: "search_link" };
+function groceryFixture() {
+  return { items: [testOnion], recipe_groups: [
+    { recipe_id: "tacos", recipe_name: "Tacos", items: [testOnion] },
+    { recipe_id: "salad", recipe_name: "Salad", items: [testOnion] }
+  ] };
+}
+
+test("delayed grocery saves immediately update every recipe and rapid taps stay ordered", async () => {
+  const first = deferred<{ status: string }>();
+  const second = deferred<{ status: string }>();
+  let writes = 0;
+  request.mockImplementation(async (path, init) => {
+    if (init?.method === "PATCH") return ++writes === 1 ? first.promise : second.promise;
+    if (path.endsWith("/grocery-lists/current")) return groceryFixture();
+    return {};
+  });
+  const screen = mount(<GroceryScreen />);
+  try {
+    await screen.findAllByRole("checkbox");
+    act(() => {
+      fireEvent.press(screen.getAllByRole("checkbox")[0]);
+      fireEvent.press(screen.getAllByRole("checkbox")[0]);
+      fireEvent.press(screen.getAllByRole("checkbox")[1]);
+    });
+    expect(screen.getAllByRole("checkbox").every(row => row.props.accessibilityState.checked)).toBe(true);
+    expect(screen.getByText("0 left to grab • Walmart links")).toBeTruthy();
+    await waitFor(() => expect(writes).toBe(1));
+    act(() => screen.client.setQueryData(["grocery"], groceryFixture()));
+    expect(screen.getAllByRole("checkbox").every(row => row.props.accessibilityState.checked)).toBe(true);
+    await act(async () => first.resolve({ status: "saved_on_device" }));
+    await waitFor(() => expect(writes).toBe(2));
+    expect(screen.getAllByRole("checkbox").every(row => row.props.accessibilityState.checked)).toBe(true);
+    await act(async () => second.resolve({ status: "saved_on_device" }));
+    await waitFor(() => expect(writes).toBe(3));
+    await waitFor(() => expect(screen.client.isMutating()).toBe(0));
+    expect(request.mock.calls.filter(([, init]) => init?.method === "PATCH").map(([, init]) => JSON.parse(String(init?.body)))).toEqual([
+      { is_checked: true }, { is_checked: false }, { is_checked: true }
+    ]);
+    expect(request.mock.calls.filter(([path]) => path.endsWith("/grocery-lists/current"))).toHaveLength(1);
+    expect(screen.client.getQueryData(["grocery"])).toMatchObject({ items: [{ is_checked: true }] });
+  } finally { first.resolve({ status: "saved_on_device" }); second.resolve({ status: "saved_on_device" }); screen.close(); }
+}, 20_000);
+
+test("a failed grocery save rolls back and a subsequent tap can save normally", async () => {
+  const failed = deferred<{ status: string }>();
+  const saved = deferred<{ status: string }>();
+  let writes = 0;
+  request.mockImplementation(async (path, init) => {
+    if (init?.method === "PATCH") return ++writes === 1 ? failed.promise : saved.promise;
+    return path.endsWith("/grocery-lists/current") ? groceryFixture() : {};
+  });
+  const screen = mount(<GroceryScreen />);
+  try {
+    await screen.findAllByRole("checkbox");
+    fireEvent.press(screen.getAllByRole("checkbox")[0]);
+    expect(screen.getAllByRole("checkbox").every(row => row.props.accessibilityState.checked)).toBe(true);
+    await waitFor(() => expect(writes).toBe(1));
+    await act(async () => failed.reject(new Error("Disk full")));
+    await screen.findByText("Disk full");
+    expect(screen.getAllByRole("checkbox").every(row => !row.props.accessibilityState.checked)).toBe(true);
+    fireEvent.press(screen.getAllByRole("checkbox")[0]);
+    fireEvent.press(screen.getAllByRole("checkbox")[1]);
+    await waitFor(() => expect(writes).toBe(2));
+    expect(screen.getAllByRole("checkbox").every(row => !row.props.accessibilityState.checked)).toBe(true);
+    await act(async () => saved.resolve({ status: "saved_on_device" }));
+    await waitFor(() => expect(screen.client.isMutating()).toBe(0));
+    expect(screen.getAllByRole("checkbox").every(row => !row.props.accessibilityState.checked)).toBe(true);
+  } finally { failed.resolve({ status: "saved_on_device" }); saved.resolve({ status: "saved_on_device" }); screen.close(); }
+});
+
+test("an earlier failed save cannot roll back a newer pending checkbox choice", async () => {
+  const failed = deferred<{ status: string }>();
+  const saved = deferred<{ status: string }>();
+  let writes = 0;
+  request.mockImplementation(async (path, init) => init?.method === "PATCH" ? (++writes === 1 ? failed.promise : saved.promise) : path.endsWith("/grocery-lists/current") ? groceryFixture() : {});
+  const screen = mount(<GroceryScreen />);
+  try {
+    await screen.findAllByRole("checkbox");
+    act(() => {
+      fireEvent.press(screen.getAllByRole("checkbox")[0]);
+      fireEvent.press(screen.getAllByRole("checkbox")[0]);
+      fireEvent.press(screen.getAllByRole("checkbox")[0]);
+    });
+    await waitFor(() => expect(writes).toBe(1));
+    await act(async () => failed.reject(new Error("Disk full")));
+    await waitFor(() => expect(writes).toBe(2));
+    expect(screen.getAllByRole("checkbox").every(row => row.props.accessibilityState.checked)).toBe(true);
+    await act(async () => saved.resolve({ status: "saved_on_device" }));
+    await waitFor(() => expect(screen.client.isMutating()).toBe(0));
+    expect(screen.getAllByRole("checkbox").every(row => row.props.accessibilityState.checked)).toBe(true);
+  } finally { failed.resolve({ status: "saved_on_device" }); saved.resolve({ status: "saved_on_device" }); screen.close(); }
+});
+
+test("queued grocery changes survive stale refreshes and remain isolated to their group", async () => {
+  request.mockImplementation(async path => path.endsWith("/grocery-lists/current") ? groceryFixture() : {});
+  const screen = mount(<GroceryScreen />);
+  try {
+    await screen.findAllByRole("checkbox");
+    act(() => useOfflineStatus.setState({ edits: [{ operation_id: "other", kind: "grocery_update", household_id: "family", target_id: "onion", values: { is_checked: true }, label: "Red onion" }] }));
+    expect(screen.getAllByRole("checkbox").every(row => !row.props.accessibilityState.checked)).toBe(true);
+    act(() => useOfflineStatus.setState({ edits: [{ operation_id: "local", kind: "grocery_update", target_id: "onion", values: { is_checked: true }, label: "Red onion", issue: "Changed on another device" }] }));
+    act(() => screen.client.setQueryData(["grocery"], groceryFixture()));
+    expect(screen.getAllByRole("checkbox").every(row => row.props.accessibilityState.checked)).toBe(true);
+    act(() => useOfflineStatus.setState({ edits: [] }));
+    expect(screen.getAllByRole("checkbox").every(row => !row.props.accessibilityState.checked)).toBe(true);
+  } finally { screen.close(); }
+});
+
+test("a completed grocery write cannot recreate a cleared account cache", async () => {
+  const saved = deferred<{ status: string }>();
+  request.mockImplementation(async (path, init) => init?.method === "PATCH" ? saved.promise : path.endsWith("/grocery-lists/current") ? groceryFixture() : {});
+  const screen = mount(<GroceryScreen />);
+  try {
+    await screen.findAllByRole("checkbox");
+    fireEvent.press(screen.getAllByRole("checkbox")[0]);
+    await waitFor(() => expect(request.mock.calls.some(([, init]) => init?.method === "PATCH")).toBe(true));
+    screen.unmount();
+    screen.client.clear();
+    await act(async () => saved.resolve({ status: "saved_on_device" }));
+    expect(screen.client.getQueryData(["grocery"])).toBeUndefined();
+  } finally { saved.resolve({ status: "saved_on_device" }); screen.client.clear(); }
+});
+
+test("offline checkbox taps persist locally instead of being paused by the query network manager", async () => {
+  request.mockImplementation(async (path, init) => init?.method === "PATCH" ? { status: "saved_on_device" } : path.endsWith("/grocery-lists/current") ? groceryFixture() : {});
+  const screen = mount(<GroceryScreen />);
+  try {
+    await screen.findAllByRole("checkbox");
+    act(() => onlineManager.setOnline(false));
+    fireEvent.press(screen.getAllByRole("checkbox")[0]);
+    expect(screen.getAllByRole("checkbox").every(row => row.props.accessibilityState.checked)).toBe(true);
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/grocery-lists/items/onion", expect.objectContaining({ method: "PATCH", body: JSON.stringify({ is_checked: true }) })));
+    await waitFor(() => expect(screen.client.isMutating()).toBe(0));
+    expect(screen.client.getQueryData(["grocery"])).toMatchObject({ items: [{ is_checked: true }] });
+  } finally { screen.close(); onlineManager.setOnline(true); }
+});
 
 test("grocery groups start expanded, collapse individually and share checks and pantry actions", async () => {
   let onion = { id: "onion", display_name: "Red onion", quantity: 3, unit: null, category: "produce", is_checked: false, match_status: "search_link" };

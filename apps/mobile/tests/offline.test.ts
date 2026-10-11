@@ -222,6 +222,57 @@ test("failed local persistence never reports saved or sends a server mutation", 
   expect((await loadOffline(owner)).edits).toHaveLength(0);
 });
 
+test("online grocery writes return after durable storage while slow sync continues in order", async () => {
+  await connect();
+  let acknowledge!: (value: Response) => void;
+  const slow = new Promise<Response>(resolve => { acknowledge = resolve; });
+  jest.mocked(fetch).mockReturnValueOnce(slow).mockImplementation(async (_url, init) => {
+    const edit = JSON.parse(String(init?.body));
+    expect(edit.revision).toBe("revision-2");
+    expect(edit.values).toEqual({ is_checked: false });
+    return response({ result: { id: "milk", revision: "revision-3" } });
+  });
+  try {
+    await expect(apiFetch("/api/v1/grocery-lists/items/milk", { method: "PATCH", body: JSON.stringify({ is_checked: true }) })).resolves.toEqual({ status: "saved_on_device" });
+    expect((await loadOffline(owner)).edits).toHaveLength(1);
+    await expect(apiFetch("/api/v1/grocery-lists/items/milk", { method: "PATCH", body: JSON.stringify({ is_checked: false }) })).resolves.toEqual({ status: "saved_on_device" });
+    const saved = await loadOffline(owner);
+    expect(saved.edits).toHaveLength(2);
+    expect(saved.edits[1].revision).toBe(`pending:${saved.edits[0].operation_id}`);
+    expect(fetch).toHaveBeenCalledTimes(1);
+    const syncing = syncOffline();
+    acknowledge(response({ result: { id: "milk", revision: "revision-2" } }));
+    await syncing;
+    expect((await loadOffline(owner)).edits).toHaveLength(0);
+    expect(readOffline(await loadOffline(owner), groceryPath)).toMatchObject({ items: [{ is_checked: false, revision: "revision-3" }] });
+  } finally {
+    acknowledge(response({ result: { id: "milk", revision: "revision-2" } }));
+    await syncOffline();
+  }
+});
+
+test("failed grocery persistence rolls back the outbox and never sends a request", async () => {
+  await connect();
+  jest.mocked(AsyncStorage.setItem).mockRejectedValueOnce(new Error("Disk full"));
+  await expect(apiFetch("/api/v1/grocery-lists/items/milk", { method: "PATCH", body: JSON.stringify({ is_checked: true }) })).rejects.toThrow("Disk full");
+  expect(fetch).not.toHaveBeenCalled();
+  expect((await loadOffline(owner)).edits).toHaveLength(0);
+  expect(readOffline(await loadOffline(owner), groceryPath)).toMatchObject({ items: [{ is_checked: false }] });
+});
+
+test.each(["network", 409])("background grocery sync failure %s retains durable local choices", async failure => {
+  await connect();
+  if (typeof failure === "string") jest.mocked(fetch).mockRejectedValueOnce(new TypeError("No connection"));
+  else jest.mocked(fetch).mockResolvedValueOnce(response({ detail: "Changed on another device" }, failure));
+  await expect(apiFetch("/api/v1/grocery-lists/items/milk", { method: "PATCH", body: JSON.stringify({ is_checked: true }) })).resolves.toEqual({ status: "saved_on_device" });
+  await syncOffline();
+  const saved = await loadOffline(owner);
+  expect(saved.edits).toHaveLength(1);
+  expect(readOffline(saved, groceryPath)).toMatchObject({ items: [{ is_checked: true }] });
+  if (failure === "network") expect(useOfflineStatus.getState().offline).toBe(true);
+  else expect(saved.edits[0].issue).toBe("Changed on another device");
+});
+
 test("sign out and another account cannot access the previous account's queue", async () => {
   await connect();
   setDeviceOffline(true);
