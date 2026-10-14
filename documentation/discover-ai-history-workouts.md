@@ -68,3 +68,19 @@ The web app is the Expo/React Native Web export served by Nginx behind the VPS p
 - Builds: web export and the isolated API Docker image passed. The restricted non-root, read-only container normalized WAV/WebM/MP4 and rejected overlong/concurrent decoding, with temporary-file cleanup verified.
 
 Provider calls were mocked for these tests; live provider acceptance testing remains a release check. Android notification delivery and native hardware features have not been verified on a device in this implementation pass. Native voice remains deferred. The production API/web/worker, PostgreSQL data, provider configuration, and APK were not changed. No source changes were committed or pushed.
+
+## Web-First Deployment, 2026-10-14
+
+- Application source `b0028dc8d1dba66e6162161a29c39c91284828c3` was pushed to `main`. [GitHub CI](https://github.com/Edwarj47/DinnerSwipeApp/actions/runs/38567356264) passed backend, frontend, and Docker jobs.
+- The API, worker, and web were deployed to `https://dinner.dcss.dev` after verified database/media backups and preserving prior image tags. Only Dinner Swipe application containers were replaced; PostgreSQL, proxy routes, and unrelated services were unchanged.
+- Both additive migrations are installed. New workout tables have the existing runtime role's DML permissions, without schema creation privileges.
+- Workouts, typed meal assistance, and web voice are enabled in the ignored server environment. Existing provider budgets remain 500 AI dispatches and 1,000 FatSecret calls globally per day; meal assistance permits 20 drafts per account per day. Repository feature-flag defaults remain disabled.
+- Production health, authenticated read access, anonymous rejection, non-root/read-only containers, web security headers, unchanged meal/grocery data fingerprints, and the existing APK 27 download were checked. A live meal description generated a temporary review draft successfully; that test draft was discarded without saving a recipe or macro entry.
+- The deployed frontend assets passed the Nutrition and Workouts browser flows at 320 x 720, 390 x 844, and 1280 x 900 using synthetic API fixtures. Those browser interactions did not write to production accounts. Live backend read checks were performed separately.
+- The actual deployed API image passed bounded WAV/WebM/MP4 decoding and cleanup checks. The configured transcription model is available to the current provider account. Real microphone/device UAT remains separate.
+
+No APK was built, no EAS build was submitted, and no Expo subscription/billing change was made. Expo SDK 51 and Android version code 27 remain unchanged. Web deployments do not update the installed APK's bundled UI; existing APK users must use the web version for newly added screens until a later native build.
+
+The planned Expo upgrade means updating the app framework and native recording dependencies, not upgrading the paid EAS plan. Native recording permissions/configuration require a new binary; see [Expo Audio](https://docs.expo.dev/versions/latest/sdk/audio/) and the [SDK upgrade guidance](https://docs.expo.dev/workflow/upgrading-expo-sdk-walkthrough/). The web app can continue to be developed and deployed independently of EAS cloud-build capacity. Under the current [Expo Free-plan policy](https://docs.expo.dev/billing/faq/), the monthly cloud-build quota resets on the first of the next calendar month. Local EAS builds remain an alternative, but none were requested for this rollout.
+
+Private backups, image IDs, checksums, and verification evidence are retained in the ignored `backups/releases/` directory. Application rollback retains the additive tables and user data, disables the new features, and restores the recorded previous API/worker/web images and server environment.
