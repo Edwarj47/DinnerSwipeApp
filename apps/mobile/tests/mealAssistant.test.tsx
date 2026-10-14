@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { MealAssistant } from "@/features/premium/MealAssistant";
 import { MacroCalculator } from "@/features/premium/MacroCalculator";
@@ -9,17 +9,18 @@ import {
   MealDraft,
   MealDraftItem,
   ReviewedFood,
+  prefillServing,
   reviewedRows,
   suggestedPortions,
 } from "@/features/premium/mealAssistant";
 import { apiFetch } from "@/services/api";
 import { useOfflineStatus } from "@/services/offlineStore";
+import { useMealVoice } from "@/features/premium/useMealVoice";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
-jest.mock("@/services/api", () => ({ apiFetch: jest.fn() }));
+jest.mock("@/services/api", () => ({ apiFetch: jest.fn(), ApiError: class extends Error { status = 503; } }));
 jest.mock("@/features/premium/useMealVoice", () => ({
-  useMealVoice: () => ({ supported: false, recording: false, audio: null, error: "",
-    start: jest.fn(), stop: jest.fn(), clear: jest.fn() }),
+  useMealVoice: jest.fn(),
 }));
 jest.mock("@/features/premium/MacroCalculator", () => ({
   MacroCalculator: jest.fn((props: { initialName: string }) => {
@@ -31,6 +32,7 @@ jest.mock("@/features/premium/MacroCalculator", () => ({
 
 const request = jest.mocked(apiFetch);
 const calculator = jest.mocked(MacroCalculator);
+const voiceHook = jest.mocked(useMealVoice);
 const NOW = 1_800_000_000_000;
 const serving = {
   serving_id: "7", serving_description: "1 egg", measurement_description: "each",
@@ -56,6 +58,8 @@ beforeEach(() => {
   jest.spyOn(Date, "now").mockReturnValue(NOW);
   useOfflineStatus.setState({ offline: false });
   calculator.mockClear();
+  voiceHook.mockReset().mockReturnValue({ supported: false, recording: false, audio: null, error: "",
+    start: jest.fn(), stop: jest.fn(), clear: jest.fn() });
   jest.spyOn(AppState, "addEventListener").mockImplementation((_, callback) => {
     onAppState = callback;
     return { remove: jest.fn() };
@@ -82,7 +86,7 @@ describe("suggestedPortions", () => {
 
   test.each([
     [150, "g", 3], [150, "grams", 3], [.15, "kg", 3],
-    [1, "oz", 28.349523125 / 50], [1, "lb", 453.59237 / 50],
+    [1, "oz", 28.349523125 / 50], [1, "lb", 453.59237 / 50], [1, "pound", 453.59237 / 50],
   ])("converts explicitly reported %s %s using a provider gram serving", (quantity, unit, expected) => {
     expect(suggestedPortions({ ...mention, quantity, unit }, serving)).toBeCloseTo(expected);
   });
@@ -105,6 +109,66 @@ describe("suggestedPortions", () => {
       { metric_serving_unit: "ml" }]) {
       expect(suggestedPortions({ ...mention, quantity: 150, unit: "g" }, { ...serving, ...invalid })).toBeNull();
     }
+  });
+
+  test("uses declared liquid volume and spoon aliases without inferring density", () => {
+    expect(suggestedPortions({ ...mention, quantity: .25, unit: "liters" }, {
+      ...serving, metric_serving_amount: "100", metric_serving_unit: "ml",
+    })).toBe(2.5);
+    expect(suggestedPortions({ ...mention, quantity: 2, unit: "tablespoons" }, {
+      ...serving, measurement_description: "tbsp", number_of_units: "1",
+    })).toBe(2);
+    expect(suggestedPortions({ ...mention, quantity: 100, unit: "ml" }, serving)).toBeNull();
+  });
+
+  test("never fills a nonfinite quantity or divides by nonfinite provider amounts", () => {
+    expect(suggestedPortions({ ...mention, quantity: Infinity }, serving)).toBeNull();
+    expect(suggestedPortions(mention, { ...serving, number_of_units: "Infinity" })).toBeNull();
+  });
+});
+
+describe("prefillServing", () => {
+  test("prefills explicit eggs, cups and grams with matching portions", () => {
+    expect(prefillServing(mention)).toEqual({ serving_id: "7", recommended_serving_id: "7", amount: "2" });
+    expect(prefillServing({ ...mention, quantity: .5, unit: "cup", servings: [serving,
+      { ...serving, serving_id: "8", measurement_description: "cup", number_of_units: ".5", serving_description: "1/2 cup" },
+    ] })).toMatchObject({ serving_id: "8", amount: "1" });
+    expect(prefillServing({ ...mention, quantity: 150, unit: "g", servings: [
+      { ...serving, serving_id: "8", metric_serving_amount: "1", measurement_description: "g" },
+      { ...serving, serving_id: "9", metric_serving_amount: "100", measurement_description: "g", number_of_units: "100" },
+    ] })).toMatchObject({ serving_id: "9", amount: "1.5" });
+  });
+
+  test("recommends a large egg over gram or extra-large servings for an unspecified egg size", () => {
+    expect(prefillServing({ ...mention, name: "eggs", quantity: 4, servings: [
+      { ...serving, serving_id: "1", measurement_description: "g" },
+      { ...serving, serving_id: "2", measurement_description: "extra large", serving_description: "1 extra large" },
+      { ...serving, serving_id: "3", measurement_description: "large", serving_description: "1 large" },
+    ] })).toMatchObject({ serving_id: "3", recommended_serving_id: "3", amount: "4" });
+  });
+
+  test.each([{ quantity: null, unit: null }, { quantity: 1, unit: "bowl" }])(
+    "does not invent a portion for missing or unmeasurable amounts: %j", changes => {
+      expect(prefillServing({ ...mention, ...changes })).toMatchObject({ serving_id: "", amount: "" });
+    },
+  );
+
+  test("preserves tiny positive portions instead of rounding them to zero", () => {
+    expect(Number(prefillServing({ ...mention, quantity: .00000000001, unit: "g" }).amount)).toBeGreaterThan(0);
+  });
+
+  test("honors explicitly stated egg size and does not substitute another size", () => {
+    const medium = { ...serving, measurement_description: "medium", serving_description: "1 medium" };
+    expect(prefillServing({ ...mention, name: "large eggs", servings: [medium] }))
+      .toMatchObject({ serving_id: "", amount: "" });
+    expect(prefillServing({ ...mention, name: "medium eggs", servings: [medium] }))
+      .toMatchObject({ serving_id: "7", amount: "2" });
+  });
+
+  test("rejects invalid IDs and portions outside calculator limits", () => {
+    expect(prefillServing({ ...mention, quantity: 101 })).toMatchObject({ serving_id: "", amount: "" });
+    expect(prefillServing({ ...mention, servings: [{ ...serving, serving_id: "bad" }] }))
+      .toMatchObject({ serving_id: "", amount: "" });
   });
 });
 
@@ -162,12 +226,12 @@ describe("reviewedRows", () => {
   });
 });
 
-async function mount() {
+async function mount(voiceEnabled = false) {
   const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false } } });
   const close = jest.fn(), saved = jest.fn();
   function Harness() {
     const [visible, setVisible] = useState(true);
-    return visible ? <MealAssistant voiceEnabled={false} onSaved={saved}
+    return visible ? <MealAssistant voiceEnabled={voiceEnabled} onSaved={saved}
       onClose={() => { close(); setVisible(false); }} /> : null;
   }
   const screen = render(<QueryClientProvider client={client}><Harness /></QueryClientProvider>);
@@ -183,25 +247,32 @@ async function preview(screen: Awaited<ReturnType<typeof mount>>) {
   await waitFor(() => expect(screen.queryByText("Working...")).toBeNull());
 }
 
-function selectServing(screen: Awaited<ReturnType<typeof mount>>, name = "My eggs") {
-  fireEvent.press(screen.getByLabelText(`Serving size for ${name}: Choose serving size`));
-  fireEvent.press(screen.getByLabelText("1 egg"));
-}
-
 function expectNoAutosave(saved: jest.Mock) {
   expect(saved).not.toHaveBeenCalled();
   expect(request.mock.calls.some(([path]) => /\/calculations|\/macros\/entries|\/recipes/.test(path))).toBe(false);
 }
 
 describe("MealAssistant review flow", () => {
-  test("preview never logs or saves and cannot bypass serving review", async () => {
+  test("the description starts empty with no example or repeated provider disclosures", async () => {
+    const screen = await mount();
+    try {
+      expect(screen.getByLabelText("Meal description").props.value).toBe("");
+      expect(screen.getByLabelText("Meal description").props.placeholder).toBeUndefined();
+      expect(screen.queryByText(/Your description is sent to OpenAI/)).toBeNull();
+    } finally { screen.cleanup(); }
+  });
+  test("preview prefills explicit amounts but never logs or saves without confirmation", async () => {
     const screen = await mount();
     try {
       await preview(screen);
-      expect(screen.getByLabelText("Servings eaten for My eggs").props.value).toBe("");
-      fireEvent.press(screen.getByLabelText("Continue to calculator"));
-      expect(screen.getByText(/Choose a database match and serving/)).toBeTruthy();
+      expect(screen.getByLabelText("Servings eaten for My eggs").props.value).toBe("2");
+      expect(screen.getByLabelText("Serving size for My eggs: 1 egg (Recommended)")).toBeTruthy();
+      expect(screen.getByText("Provider egg name (Recommended)")).toBeTruthy();
       expect(calculator).not.toHaveBeenCalled();
+      expectNoAutosave(screen.saved);
+      fireEvent.press(screen.getByLabelText("Continue to calculator"));
+      await screen.findByTestId("meal-calculator-handoff");
+      expect(calculationItems(calculator.mock.calls[0][0].initialRows!)[0].portions).toBe(2);
       expectNoAutosave(screen.saved);
     } finally { screen.cleanup(); }
   });
@@ -217,7 +288,8 @@ describe("MealAssistant review flow", () => {
     const screen = await mount();
     try {
       await preview(screen);
-      selectServing(screen);
+      fireEvent.press(screen.getByLabelText("Serving size for My eggs: Choose serving size"));
+      fireEvent.press(screen.getByLabelText("1 egg"));
       expect(screen.getByLabelText("Servings eaten for My eggs").props.value).toBe("");
       fireEvent.press(screen.getByLabelText("Continue to calculator"));
       expect(screen.getByText(/Enter servings eaten/)).toBeTruthy();
@@ -230,7 +302,6 @@ describe("MealAssistant review flow", () => {
     const screen = await mount();
     try {
       await preview(screen);
-      selectServing(screen);
       expect(screen.getByLabelText("Servings eaten for My eggs").props.value).toBe("2");
       fireEvent.changeText(screen.getByLabelText("Servings eaten for My eggs"), "1.5");
       fireEvent.press(screen.getByLabelText("Continue to calculator"));
@@ -245,6 +316,36 @@ describe("MealAssistant review flow", () => {
     } finally { screen.cleanup(); }
   });
 
+  test("a changed food match prefills its servings while the original recommendation stays identified", async () => {
+    const original = request.getMockImplementation()!;
+    request.mockImplementation(async (path, init) => {
+      if (path.includes("/foods/search")) return { data: { foods: { food: [
+        { food_id: "42", food_name: "Provider egg name" }, { food_id: "99", food_name: "Alternative eggs" },
+      ] } } };
+      if (path.endsWith("/foods/99")) return { data: { food: { food_name: "Alternative eggs", servings: { serving: [
+        { ...serving, serving_id: "9", number_of_units: ".5", serving_description: "1/2 egg" },
+      ] } } } };
+      return original(path, init);
+    });
+    const screen = await mount();
+    try {
+      await preview(screen);
+      fireEvent.press(screen.getByLabelText("Change match"));
+      fireEvent.press(screen.getByLabelText("Search Database"));
+      await screen.findByLabelText("Provider egg name (Recommended)");
+      fireEvent.press(screen.getByLabelText("Alternative eggs"));
+      await screen.findByLabelText("Serving size for My eggs: 1/2 egg (Recommended)");
+      expect(screen.getByLabelText("Servings eaten for My eggs").props.value).toBe("4");
+      expect(screen.getByText("Alternative eggs", { exact: true })).toBeTruthy();
+      fireEvent.press(screen.getByLabelText("Continue to calculator"));
+      await screen.findByTestId("meal-calculator-handoff");
+      expect(calculationItems(calculator.mock.calls[0][0].initialRows!)).toEqual([
+        { source: "fatsecret", name: "My eggs", food_id: "99", serving_id: "9", portions: 4 },
+      ]);
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+
   test("closing unmounts temporary results and discards the draft", async () => {
     const screen = await mount();
     try {
@@ -253,7 +354,7 @@ describe("MealAssistant review flow", () => {
       const requestId = JSON.parse(String(call[1]?.body)).request_id;
       fireEvent.press(screen.getByLabelText("Close meal assistant"));
       expect(screen.close).toHaveBeenCalledTimes(1);
-      expect(screen.queryByText("Provider egg name")).toBeNull();
+      expect(screen.queryByText("Provider egg name (Recommended)")).toBeNull();
       expect(screen.queryByText("Review meal")).toBeNull();
       await waitFor(() => expect(request).toHaveBeenCalledWith(
         `/api/v1/nutrition/ai/drafts/${requestId}`, { method: "DELETE" },
@@ -266,12 +367,11 @@ describe("MealAssistant review flow", () => {
     const screen = await mount();
     try {
       await preview(screen);
-      selectServing(screen);
       fireEvent.press(screen.getByLabelText("Continue to calculator"));
       await screen.findByTestId("meal-calculator-handoff");
       act(() => onAppState(state));
       expect(screen.queryByTestId("meal-calculator-handoff")).toBeNull();
-      expect(screen.queryByText("Provider egg name")).toBeNull();
+      expect(screen.queryByText("Provider egg name (Recommended)")).toBeNull();
       expect(screen.getByLabelText("Meal description")).toBeTruthy();
       expectNoAutosave(screen.saved);
     } finally { screen.cleanup(); }
@@ -297,6 +397,103 @@ describe("MealAssistant review flow", () => {
       expect(screen.queryByText("Review meal")).toBeNull();
       expect(screen.queryByText("Provider egg name")).toBeNull();
       expect(calculator).not.toHaveBeenCalled();
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+});
+
+function enableVoice() {
+  const clear = jest.fn();
+  const audio = new Blob(["synthetic clip"], { type: "audio/webm" });
+  voiceHook.mockImplementation(function useMockVoice() {
+    const [recording, setRecording] = useState(false);
+    const [clip, setClip] = useState<Blob | null>(null);
+    const reset = useCallback(() => { clear(); setRecording(false); setClip(null); return undefined; }, []);
+    return { supported: true, recording, audio: clip, error: "",
+      start: async () => { setClip(null); setRecording(true); },
+      stop: () => { setRecording(false); setClip(audio); }, clear: reset };
+  });
+  return { clear, audio };
+}
+
+function transcriptionCalls() { return request.mock.calls.filter(([path]) => path.endsWith("/transcriptions")); }
+function transcriptionId(body: unknown) {
+  const form = body as { get?: (key: string) => unknown; getParts?: () => { fieldName: string; string?: string }[] };
+  return form.get?.("request_id") ?? form.getParts?.().find(part => part.fieldName === "request_id")?.string;
+}
+async function recordAndStop(screen: Awaited<ReturnType<typeof mount>>) {
+  fireEvent.press(screen.getByLabelText("Record meal"));
+  expect(transcriptionCalls()).toHaveLength(0);
+  fireEvent.press(screen.getByLabelText("Stop recording"));
+  await waitFor(() => expect(transcriptionCalls()).toHaveLength(1));
+}
+
+describe("automatic meal transcription", () => {
+  test("stopping fills editable words once, preserves typed text, and never previews or saves automatically", async () => {
+    const voice = enableVoice();
+    const original = request.getMockImplementation()!;
+    request.mockImplementation(async (path, init) => path.endsWith("/transcriptions") ? { text: "two eggs" } : original(path, init));
+    const screen = await mount(true);
+    try {
+      fireEvent.changeText(screen.getByLabelText("Meal description"), "Breakfast was");
+      expect(screen.queryByLabelText("Transcribe")).toBeNull();
+      expect(screen.queryByText(/Audio is sent to OpenAI/)).toBeNull();
+      await recordAndStop(screen);
+      await waitFor(() => expect(screen.getByLabelText("Meal description").props.value).toBe("Breakfast was two eggs"));
+      expect(screen.getByLabelText("Meal description").props.editable).toBe(true);
+      fireEvent.changeText(screen.getByLabelText("Meal description"), "Breakfast was three eggs");
+      expect(transcriptionCalls()).toHaveLength(1);
+      expect(request.mock.calls.some(([path, init]) => path.endsWith("/drafts") && init?.method === "POST")).toBe(false);
+      expect(voice.clear).toHaveBeenCalled();
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+
+  test("a failed transcription does not loop; explicit retry reuses the completed clip and request ID", async () => {
+    enableVoice();
+    const original = request.getMockImplementation()!;
+    let failures = 1;
+    request.mockImplementation(async (path, init) => {
+      if (path.endsWith("/transcriptions")) {
+        if (failures-- > 0) throw new Error("Connection interrupted");
+        return { text: "two eggs" };
+      }
+      return original(path, init);
+    });
+    const screen = await mount(true);
+    try {
+      await recordAndStop(screen);
+      await screen.findByLabelText("Retry transcription");
+      fireEvent.changeText(screen.getByLabelText("Meal description"), "Breakfast:");
+      expect(transcriptionCalls()).toHaveLength(1);
+      fireEvent.press(screen.getByLabelText("Retry transcription"));
+      await waitFor(() => expect(screen.getByLabelText("Meal description").props.value).toBe("Breakfast: two eggs"));
+      const calls = transcriptionCalls();
+      expect(calls).toHaveLength(2);
+      expect(transcriptionId(calls[0][1]?.body)).toBeTruthy();
+      expect(transcriptionId(calls[0][1]?.body)).toBe(transcriptionId(calls[1][1]?.body));
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+
+  test.each(["cancel", "background", "close"])("%s aborts transcription and drops late words", async mode => {
+    const voice = enableVoice();
+    let resolve!: (value: { text: string }) => void;
+    const original = request.getMockImplementation()!;
+    request.mockImplementation(async (path, init) => path.endsWith("/transcriptions")
+      ? new Promise<{ text: string }>(done => { resolve = done; }) : original(path, init));
+    const screen = await mount(true);
+    try {
+      fireEvent.changeText(screen.getByLabelText("Meal description"), "Keep my text");
+      await recordAndStop(screen);
+      if (mode === "cancel") fireEvent.press(screen.getByLabelText("Cancel transcription"));
+      else if (mode === "background") act(() => onAppState("background"));
+      else fireEvent.press(screen.getByLabelText("Close meal assistant"));
+      expect(transcriptionCalls()[0][1]?.signal?.aborted).toBe(true);
+      expect(voice.clear).toHaveBeenCalled();
+      await act(async () => resolve({ text: "late transcript" }));
+      if (mode !== "close") expect(screen.getByLabelText("Meal description").props.value).toBe("Keep my text");
+      expect(transcriptionCalls()).toHaveLength(1);
       expectNoAutosave(screen.saved);
     } finally { screen.cleanup(); }
   });

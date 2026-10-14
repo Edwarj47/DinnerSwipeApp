@@ -92,7 +92,9 @@ test("stack supports add, edit, remove, naming and logging to today", async () =
     fireEvent.changeText(screen.getByLabelText("Calculator item name"), "Toast");
     fireEvent.press(screen.getByLabelText("Add item"));
     fireEvent.press(screen.getByLabelText("Remove Toast"));
-    fireEvent.press(screen.getByLabelText("Add to today"));
+    fireEvent.press(screen.getByLabelText("Log meal"));
+    expect(screen.queryByLabelText("Log meal")).toBeNull();
+    expect(screen.saved).not.toHaveBeenCalled();
     fireEvent.changeText(screen.getByLabelText("Calculation name"), "My breakfast");
     fireEvent.press(screen.getByLabelText("Add to today"));
     await waitFor(() => expect(screen.saved).toHaveBeenCalled());
@@ -240,7 +242,7 @@ test("failed save retains stack and reuses idempotency key for retry", async () 
   try {
     fireEvent.changeText(screen.getByLabelText("Calculator item name"), "My toast");
     fireEvent.press(screen.getByLabelText("Add item"));
-    fireEvent.press(screen.getByLabelText("Add to today"));
+    fireEvent.press(screen.getByLabelText("Log meal"));
     fireEvent.changeText(screen.getByLabelText("Calculation name"), "Breakfast");
     fireEvent.press(screen.getByLabelText("Add to today"));
     await screen.findByText("Try again");

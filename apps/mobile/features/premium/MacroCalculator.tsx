@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import * as Crypto from "expo-crypto";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { AppState, KeyboardAvoidingView, Linking, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
 import { SearchField } from "@/components/SearchField";
 import { Colors } from "@/components/theme";
@@ -18,6 +18,7 @@ import { MacroChoice } from "./MacroChoice";
 import { todayISO } from "./macroDates";
 import { Calculation, CalculatorRow, calculationItems, calculationTotal, objects, PROVIDER_VIEW_MS, servingNutrition } from "./calculator";
 import { NutritionAttribution } from "./NutritionAttribution";
+import { NutritionConsent, NutritionConsentStatus } from "./NutritionConsent";
 
 type Lookup = { data: Record<string, unknown> };
 
@@ -56,7 +57,7 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
   const pendingItem = itemOpen && Boolean(editing || providerItem || itemName.trim() || Object.values(fields).some(value => value.trim()));
   const copyingEntry = Boolean(calculationId && existing && !existing.recipe_id && destination === "recipe");
   const consent = useQuery({ queryKey: ["nutrition-consent"],
-    queryFn: () => apiFetch<{ accepted: boolean; terms_version: string; terms_url: string }>("/api/v1/nutrition/consent"), retry: false });
+    queryFn: () => apiFetch<NutritionConsentStatus>("/api/v1/nutrition/consent"), retry: false });
   const accepted = consent.data?.accepted === true;
   const accept = useMutation({
     mutationFn: () => apiFetch<typeof consent.data>("/api/v1/nutrition/consent", {
@@ -203,14 +204,8 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
         <View style={styles.header}><Ionicons name="calculator-outline" size={22} color={Colors.basil} />
           <Text style={styles.heading}>Macro calculator</Text><Button label="" icon="close" accessibilityLabel="Close macro calculator" disabled={!!busy} onPress={onClose} /></View>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
-          {!accepted ? <>
-            <Text style={styles.subheading}>Food database terms</Text>
-            <Button label="Terms of Use" icon="open-outline" onPress={() => { void Linking.openURL("https://platform.fatsecret.com/terms"); }} />
-            {consent.isLoading ? <Text style={styles.meta}>Checking acceptance...</Text> : consent.isError ?
-              <Button label="Retry" icon="refresh" onPress={() => { void consent.refetch(); }} /> :
-              <View style={styles.actions}><Button label="Agree and continue" icon="checkmark" variant="primary" disabled={offline || accept.isPending} onPress={() => accept.mutate()} />
-                <Button label="Not now" icon="close" onPress={onClose} /></View>}
-          </> : searchOpen ? <>
+          {!accepted ? <NutritionConsent data={consent.data} loading={consent.isLoading} failed={consent.isError} pending={accept.isPending}
+            offline={offline} onAccept={() => accept.mutate()} onRetry={() => { void consent.refetch(); }} onClose={onClose} /> : searchOpen ? <>
             <View style={styles.header}><Text style={styles.subheading}>Search Database</Text><Button label="" icon="arrow-back" accessibilityLabel="Back to calculator" disabled={!!busy} onPress={() => setSearchOpen(false)} /></View>
             <SearchField accessibilityLabel="Search food database" value={query} onChangeText={changeSearch} placeholder="Food or brand" maxLength={100}
               editable={!busy} returnKeyType="search" onSubmitEditing={() => { void search(); }} />
@@ -257,7 +252,7 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
               <Button label="Update calculation" icon="save-outline" variant="primary" disabled={(!rows.length && !itemName.trim()) || !!busy || offline} onPress={() => finish(existing.recipe_id ? "recipe" : "entry")} />
               {!existing.recipe_id ? <Button label="Save as recipe" icon="book-outline" disabled={(!rows.length && !itemName.trim()) || !!busy || offline} onPress={() => finish("recipe")} /> : null}
             </> : <>
-              <Button label="Add to today" icon="checkmark" variant="primary" disabled={(!rows.length && !itemName.trim()) || !!busy || offline} onPress={() => finish("entry")} />
+              <Button label="Log meal" icon="checkmark" variant="primary" disabled={(!rows.length && !itemName.trim()) || !!busy || offline} onPress={() => finish("entry")} />
               <Button label="Save as recipe" icon="book-outline" disabled={(!rows.length && !itemName.trim()) || !!busy || offline} onPress={() => finish("recipe")} /></>}</View>
           </>}
           {accepted && (searchOpen || providerItem || rows.some(row => row.source === "fatsecret")) ? <NutritionAttribution /> : null}

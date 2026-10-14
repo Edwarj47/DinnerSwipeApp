@@ -37,7 +37,10 @@ export function useMealVoice() {
       active.onstop = () => {
         clearTimeout(timer.current); capture.getTracks().forEach(track => track.stop());
         if (generation !== epoch.current) return;
-        setRecording(false); setAudio(new Blob(chunks, { type: active.mimeType.split(";")[0] }));
+        recorder.current = null; stream.current = null;
+        const audio = new Blob(chunks, { type: active.mimeType.split(";")[0] });
+        setRecording(false);
+        if (audio.size) setAudio(audio); else setError("No audio recorded. Try again.");
       };
       active.start(1000); setRecording(true); timer.current = setTimeout(stop, 59000);
     } catch (reason) { clear(); setError(reason instanceof Error ? reason.message : "Microphone unavailable."); }

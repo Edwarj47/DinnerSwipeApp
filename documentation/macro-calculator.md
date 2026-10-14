@@ -2,7 +2,7 @@
 
 ## Behavior
 
-Premium Macro Tracker has an icon-only calculator beside Save as recipe. The
+Premium Macro Tracker has a Calculator button above Save as recipe. The
 modal holds up to 30 items in memory. Each item has a user-entered label,
 serving multiplier, and either manual nutrition or a selected database serving.
 Search is explicit, not autocomplete. Food results and serving choices appear
@@ -11,11 +11,27 @@ stack. Totals keep unknown nutrients unknown rather than treating them as zero.
 The refresh icon beside Total refreshes database values without saving a recipe
 or creating a macro entry.
 
-Add to today prompts for a meal name and category and logs one aggregate entry
+Log meal opens a name/category review; the final Add to today confirmation logs
+one aggregate entry
 on the device's local date. Save as recipe prompts for a name, category, and
 recipe yield and saves ingredients plus per-serving nutrition. Saved stacks can
 be reopened through Edit nutrition or a linked macro entry. Logging a saved
 recipe and weekly Ate confirmations retain serving scaling.
+
+AI meal review recommends a food match from the existing bounded search results,
+preferring matching food names, stated brands, and preparation methods. Compatible
+servings and explicitly reported quantities are prefilled and marked Recommended;
+users can change the food, serving, or amount before continuing. Missing amounts
+and incompatible measures remain blank instead of guessing weights or density.
+Previewing or continuing to the calculator never logs or saves automatically.
+
+Completed web recordings transcribe automatically once and append to the editable
+meal description. Preview meal remains a separate action. Failed uploads never
+retry automatically; an explicit retry reuses the request ID after a connection
+failure. Cancellation, closing and backgrounding abort the request and clear
+the browser clip. The recorder no longer shows example food text or repeated
+provider disclosures. Nutrition-tool consent covers the provider processing once
+per policy revision, with full details on the public Privacy and Terms pages.
 
 Targets remain user-entered daily reference values shown in Trends alongside
 totals and averages, and the calorie target scales Calendar bars. Goal is a saved
@@ -39,7 +55,7 @@ maximum, leaving margin below the provider's 24-hour content lifetime.
 
 The app includes the official attribution link wherever database nutrition is
 displayed, public legal-page attribution, provider terms in app terms, and a
-terms checkbox before search. When store listings are published, include:
+one-time account acceptance before using database lookup. When store listings are published, include:
 "Powered by fatsecret nutrition API" (www.fatsecret.com).
 
 Sources: https://platform.fatsecret.com/terms,

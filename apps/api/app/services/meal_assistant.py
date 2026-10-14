@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import hashlib
+import re
+import unicodedata
 from datetime import timedelta
 from typing import Any, Literal, cast
 
@@ -24,6 +26,31 @@ from app.services.nutrition_consent import require_nutrition_consent
 JOB_TYPE = "nutrition_meal_draft"
 VOICE_JOB_TYPE = "nutrition_transcription"
 DRAFT_TTL = timedelta(hours=1)
+_PREPARATION_ALIASES = {
+    "uncooked": "raw",
+    "raw": "raw",
+    "cooked": "cooked",
+    "boiled": "boiled",
+    "boil": "boiled",
+    "steamed": "steamed",
+    "steam": "steamed",
+    "grilled": "grilled",
+    "grill": "grilled",
+    "baked": "baked",
+    "bake": "baked",
+    "roasted": "roasted",
+    "roast": "roasted",
+    "fried": "fried",
+    "fry": "fried",
+    "scrambled": "scrambled",
+    "scramble": "scrambled",
+    "poached": "poached",
+    "poach": "poached",
+    "broiled": "broiled",
+    "broil": "broiled",
+}
+_PREPARATIONS = frozenset(_PREPARATION_ALIASES.values())
+_MATCH_STOPWORDS = frozenset({"a", "an", "the", "my", "with", "of", "and", "for", "in"})
 
 
 class FoodMention(BaseModel):
@@ -39,6 +66,84 @@ class MealMentions(BaseModel):
     name: str = Field(min_length=2, max_length=160)
     meal_label: Literal["breakfast", "lunch", "dinner", "snack", "beverage"]
     items: list[FoodMention] = Field(min_length=1, max_length=10)
+
+
+def _match_tokens(value: Any) -> set[str]:
+    if not isinstance(value, str):
+        return set()
+    text = (
+        "".join(
+            char
+            for char in unicodedata.normalize("NFKD", value.casefold())
+            if not unicodedata.combining(char)
+        )
+        .replace("'", "")
+        .replace("\u2019", "")
+    )
+    tokens: set[str] = set()
+    for word in re.findall(r"[^\W_]+", text):
+        if word in _PREPARATION_ALIASES:
+            word = _PREPARATION_ALIASES[word]
+        elif len(word) > 4 and word.endswith("ies"):
+            word = word[:-3] + "y"
+        elif word.endswith(("atoes", "ches", "shes")):
+            word = word[:-2]
+        elif len(word) > 3 and word.endswith("s") and not word.endswith(("ss", "us")):
+            word = word[:-1]
+        tokens.add(word)
+    return tokens
+
+
+def recommended_food_id(mention: FoodMention, found: list[dict[str, Any]]) -> str | None:
+    candidates = [food for food in found if identifier(food.get("food_id"))]
+    if not candidates:
+        return None
+    sources = [_match_tokens(mention.name), _match_tokens(mention.search_term)]
+    requested = sources[0] | sources[1]
+    brands = [_match_tokens(food.get("brand_name")) for food in candidates]
+    brand_matches = [bool(brand) and any(brand <= source for source in sources) for brand in brands]
+    explicit_brand = set().union(
+        *(brand for brand, matches in zip(brands, brand_matches, strict=True) if matches)
+    )
+    preferred_preparation = requested & _PREPARATIONS
+    preferred_methods = preferred_preparation - {"raw", "cooked"}
+    query = requested - _MATCH_STOPWORDS - _PREPARATIONS - explicit_brand
+    scores: list[tuple[bool, float]] = []
+    for food, brand, brand_matches_query in zip(candidates, brands, brand_matches, strict=True):
+        name = _match_tokens(food.get("food_name"))
+        preparation = name & _PREPARATIONS
+        content = name - _MATCH_STOPWORDS - _PREPARATIONS - brand
+        overlap = len(query & content)
+        score = 100 * overlap / max(len(query), 1) + 20 * overlap / max(len(content), 1)
+        if query and query == content:
+            score += 25
+        if explicit_brand:
+            score += 40 if brand_matches_query else -40
+        elif brand or str(food.get("food_type", "")).casefold() == "brand":
+            score -= 8
+        elif str(food.get("food_type", "")).casefold() == "generic":
+            score += 8
+        # Cooking state affects nutrition; never treat raw and cooked as equivalent.
+        if preferred_preparation:
+            if ("raw" in preferred_preparation and preparation - {"raw"}) or (
+                preferred_preparation - {"raw"} and "raw" in preparation
+            ):
+                score -= 60
+            elif preferred_methods:
+                if preferred_methods & preparation:
+                    score += 30
+                elif preparation - {"cooked"}:
+                    score -= 35
+            elif preferred_preparation & preparation or (
+                "cooked" in preferred_preparation and preparation - {"raw"}
+            ):
+                score += 30
+        scores.append((bool(overlap), score))
+    if not any(score[0] for score in scores):
+        return None
+    # Preserve provider order when matching candidates have equal evidence.
+    best = max(range(len(candidates)), key=scores.__getitem__)
+    return identifier(candidates[best]["food_id"])
 
 
 def require_assistant(db: Session, user: User) -> None:
@@ -244,10 +349,14 @@ def match_mentions(db: Session, job: IngestionJob, draft: MealMentions) -> list[
                     "max_results": "5",
                 },
             )
-            store_identifiers(db, payload, detailed=False)
-            found = objects(payload.get("foods", {}).get("food"))
-            if found and identifier(found[0].get("food_id")):
-                item["food_id"] = str(found[0]["food_id"])
+            foods = payload.get("foods", {})
+            if not isinstance(foods, dict):
+                raise NutritionError("invalid_response")
+            found = [food for food in objects(foods.get("food")) if identifier(food.get("food_id"))]
+            store_identifiers(db, {"foods": {"food": found}}, detailed=False)
+            food_id = recommended_food_id(mention, found)
+            if food_id:
+                item["food_id"] = food_id
         except NutritionError:
             item["lookup_unavailable"] = True
         items.append(item)

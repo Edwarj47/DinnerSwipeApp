@@ -1,7 +1,22 @@
 export const privacySections = [
   {
+    title: "Nutrition Tools Agreement",
+    body:
+      "Food database searches and meal AI use a shared, optional agreement saved to your account. We record the agreement revision and acceptance time. Accepting a previous fatsecret-only revision does not opt you into this revision. Acceptance covers the calculator and meal AI without a new agreement for each search or recording, but it does not start recording or send a meal description by itself. You can choose not to use these tools; typing a meal and recording voice are optional."
+  },
+  {
+    title: "Optional Meal AI And Voice",
+    body:
+      "When you submit a meal description to meal AI, Dinner Swipe sends that text to OpenAI to identify foods and quantities. If you choose voice, a completed recording you submit goes through our server to OpenAI for transcription; it is not live-streamed as you speak. The transcript is returned for your review and, when you submit it as your meal description, goes to OpenAI for food identification. Food search terms derived from the description then go to fatsecret to find nutrition matches. Avoid including personal, sensitive or other people's information that is not needed to describe your food. OpenAI processes submitted text and audio under its applicable data-processing and retention policies. Dinner Swipe does not promise zero retention by OpenAI. OpenAI's API data controls are described at https://developers.openai.com/api/docs/guides/your-data."
+  },
+  {
+    title: "Recording, Transcript And Meal Draft Handling",
+    body:
+      "Our server handles audio only to validate, convert and transcribe your submitted recording. Temporary conversion files are removed after conversion completes or fails, and audio is not saved to your account. Standalone transcripts are held only in server memory for up to five minutes to handle a repeated request, not stored as transcripts in our database. If you submit transcript text as a meal description, derived meal names, food descriptions, search terms and portions may be stored with food identifiers in a meal draft available for up to one hour. The one-hour limit controls draft access, not automatic deletion from server storage. Discarding a draft clears its draft content. Job status, request fingerprints and usage records may remain for reliability and limits. Saving is a separate action after you review the result."
+  },
+  {
     title: "Food Database Lookups",
-    body: "When you search the nutrition database, Dinner Swipe sends your search through our server to fatsecret. Database names, serving descriptions and nutrition are temporary, not stored as permanent copies. Saved calculations retain food and serving identifiers, your labels and portions, and any manually entered nutrition. Database values are refreshed for display and are unavailable offline."
+    body: "When you search the nutrition database or submit a meal for AI matching, Dinner Swipe sends your food search terms through our server to fatsecret. Fatsecret receives these food search terms and requested food identifiers, not the voice recording or the full meal description through this integration. Database names, serving descriptions and nutrition are temporary, not stored as permanent copies. Saved calculations retain food and serving identifiers, your labels and portions, and any manually entered nutrition. Database values are refreshed for display and are unavailable offline. Required fatsecret attribution remains wherever its content is displayed."
   },
   {
     title: "Information We Collect",
@@ -56,6 +71,16 @@ export const privacySections = [
 ];
 
 export const termsSections = [
+  {
+    title: "Optional Nutrition Tools Agreement",
+    body:
+      "Before using food database searches or meal AI, you must explicitly accept the current nutrition tools agreement for your account. This agreement covers both tools, the Dinner Swipe Terms of Service, acknowledgement of the Privacy Policy, and the fatsecret Platform API Terms of Use. A previous fatsecret-only acceptance is not acceptance of this revision. We save the accepted revision and time; you are not asked to accept it for each recording or search. If the agreement changes, you must review and accept the new revision before using these tools again. Acceptance alone does not record audio or submit text, and voice and meal AI remain optional."
+  },
+  {
+    title: "Meal AI, Voice And Review Before Saving",
+    body:
+      "Submitting text to meal AI authorizes Dinner Swipe to send your meal description to OpenAI to identify foods. Choosing to submit a completed voice recording authorizes us to send it to OpenAI for transcription. After you review and submit the transcript, it is processed as a meal description. Derived food search terms then go to fatsecret for nutrition matching. These providers process the submitted content under the policies described in our Privacy Policy; we do not guarantee zero provider retention. You must have permission to submit the text and audio you provide. Review and correct transcripts, food matches, cooking methods, serving sizes, portions and nutrition before saving or using a result. AI and database matches can be wrong; missing or ambiguous amounts require your review. A draft or transcription does not automatically save a meal, recipe or macro entry."
+  },
   {
     title: "fatsecret Nutrition Database",
     body: "By using Dinner Swipe's fatsecret food database features, you agree to be bound by the fatsecret Platform API Terms of Use at https://platform.fatsecret.com/terms. Nutrition is provided for factual tracking only, not as health advice or a substitute for medical consultation, evaluation or treatment. Values may change when refreshed; review product labels for accuracy. Database values are temporary and are excluded from permanent offline copies and exports."

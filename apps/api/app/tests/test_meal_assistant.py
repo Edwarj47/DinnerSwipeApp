@@ -58,7 +58,7 @@ PROVIDER_CALORIES = "197.654321"
 SEARCH = {
     "foods": {
         "food": [
-            {"food_id": "42", "food_name": SEARCH_NAME},
+            {"food_id": "42", "food_name": f"Egg {SEARCH_NAME}"},
             {"food_id": "99", "food_name": "OTHER_PROVIDER_SEARCH_NAME"},
         ]
     }
@@ -296,7 +296,389 @@ def test_missing_consent_blocks_text_and_audio_before_processing(
     providers.post.assert_not_awaited()
 
 
-def test_valid_draft_is_temporary_first_match_only_and_does_not_save_a_meal(
+@pytest.mark.parametrize(
+    ("name", "search_term", "found", "expected"),
+    [
+        pytest.param(
+            "eggs",
+            "eggs",
+            [
+                {
+                    "food_id": "99",
+                    "food_name": "Egg Breakfast Sandwich",
+                    "food_type": "Brand",
+                    "brand_name": "Jimmy Dean",
+                },
+                {"food_id": "42", "food_name": "Egg", "food_type": "Generic"},
+            ],
+            "42",
+            id="generic-egg-over-branded-sandwich",
+        ),
+        pytest.param(
+            "chicken breast",
+            "chicken breast",
+            [
+                {
+                    "food_id": "99",
+                    "food_name": "Chicken Breast Nuggets",
+                    "food_type": "Brand",
+                    "brand_name": "Tyson",
+                },
+                {"food_id": "42", "food_name": "Chicken Breast", "food_type": "Generic"},
+            ],
+            "42",
+            id="exact-food-over-branded-prepared-food",
+        ),
+        pytest.param(
+            "rice",
+            "rice",
+            [
+                {
+                    "food_id": "99",
+                    "food_name": "Licorice",
+                    "food_type": "Brand",
+                    "brand_name": "Twizzlers",
+                },
+                {"food_id": "42", "food_name": "White Rice", "food_type": "Generic"},
+            ],
+            "42",
+            id="whole-word-matching-not-substrings",
+        ),
+        pytest.param(
+            "corn flakes",
+            "corn flakes",
+            [
+                {
+                    "food_id": "99",
+                    "food_name": "Corn Flakes",
+                    "food_type": "Brand",
+                    "brand_name": "Kellogg's",
+                },
+                {"food_id": "42", "food_name": "Corn Flakes", "food_type": "Generic"},
+            ],
+            "42",
+            id="generic-tiebreak-without-explicit-brand",
+        ),
+        pytest.param(
+            "Greek yogurt",
+            "Greek yogurt",
+            [
+                {"food_id": "99", "food_name": "Yogurt", "food_type": "Generic"},
+                {
+                    "food_id": "42",
+                    "food_name": "Greek Yogurt",
+                    "food_type": "Brand",
+                    "brand_name": "Fage",
+                },
+            ],
+            "42",
+            id="food-relevance-before-generic-preference",
+        ),
+        pytest.param(
+            "grilled chicken breasts",
+            "chicken breast",
+            [
+                {"food_id": "99", "food_name": "Chicken Breast (Raw)", "food_type": "Generic"},
+                {"food_id": "42", "food_name": "Grilled Chicken Breast", "food_type": "Generic"},
+            ],
+            "42",
+            id="grilled-method-preserved-in-name",
+        ),
+        pytest.param(
+            "rice",
+            "cooked rice",
+            [
+                {"food_id": "99", "food_name": "Rice (Raw)", "food_type": "Generic"},
+                {
+                    "food_id": "42",
+                    "food_name": "White Rice (Long-Grain, Cooked)",
+                    "food_type": "Generic",
+                },
+            ],
+            "42",
+            id="cooked-state-preserved-in-search-term",
+        ),
+        pytest.param(
+            "uncooked white rice",
+            "white rice",
+            [
+                {"food_id": "99", "food_name": "Cooked White Rice", "food_type": "Generic"},
+                {"food_id": "42", "food_name": "White Rice (Raw)", "food_type": "Generic"},
+            ],
+            "42",
+            id="explicit-uncooked-means-raw",
+        ),
+        pytest.param(
+            "raw almonds",
+            "almonds",
+            [
+                {"food_id": "99", "food_name": "Roasted Almonds", "food_type": "Generic"},
+                {"food_id": "42", "food_name": "Raw Almonds", "food_type": "Generic"},
+            ],
+            "42",
+            id="raw-over-cooked-method",
+        ),
+        pytest.param(
+            "fried chicken breast",
+            "chicken breast",
+            [
+                {"food_id": "99", "food_name": "Grilled Chicken Breast", "food_type": "Generic"},
+                {"food_id": "42", "food_name": "Fried Chicken Breast", "food_type": "Generic"},
+            ],
+            "42",
+            id="specific-method-over-other-cooked-method",
+        ),
+        pytest.param(
+            "steamed white rice",
+            "cooked white rice",
+            [
+                {"food_id": "99", "food_name": "Fried White Rice", "food_type": "Generic"},
+                {"food_id": "42", "food_name": "Steamed White Rice", "food_type": "Generic"},
+            ],
+            "42",
+            id="specific-method-before-broad-cooked-state",
+        ),
+        pytest.param(
+            "Kellogg's corn flakes",
+            "corn flakes",
+            [
+                {"food_id": "10", "food_name": "Corn Flakes", "food_type": "Generic"},
+                {
+                    "food_id": "99",
+                    "food_name": "Corn Flakes Cereal",
+                    "food_type": "Brand",
+                    "brand_name": "Quaker",
+                },
+                {
+                    "food_id": "42",
+                    "food_name": "Corn Flakes Cereal",
+                    "food_type": "Brand",
+                    "brand_name": "KELLOGG'S",
+                },
+            ],
+            "42",
+            id="explicit-brand-from-name-over-generic-and-wrong-brand",
+        ),
+        pytest.param(
+            "eggs",
+            "Eggland's Best eggs",
+            [
+                {"food_id": "99", "food_name": "Egg", "food_type": "Generic"},
+                {
+                    "food_id": "42",
+                    "food_name": "Large Brown Eggs",
+                    "food_type": "Brand",
+                    "brand_name": "Eggland's Best",
+                },
+            ],
+            "42",
+            id="explicit-brand-from-search-term",
+        ),
+        pytest.param(
+            "cafe yogurt",
+            "cafe yogurt",
+            [
+                {"food_id": "99", "food_name": "Yogurt", "food_type": "Generic"},
+                {
+                    "food_id": "42",
+                    "food_name": "Yogurt",
+                    "food_type": "Brand",
+                    "brand_name": "Caf\u00e9",
+                },
+            ],
+            "42",
+            id="brand-case-and-accent-normalization",
+        ),
+        pytest.param(
+            "eggs",
+            "eggs",
+            [
+                {"food_id": "42", "food_name": "Egg", "food_type": "Generic"},
+                {"food_id": "99", "food_name": "Egg", "food_type": "Generic"},
+            ],
+            "42",
+            id="equal-evidence-preserves-provider-order",
+        ),
+        pytest.param(
+            "eggs",
+            "eggs",
+            [{"food_id": "42", "food_name": None}],
+            None,
+            id="missing-name-has-no-recommendation",
+        ),
+        pytest.param(
+            "eggs",
+            "eggs",
+            [
+                {"food_id": "99", "food_name": "White Rice", "food_type": "Generic"},
+                {
+                    "food_id": "42",
+                    "food_name": "Corn Flakes",
+                    "food_type": "Brand",
+                    "brand_name": "Kellogg's",
+                },
+            ],
+            None,
+            id="unrelated-results-have-no-recommendation",
+        ),
+        pytest.param(
+            "2% milk",
+            "2% milk",
+            [
+                {"food_id": "99", "food_name": "Milk (1% Fat)", "food_type": "Generic"},
+                {"food_id": "42", "food_name": "Milk (2% Fat)", "food_type": "Generic"},
+            ],
+            "42",
+            id="numeric-food-name-preference",
+        ),
+        pytest.param(
+            "Quaker oats",
+            "oats",
+            [
+                {"food_id": "99", "food_name": "Oats", "food_type": "Generic"},
+                {
+                    "food_id": "42",
+                    "food_name": "Quaker Old Fashioned Oats",
+                    "food_type": "Brand",
+                    "brand_name": "Quaker",
+                },
+            ],
+            "42",
+            id="brand-prefix-in-returned-food-name",
+        ),
+        pytest.param("eggs", "eggs", [], None, id="empty-results-have-no-recommendation"),
+    ],
+)
+def test_recommended_food_uses_preserved_mention_and_search_metadata_without_calls(
+    name: str,
+    search_term: str,
+    found: list[dict[str, Any]],
+    expected: str | None,
+    providers: SimpleNamespace,
+) -> None:
+    mention = meal_assistant.FoodMention(
+        name=name, search_term=search_term, quantity=None, unit=None
+    )
+    original = deepcopy(found)
+    assert meal_assistant.recommended_food_id(mention, found) == expected
+    assert found == original
+    providers.ai.assert_not_awaited()
+    providers.nutrition.request.assert_not_called()
+
+
+@pytest.mark.parametrize("singleton", [False, True])
+def test_draft_recommends_nonfirst_result_with_identifiers_only_and_no_extra_calls(
+    client: TestClient,
+    assistant_headers: dict[str, str],
+    db_session: Session,
+    providers: SimpleNamespace,
+    singleton: bool,
+) -> None:
+    recommended = {
+        "food_id": "42",
+        "food_name": "Egg (Whole)",
+        "food_type": "Generic",
+        "food_description": f"{SEARCH_NAME} - Calories: {PROVIDER_CALORIES}",
+    }
+    found: Any = (
+        recommended
+        if singleton
+        else [
+            None,
+            "invalid row",
+            {"food_id": "invalid", "food_name": "Eggs"},
+            {
+                "food_id": "99",
+                "food_name": "Egg Breakfast Sandwich",
+                "food_type": "Brand",
+                "brand_name": "Jimmy Dean",
+            },
+            recommended,
+        ]
+    )
+    providers.nutrition.request.side_effect = [
+        {"foods": {"food": found, "page_number": "0", "max_results": "5"}},
+        deepcopy(DETAIL),
+    ]
+    payload = body()
+    response = client.post(f"{ROOT}/drafts", headers=assistant_headers, json=payload)
+    assert response.status_code == 200, response.text
+    assert response.json()["items"][0]["food_id"] == "42"
+    assert response.json()["items"][0]["food_name"] == DETAIL_NAME
+    assert draft_job(db_session, payload["request_id"]).progress == {
+        "fingerprint": hashlib.sha256(DESCRIPTION.encode()).hexdigest(),
+        "draft": MENTIONS | {"items": [MENTIONS["items"][0] | {"food_id": "42"}]},
+    }
+    assert db_session.get(NutritionFood, "42")
+    assert db_session.get(NutritionFood, "invalid") is None
+    assert_no_saved_meal(db_session)
+    providers.ai.assert_awaited_once()
+    assert [call.args for call in providers.nutrition.request.call_args_list] == [
+        ("foods.search", {"search_expression": "eggs", "page_number": "0", "max_results": "5"}),
+        ("food.get.v5", {"food_id": "42"}),
+    ]
+
+
+@pytest.mark.parametrize(
+    "invalid_id", [None, "", "abc", "-1", "1.5", 1.5, True, " 42", "1" * 21, "\u0664\u0662"]
+)
+def test_invalid_search_ids_are_not_recommended_or_indexed(
+    client: TestClient,
+    assistant_headers: dict[str, str],
+    db_session: Session,
+    providers: SimpleNamespace,
+    invalid_id: Any,
+) -> None:
+    found = [{"food_id": invalid_id, "food_name": "Egg", "food_type": "Generic"}]
+    mention = meal_assistant.FoodMention(**MENTIONS["items"][0])
+    assert meal_assistant.recommended_food_id(mention, found) is None
+    assert meal_assistant.recommended_food_id(mention, found + SEARCH["foods"]["food"]) == "42"
+    providers.nutrition.request.side_effect = None
+    providers.nutrition.request.return_value = {"foods": {"food": found}}
+    payload = body()
+    response = client.post(f"{ROOT}/drafts", headers=assistant_headers, json=payload)
+    assert response.status_code == 200, response.text
+    assert response.json()["items"] == MENTIONS["items"]
+    assert draft_job(db_session, payload["request_id"]).progress["draft"] == MENTIONS
+    assert db_session.scalar(select(func.count()).select_from(NutritionFood)) == 0
+    providers.nutrition.request.assert_called_once()
+    assert_no_saved_meal(db_session)
+
+
+def test_unrelated_search_results_leave_user_text_without_recommendation_or_detail_call(
+    client: TestClient,
+    assistant_headers: dict[str, str],
+    db_session: Session,
+    providers: SimpleNamespace,
+) -> None:
+    providers.nutrition.request.side_effect = None
+    providers.nutrition.request.return_value = {
+        "foods": {
+            "food": [
+                {"food_id": "99", "food_name": "White Rice", "food_type": "Generic"},
+                {
+                    "food_id": "42",
+                    "food_name": "Corn Flakes",
+                    "food_type": "Brand",
+                    "brand_name": "Kellogg's",
+                },
+            ]
+        },
+    }
+    payload = body()
+    response = client.post(f"{ROOT}/drafts", headers=assistant_headers, json=payload)
+    assert response.status_code == 200, response.text
+    assert response.json()["items"] == MENTIONS["items"]
+    job = draft_job(db_session, payload["request_id"])
+    assert job.status == "succeeded" and job.progress["draft"] == MENTIONS
+    providers.ai.assert_awaited_once()
+    providers.nutrition.request.assert_called_once_with(
+        "foods.search", {"search_expression": "eggs", "page_number": "0", "max_results": "5"}
+    )
+    assert_no_saved_meal(db_session)
+
+
+def test_valid_draft_is_temporary_recommendation_only_and_does_not_save_a_meal(
     client: TestClient,
     assistant_headers: dict[str, str],
     db_session: Session,

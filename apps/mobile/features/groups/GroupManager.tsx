@@ -61,9 +61,9 @@ export function GroupManager({ current }: { current?: Household }) {
     <SpaceSelector label="Default group" purpose="default" />
     {groups.isLoading ? <Text style={styles.meta}>Loading groups...</Text> : null}
     {groups.isError ? <Button label="Retry groups" icon="refresh" onPress={() => { void groups.refetch(); }} /> : null}
-    {groupList.map(group => <Pressable key={group.id} accessibilityRole="button" accessibilityLabel={`Switch to ${group.is_personal ? "My kitchen" : group.name}`} accessibilityState={{ selected: current?.id === group.id, disabled: busy }} disabled={busy || current?.id === group.id} onPress={() => switchGroup.mutate(group.id)} style={[styles.space, current?.id === group.id && styles.active]}>
+    {groupList.map(group => <Pressable key={group.id} accessibilityRole="button" accessibilityLabel={`Switch to ${group.is_personal ? "Personal" : group.name}`} accessibilityState={{ selected: current?.id === group.id, disabled: busy }} disabled={busy || current?.id === group.id} onPress={() => switchGroup.mutate(group.id)} style={[styles.space, current?.id === group.id && styles.active]}>
       <Ionicons name={group.is_personal ? "person-outline" : "people-outline"} size={22} color={Colors.ink} />
-      <View style={styles.copy}><Text style={styles.name}>{group.is_personal ? "My kitchen" : group.name}</Text><Text style={styles.meta}>{group.is_personal ? "Private" : `${group.members.length} members - ${group.current_user_role}`}</Text></View>
+      <View style={styles.copy}><Text style={styles.name}>{group.is_personal ? "Personal" : group.name}</Text><Text style={styles.meta}>{group.is_personal ? "Private" : `${group.members.length} members - ${group.current_user_role}`}</Text></View>
       {current?.id === group.id ? <Ionicons name="checkmark-circle" color={Colors.basil} size={22} /> : <Ionicons name="chevron-forward" color={Colors.muted} size={20} />}
     </Pressable>)}
     <View style={styles.actions}>

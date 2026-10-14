@@ -106,14 +106,15 @@ test("bulk selection preserves unsaved choices outside the current search", asyn
   } finally { screen.close(); }
 });
 
-test("kitchen selector searches and persists the selected kitchen through the existing switch API", async () => {
+test("personal selector searches and persists the private space through the existing switch API", async () => {
   const screen = mount(<SpaceSelector label="Swiping for" />);
   try {
     fireEvent.press(await screen.findByLabelText("Swiping for: Family"));
-    await screen.findByText("My Kitchen");
+    await screen.findByRole("radio", { name: "Personal" });
+    expect(screen.queryByText("My Kitchen")).toBeNull();
     expect(screen.getByText("Choose a group")).toBeTruthy();
-    fireEvent.changeText(screen.getByLabelText("Search groups"), "my");
-    fireEvent.press(screen.getByRole("radio", { name: "My Kitchen" }));
+    fireEvent.changeText(screen.getByLabelText("Search groups"), "personal");
+    fireEvent.press(screen.getByRole("radio", { name: "Personal" }));
     await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/households/kitchen/switch", { method: "POST" }));
   } finally { screen.close(); }
 });
@@ -135,7 +136,7 @@ test("Profile default picker keeps the default separate from the active group", 
   try {
     fireEvent.press(await screen.findByLabelText("Default group: Family"));
     expect(screen.getByRole("radio", { name: "Family" }).props.accessibilityState.checked).toBe(true);
-    fireEvent.press(screen.getByRole("radio", { name: "My Kitchen" }));
+    fireEvent.press(screen.getByRole("radio", { name: "Personal" }));
     await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/households/kitchen/default", { method: "POST" }));
   } finally { screen.close(); }
 });

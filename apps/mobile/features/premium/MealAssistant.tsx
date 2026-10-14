@@ -1,17 +1,18 @@
 import * as Crypto from "expo-crypto";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { AppState, KeyboardAvoidingView, Linking, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { AppState, KeyboardAvoidingView, Modal, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
 import { SearchField } from "@/components/SearchField";
 import { Colors } from "@/components/theme";
-import { apiFetch } from "@/services/api";
+import { ApiError, apiFetch } from "@/services/api";
 import { useOfflineStatus } from "@/services/offlineStore";
 import { MacroChoice } from "./MacroChoice";
 import { MacroCalculator } from "./MacroCalculator";
 import { Calculation, CalculatorRow, objects, PROVIDER_VIEW_MS } from "./calculator";
-import { MealDraft, ReviewedFood, reviewedRows, suggestedPortions } from "./mealAssistant";
+import { MealDraft, ReviewedFood, prefillServing, reviewedRows, suggestedPortions } from "./mealAssistant";
 import { NutritionAttribution } from "./NutritionAttribution";
+import { NutritionConsent, NutritionConsentStatus } from "./NutritionConsent";
 import { useMealVoice } from "./useMealVoice";
 
 export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
@@ -24,6 +25,8 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
   const [items, setItems] = useState<ReviewedFood[]>([]);
   const [rows, setRows] = useState<CalculatorRow[] | null>(null);
   const [busy, setBusy] = useState(false);
+  const [transcribing, setTranscribing] = useState(false);
+  const [voiceFailure, setVoiceFailure] = useState(false);
   const [error, setError] = useState("");
   const [searching, setSearching] = useState<string | null>(null);
   const [query, setQuery] = useState("");
@@ -32,27 +35,44 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
   const request = useRef<{ description: string; id: string } | null>(null);
   const abort = useRef<AbortController | null>(null);
   const alive = useRef(true);
+  const inFlight = useRef(false);
+  const autoAttempted = useRef(new WeakSet<Blob>());
+  const transcription = useRef<{ audio: Blob; id: string } | null>(null);
   const voice = useMealVoice();
+  const voiceRef = useRef(voice);
+  voiceRef.current = voice;
+  const autoTranscribe = useRef<() => void>(() => undefined);
+  autoTranscribe.current = () => { if (voice.audio) void run(signal => transcribe(voice.audio!, signal)); };
   const consent = useQuery({ queryKey: ["nutrition-consent"], queryFn: () =>
-    apiFetch<{ accepted: boolean; terms_version: string; terms_url: string }>("/api/v1/nutrition/consent"), retry: false });
+    apiFetch<NutritionConsentStatus>("/api/v1/nutrition/consent"), retry: false });
   const accept = useMutation({ mutationFn: () => apiFetch("/api/v1/nutrition/consent", {
     method: "POST", body: JSON.stringify({ terms_version: consent.data?.terms_version }) }),
-    onSuccess: result => client.setQueryData(["nutrition-consent"], result), onError: reason => setError(message(reason)) });
+    onSuccess: result => {
+      client.setQueryData(["nutrition-consent"], result);
+      void client.invalidateQueries({ predicate: item => String(item.queryKey[0]).startsWith("macro-") });
+    }, onError: reason => setError(message(reason)) });
   const accepted = consent.data?.accepted === true;
   useEffect(() => {
     alive.current = true;
     const background = () => {
       if (Platform.OS === "web" && !document.hidden) return;
-      abort.current?.abort(); setBusy(false); setRows(null); setItems([]); setDraft(null); setResults(null);
+      abort.current?.abort(); inFlight.current = false; transcription.current = null; voiceRef.current.clear();
+      setBusy(false); setTranscribing(false); setVoiceFailure(false); setRows(null); setItems([]); setDraft(null); setResults(null);
     };
     const subscription = AppState.addEventListener("change", state => { if (state !== "active") background(); });
     if (Platform.OS === "web") document.addEventListener("visibilitychange", background);
     return () => {
-      alive.current = false; abort.current?.abort(); subscription.remove();
+      alive.current = false; abort.current?.abort(); transcription.current = null; voiceRef.current.clear(); subscription.remove();
       if (Platform.OS === "web") document.removeEventListener("visibilitychange", background);
       if (request.current) void apiFetch(`/api/v1/nutrition/ai/drafts/${request.current.id}`, { method: "DELETE" }).catch(() => undefined);
     };
   }, []);
+  useEffect(() => {
+    if (!accepted || !voiceEnabled || !voice.supported || !voice.audio || voice.recording || draft || busy || offline || inFlight.current) return;
+    if (autoAttempted.current.has(voice.audio)) return;
+    autoAttempted.current.add(voice.audio);
+    autoTranscribe.current();
+  }, [accepted, voiceEnabled, voice.supported, voice.audio, voice.recording, draft, busy, offline]);
   useEffect(() => {
     const timer = setInterval(() => {
       if (resultsExpire && resultsExpire <= Date.now()) { setResults(null); setResultsExpire(0); }
@@ -68,11 +88,12 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
   }, [items, resultsExpire]);
   function changeDescription(value: string) { setDescription(value); request.current = null; setError(""); }
   async function run(action: (signal: AbortSignal) => Promise<void>) {
-    if (busy || offline) return;
-    abort.current = new AbortController(); const signal = abort.current.signal;
+    if (inFlight.current || offline) return;
+    inFlight.current = true;
+    const controller = new AbortController(); abort.current = controller; const signal = controller.signal;
     setBusy(true); setError("");
     try { await action(signal); } catch (reason) { if (alive.current && !signal.aborted) setError(message(reason)); }
-    finally { if (alive.current) setBusy(false); }
+    finally { if (alive.current && abort.current === controller) { inFlight.current = false; setBusy(false); setTranscribing(false); } }
   }
   async function describe(signal: AbortSignal) {
     const text = description.trim();
@@ -82,13 +103,27 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
     if (signal.aborted) return;
     if (result.status !== "ready") throw new Error("Your meal is still being prepared. Try again shortly.");
     setDraft({ ...result, items: [] }); setItems(result.items.map(item => ({ ...item, key: Crypto.randomUUID(),
-      serving_id: "", amount: "", expires: Date.now() + PROVIDER_VIEW_MS })));
+      ...prefillServing(item), recommended_food_id: item.food_id, expires: Date.now() + PROVIDER_VIEW_MS })));
   }
-  async function transcribe(signal: AbortSignal) {
-    if (!voice.audio) return;
-    const body = new FormData(); body.append("request_id", Crypto.randomUUID()); body.append("audio", voice.audio, "meal-recording");
-    const result = await apiFetch<{ text: string }>("/api/v1/nutrition/ai/transcriptions", { method: "POST", signal, body });
-    if (!signal.aborted) { changeDescription(result.text); voice.clear(); }
+  async function transcribe(audio: Blob, signal: AbortSignal) {
+    setTranscribing(true); setVoiceFailure(false);
+    if (transcription.current?.audio !== audio) transcription.current = { audio, id: Crypto.randomUUID() };
+    const body = new FormData(); body.append("request_id", transcription.current.id); body.append("audio", audio, "meal-recording");
+    try {
+      const result = await apiFetch<{ text: string }>("/api/v1/nutrition/ai/transcriptions", { method: "POST", signal, body });
+      if (signal.aborted || !alive.current) return;
+      const text = [description.trim(), result.text.trim()].filter(Boolean).join(" ");
+      if (text.length > 4000) throw new Error("Shorten the meal description before retrying transcription.");
+      changeDescription(text); transcription.current = null; voiceRef.current.clear();
+    } catch (reason) {
+      if (!signal.aborted && alive.current) setVoiceFailure(true);
+      if (reason instanceof ApiError && [410, 422, 503].includes(reason.status)) transcription.current = null;
+      throw reason;
+    }
+  }
+  function discardRecording() {
+    if (transcribing) { abort.current?.abort(); inFlight.current = false; setBusy(false); setTranscribing(false); }
+    transcription.current = null; voice.clear(); setVoiceFailure(false); setError("");
   }
   function updateItem(key: string, changes: Partial<ReviewedFood>) {
     setItems(current => current.map(item => item.key === key ? { ...item, ...changes } : item)); setError("");
@@ -101,8 +136,11 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
     const result = await apiFetch<{ data: Record<string, unknown> }>(`/api/v1/nutrition/foods/${food.food_id}`, { signal });
     if (signal.aborted || !searching) return;
     const detail = result.data.food as Record<string, unknown>;
-    updateItem(searching, { food_id: String(food.food_id), food_name: String(detail.food_name),
-      servings: objects((detail.servings as Record<string, unknown>)?.serving), serving_id: "", amount: "", expires: Date.now() + PROVIDER_VIEW_MS });
+    const item = items.find(value => value.key === searching);
+    if (!item) return;
+    const changes = { food_id: String(food.food_id), food_name: String(detail.food_name),
+      servings: objects((detail.servings as Record<string, unknown>)?.serving) };
+    updateItem(searching, { ...changes, ...prefillServing({ ...item, ...changes }), expires: Date.now() + PROVIDER_VIEW_MS });
     setSearching(null); setResults(null); setQuery("");
   }
   function review() { try { setRows(reviewedRows(items)); setError(""); } catch (reason) { setError(message(reason)); } }
@@ -114,39 +152,36 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
         <View style={styles.header}><Text style={styles.title}>{draft ? "Review meal" : "Describe a meal"}</Text>
           <Button label="" icon="close" accessibilityLabel="Close meal assistant" variant="quiet" onPress={onClose} /></View>
         <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={styles.content}>
-          {consent.isLoading ? <Text style={styles.meta}>Checking database access...</Text> : !accepted ? <View style={styles.section}>
-            {consent.error ? <><Text accessibilityRole="alert" style={styles.error}>Couldn't check database terms.</Text>
-              <Button label="Retry" icon="refresh-outline" onPress={() => { void consent.refetch(); }} /></> : null}
-            <Text style={styles.meta}>Database results are provided by FatSecret.</Text>
-            <Button label="Terms of Use" icon="open-outline" onPress={() => { void Linking.openURL(consent.data?.terms_url ?? "https://platform.fatsecret.com/terms"); }} />
-            <Button label="Accept and continue" icon="checkmark" variant="primary" disabled={!consent.data || accept.isPending || offline} onPress={() => accept.mutate()} />
-          </View> : !draft ? <>
+          {!accepted ? <NutritionConsent data={consent.data} loading={consent.isLoading} failed={consent.isError} pending={accept.isPending}
+            offline={offline} onAccept={() => accept.mutate()} onRetry={() => { void consent.refetch(); }} onClose={onClose} /> : !draft ? <>
             <Text style={styles.label}>What did you eat?</Text>
             <TextInput style={[styles.input, styles.description]} multiline maxLength={4000} accessibilityLabel="Meal description"
-              placeholder="2 eggs and 150 g cooked rice" value={description} onChangeText={changeDescription} editable={!busy} />
+              value={description} onChangeText={changeDescription} editable={!busy && !voice.recording} />
             {voiceEnabled && voice.supported ? <View style={styles.section}>
               <Button label={voice.recording ? "Stop recording" : "Record meal"} icon={voice.recording ? "stop-circle-outline" : "mic-outline"}
-                disabled={busy || offline} onPress={() => { if (voice.recording) voice.stop(); else void voice.start(); }} />
-              <Text style={styles.meta}>Audio is sent to OpenAI for transcription. Up to 60 seconds.</Text>
-              {voice.audio ? <View style={styles.row}><View style={styles.equal}><Button label="Transcribe" icon="text-outline" disabled={busy || offline} onPress={() => { void run(transcribe); }} /></View>
-                <View style={styles.equal}><Button label="Discard recording" icon="trash-outline" disabled={busy} onPress={voice.clear} /></View></View> : null}
+                disabled={busy || offline} onPress={() => { if (voice.recording) voice.stop(); else { transcription.current = null; setVoiceFailure(false); setError(""); void voice.start(); } }} />
+              {voice.audio ? <View style={styles.row}>
+                {voiceFailure && !busy ? <View style={styles.equal}><Button label="Retry transcription" icon="refresh-outline" disabled={offline}
+                  onPress={() => { void run(signal => transcribe(voice.audio!, signal)); }} /></View> : null}
+                <View style={styles.equal}><Button label={transcribing ? "Cancel transcription" : "Discard recording"} icon="trash-outline"
+                  disabled={busy && !transcribing} onPress={discardRecording} /></View></View> : null}
             </View> : null}
-            <Text style={styles.meta}>Your description is sent to OpenAI; food searches are sent to FatSecret.</Text>
-            <Button label={busy ? "Preparing..." : "Preview meal"} icon="sparkles-outline" variant="primary"
-              disabled={busy || offline || voice.recording || description.trim().length < 3} onPress={() => { void run(describe); }} />
+            <Button label={busy && !transcribing ? "Preparing..." : "Preview meal"} icon="sparkles-outline" variant="primary"
+              disabled={busy || offline || voice.recording || !!voice.audio || description.trim().length < 3} onPress={() => { void run(describe); }} />
           </> : <>
             {items.map(item => <View key={item.key} style={styles.item}>
               <View style={styles.row}><Text style={[styles.label, styles.equal]}>{item.name}</Text>
                 <Button label="" icon="trash-outline" accessibilityLabel={`Remove ${item.name}`} variant="quiet" disabled={busy} onPress={() => setItems(current => current.filter(row => row.key !== item.key))} /></View>
               {item.quantity != null ? <Text style={styles.meta}>Reported: {item.quantity} {item.unit}</Text> : <Text style={styles.meta}>Amount needed</Text>}
-              <Text style={styles.meta}>{item.food_name ?? "Choose a database match"}</Text>
+              <Text style={styles.meta}>{item.food_name ? `${item.food_name}${item.food_id === item.recommended_food_id ? " (Recommended)" : ""}` : "Choose a database match"}</Text>
               <Button label="Change match" icon="search-outline" disabled={busy || offline} onPress={() => { setSearching(item.key); setQuery(item.search_term); setResults(null); }} />
               <MacroChoice label={`Serving size for ${item.name}`} value={item.serving_id} disabled={busy || !item.servings?.length}
-                options={[{ value: "", label: "Choose serving size" }, ...(item.servings ?? []).map(serving => ({ value: String(serving.serving_id), label: String(serving.serving_description ?? "Serving") }))]}
+                options={[{ value: "", label: "Choose serving size" }, ...(item.servings ?? []).map(serving => ({ value: String(serving.serving_id),
+                  label: `${String(serving.serving_description ?? "Serving")}${String(serving.serving_id) === item.recommended_serving_id ? " (Recommended)" : ""}` }))]}
                 onChange={id => {
                   const serving = item.servings?.find(value => String(value.serving_id) === id);
                   const amount = serving ? suggestedPortions(item, serving) : null;
-                  updateItem(item.key, { serving_id: id, amount: amount != null ? String(Math.round(amount * 10000) / 10000) : "" });
+                  updateItem(item.key, { serving_id: id, amount: amount != null && Number.isFinite(amount) ? String(Number(amount.toPrecision(12))) : "" });
                 }} />
               <Text style={styles.label}>Servings eaten</Text>
               <TextInput style={styles.input} keyboardType="decimal-pad" accessibilityLabel={`Servings eaten for ${item.name}`} value={item.amount}
@@ -156,16 +191,18 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
               <View style={styles.row}><Text style={[styles.label, styles.equal]}>Choose a food</Text><Button label="" icon="close" accessibilityLabel="Close food search" variant="quiet" onPress={() => setSearching(null)} /></View>
               <SearchField accessibilityLabel="Food search" placeholder="Search database" value={query} onChangeText={value => { setQuery(value); setResults(null); }} />
               <Button label="Search Database" icon="search-outline" disabled={busy || offline || query.trim().length < 2} onPress={() => { void run(search); }} />
-              {results?.map(food => <Button key={String(food.food_id)} label={String(food.food_name)} disabled={busy} onPress={() => { void run(signal => chooseFood(food, signal)); }} />)}
+              {results?.map(food => <Button key={String(food.food_id)}
+                label={`${String(food.food_name)}${String(food.food_id) === items.find(item => item.key === searching)?.recommended_food_id ? " (Recommended)" : ""}`}
+                disabled={busy} onPress={() => { void run(signal => chooseFood(food, signal)); }} />)}
               {results?.length === 0 ? <Text style={styles.meta}>No matching foods.</Text> : null}
             </View> : null}
             <Button label="Continue to calculator" icon="calculator-outline" variant="primary" disabled={busy || offline || !items.length || !!searching} onPress={review} />
             <Button label="Start over" icon="refresh-outline" disabled={busy} onPress={() => { setDraft(null); setItems([]); setSearching(null); setResults(null); request.current = null; }} />
             <NutritionAttribution />
           </>}
-          {busy ? <Text accessibilityLiveRegion="polite" style={styles.meta}>Working...</Text> : null}
+          {busy ? <Text accessibilityLiveRegion="polite" style={styles.meta}>{transcribing ? "Transcribing..." : "Working..."}</Text> : null}
           {error || voice.error ? <Text accessibilityRole="alert" style={styles.error}>{error || voice.error}</Text> : null}
-          {error && !draft && accepted ? <Button label="Try again" icon="refresh-outline" disabled={busy || offline || description.trim().length < 3}
+          {error && !draft && accepted && !voice.audio ? <Button label="Try again" icon="refresh-outline" disabled={busy || offline || description.trim().length < 3}
             onPress={() => { request.current = null; void run(describe); }} /> : null}
           {offline ? <Text style={styles.error}>Connect to use the meal assistant.</Text> : null}
         </ScrollView>
