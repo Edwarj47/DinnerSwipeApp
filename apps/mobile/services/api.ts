@@ -281,6 +281,9 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     if (owner && method !== "GET" && path.startsWith("/api/v1/groups")) {
       await remember(owner, data => { data.cache = Object.fromEntries(Object.entries(data.cache).filter(([key]) => key.startsWith("/api/v1/macros/"))); });
     }
+    if (owner && method === "PATCH" && ["/api/v1/profile/discover", "/api/v1/profile/experience"].includes(path)) {
+      await remember(owner, data => { data.cache["/api/v1/profile"] = { data: result, at: Date.now() }; });
+    }
     if (owner && method !== "GET" && path.startsWith("/api/v1/recipes")) {
       await remember(owner, data => {
         for (const key of Object.keys(data.cache)) if (key.startsWith("/api/v1/recipes")) delete data.cache[key];
@@ -337,7 +340,7 @@ async function request(path: string, init: RequestInit): Promise<Response> {
   const abort = () => controller.abort();
   init.signal?.addEventListener("abort", abort);
   if (init.signal?.aborted) abort();
-  const slowAction = init.body instanceof FormData || path.includes("ingestion") || path.includes("ai-recipes");
+  const slowAction = init.body instanceof FormData || path.includes("ingestion") || path.includes("ai-recipes") || path.includes("/nutrition/ai/");
   const timer = setTimeout(abort, slowAction ? 120000 : path.includes("/nutrition/") ? 30000 : 12000);
   try {
     const headers = new Headers(init.headers);

@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from fastapi import APIRouter
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbDep
@@ -14,6 +16,8 @@ from app.schemas.common import (
     WeeklyPlanningUpdate,
 )
 from app.services.account_preferences import DEFAULT_GROUP_KEY, DISPLAY_NAME_KEY, display_name
+from app.services.discovery import DISCOVER_KEY
+from app.services.discovery import preferences as discover_preferences
 from app.services.planning import (
     CURSOR_KEY,
     SETTINGS_KEY,
@@ -43,6 +47,10 @@ def get_profile(current_user: CurrentUser) -> dict[str, object]:
         "walmart_zip": profile.walmart_zip,
         "preferred_grocery_retailer": profile.preferred_grocery_retailer,
         "notification_preferences": profile.notification_preferences,
+        "discover_preferences": discover_preferences(current_user),
+        "experience_preferences": (profile.notification_preferences or {}).get(
+            "experience_preferences", {"mode": "nutrition", "weight_unit": "kg"}
+        ),
         "weekly_planning": planning_settings(current_user),
         "onboarding_completed_at": profile.onboarding_completed_at,
         "tutorial_completed_at": profile.tutorial_completed_at,
@@ -72,6 +80,8 @@ def update_profile(
                 CURSOR_KEY,
                 DEFAULT_GROUP_KEY,
                 DISPLAY_NAME_KEY,
+                DISCOVER_KEY,
+                "experience_preferences",
             ):
                 stored = (profile.notification_preferences or {}).get(protected)
                 if stored is not None:
@@ -79,6 +89,64 @@ def update_profile(
                 else:
                     value.pop(protected, None)
         setattr(profile, key, value)
+    db.commit()
+    return get_profile(current_user)
+
+
+class DiscoverUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    categories: list[
+        Literal["breakfast", "lunch", "dinner", "snack", "beverage", "dessert", "sauce", "other"]
+    ] = Field(max_length=8)
+
+    @field_validator("categories")
+    @classmethod
+    def unique_categories(cls, value: list[str]) -> list[str]:
+        if len(set(value)) != len(value):
+            raise ValueError("Choose each category only once.")
+        return value
+
+
+class ExperienceUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    mode: Literal["nutrition", "workouts"]
+    weight_unit: Literal["kg", "lb"]
+
+
+@router.patch("/experience")
+def update_experience(
+    payload: ExperienceUpdate, db: DbDep, current_user: CurrentUser
+) -> dict[str, object]:
+    profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == current_user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    assert profile is not None
+    profile.notification_preferences = {
+        **(profile.notification_preferences or {}),
+        "experience_preferences": payload.model_dump(),
+    }
+    db.commit()
+    return get_profile(current_user)
+
+
+@router.patch("/discover")
+def update_discover(
+    payload: DiscoverUpdate, db: DbDep, current_user: CurrentUser
+) -> dict[str, object]:
+    profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == current_user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    assert profile is not None
+    profile.notification_preferences = {
+        **(profile.notification_preferences or {}),
+        DISCOVER_KEY: payload.model_dump(),
+    }
     db.commit()
     return get_profile(current_user)
 

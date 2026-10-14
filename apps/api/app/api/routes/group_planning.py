@@ -29,11 +29,20 @@ from app.schemas.common import (
     WeeklySlotUpdate,
 )
 from app.services import group_planning as service
+from app.services.discovery import filter_query as discover_filter
 from app.services.groups import household_preference_terms, recipe_group_safety
 from app.services.recipes import regenerate_grocery_list, serialize_plan, serialize_recipe
+from app.services.week_history import history
 
 router = APIRouter(prefix="/households/{household_id}", tags=["group-planning"])
 reminder_router = APIRouter(prefix="/households", tags=["group-planning"])
+
+
+@router.get("/weekly-plans/history")
+def historical_group_plan(
+    household_id: str, week_start: date, db: DbDep, current_user: BasicUser
+) -> dict[str, Any]:
+    return history(db, current_user, week_start, household_id)
 
 
 class ChoiceUpdate(BaseModel):
@@ -139,6 +148,7 @@ def library(
     )
     if discover:
         query = query.where(Recipe.id.in_(enabled))
+        query = discover_filter(query, current_user)
     total = db.scalar(select(func.count()).select_from(query.subquery()))
     preferences = household_preference_terms(db, group)
     items = []

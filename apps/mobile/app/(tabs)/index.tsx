@@ -14,7 +14,10 @@ import { useGuidedTour } from "@/features/onboarding/TourContext";
 import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
 import { apiFetch } from "@/services/api";
 import { openSettings } from "@/services/settingsMenu";
-import { Recipe, WeeklyPlan } from "@/services/types";
+import { Recipe, UserProfile, WeeklyPlan } from "@/services/types";
+import { discoverCategories, matchesDiscoverCategories } from "@/features/discover/DiscoverSettings";
+import { WorkoutDiscover } from "@/features/workouts/WorkoutDiscover";
+import { useIsWorkoutMode } from "@/features/workouts/WorkoutRuntime";
 import { usePlannerStore } from "@/stores/plannerStore";
 import { shuffleRecipes } from "@/features/discover/deck";
 import { useCurrentWeek } from "@/features/planner/useCurrentWeek";
@@ -22,6 +25,11 @@ import { useSpace } from "@/features/groups/useSpace";
 import { SpaceSelector } from "@/features/groups/SpaceSelector";
 
 export default function DiscoverScreen() {
+  const workouts = useIsWorkoutMode();
+  return workouts ? <WorkoutDiscover /> : <NutritionDiscoverScreen />;
+}
+
+function NutritionDiscoverScreen() {
   const space = useSpace();
   return <DiscoverContent key={space.key} />;
 }
@@ -44,15 +52,19 @@ function DiscoverContent() {
   const { sessionId, addSwipe, history, shuffleVersion, restartDiscover, removeChoice } = usePlannerStore();
   const [selectedRecipe, setSelectedRecipe] = useState<Recipe | null>(null);
   const [status, setStatus] = useTransientMessage();
-  const { data, isLoading, isFetching, error, refetch } = useQuery<Recipe[]>({ queryKey: ["recipes", "discover", space.key], queryFn: async () => {
+  const profile = useQuery({ queryKey: ["profile"], queryFn: () => apiFetch<UserProfile>("/api/v1/profile") });
+  const categories = discoverCategories(profile.data);
+  const { data, isLoading, isFetching, error, refetch } = useQuery<{ recipes: Recipe[]; enabledCount?: number }>({ queryKey: ["recipes", "discover", space.key, categories.join(",")], queryFn: async () => {
     const all: Recipe[] = [];
+    let enabledCount: number | undefined;
     for (let offset = 0; ; offset += 100) {
-      const result = space.groupId ? await apiFetch<{ items: { recipe: Recipe }[]; total: number }>(`/api/v1/households/${space.groupId}/library?discover=true&limit=100&offset=${offset}`) : null;
-      const page = result ? result.items.map(item => item.recipe) : await apiFetch<Recipe[]>(`/api/v1/recipes?limit=100&offset=${offset}`);
+      const result = space.groupId ? await apiFetch<{ items: { recipe: Recipe }[]; total: number; enabled_count?: number }>(`/api/v1/households/${space.groupId}/library?discover=true&limit=100&offset=${offset}`) : null;
+      if (result) enabledCount = result.enabled_count;
+      const page = result ? result.items.map(item => item.recipe) : await apiFetch<Recipe[]>(`/api/v1/recipes?discover=true&limit=100&offset=${offset}`);
       all.push(...page);
-      if (result ? offset + 100 >= result.total : page.length < 100) return all;
+      if (result ? offset + 100 >= result.total : page.length < 100) return { recipes: all, enabledCount };
     }
-  }, enabled: !space.isLoading && !space.isError, refetchInterval: space.groupId ? 30_000 : false, retry: false });
+  }, enabled: !space.isLoading && !space.isError && !profile.isLoading, refetchInterval: space.groupId ? 30_000 : false, retry: false });
   const plan = useCurrentWeek();
   const replaceSlotId = typeof params.replace_slot_id === "string" ? params.replace_slot_id : "";
   const replaceName = typeof params.replace_name === "string" ? params.replace_name : "this slot";
@@ -100,7 +112,7 @@ function DiscoverContent() {
     },
     onError: (error) => setStatus(error instanceof Error ? error.message : "Unable to undo the planned dinner.")
   });
-  const recipes = useMemo(() => shuffleRecipes<Recipe>(data ?? [], `${sessionId}-${shuffleVersion}`), [data, sessionId, shuffleVersion]);
+  const recipes = useMemo(() => shuffleRecipes<Recipe>((data?.recipes ?? []).filter((recipe: Recipe) => matchesDiscoverCategories(recipe.meal_type, categories)), `${sessionId}-${shuffleVersion}`), [data, sessionId, shuffleVersion, categories]);
   const plannedIds = new Set(plan.data?.slots.flatMap((slot: WeeklyPlan["slots"][number]) => slot.recipe_id ? [slot.recipe_id] : []) ?? []);
   const seenIds = new Set(history.map(item => item.recipe.id));
   const current = recipes.find(recipe => !recipe.is_hidden && !plannedIds.has(recipe.id) && !seenIds.has(recipe.id));
@@ -112,7 +124,7 @@ function DiscoverContent() {
   const ownerName = owner && "name" in owner ? owner.name : null;
 
   const headline = useMemo(
-    () => (isReplacingSlot ? "Pick replacement" : "Find dinners"),
+    () => (isReplacingSlot ? "Pick replacement" : "Find meals"),
     [isReplacingSlot]
   );
 
@@ -144,7 +156,7 @@ function DiscoverContent() {
     <Screen contentWidth={960} scroll={scroll} onViewportLayout={setViewportHeight} header={
       <View style={styles.header}>
         <View style={styles.brand}>
-          <BrandLogo size={46} />
+          <BrandLogo size={46} experienceSelector />
           <View style={styles.brandText}>
             <Text style={styles.eyebrow}>{progressText}</Text>
             <Text style={styles.title}>{headline}</Text>
@@ -178,6 +190,9 @@ function DiscoverContent() {
           <Text style={styles.emptyCopy}>Check your connection and try again.</Text>
           <Button label={isFetching || plan.isFetching ? "Trying again..." : "Try again"} icon="refresh" disabled={isFetching || plan.isFetching} onPress={() => { if (space.isError) { void space.refetch(); } else { void refetch(); void plan.refetch(); } }} />
         </View>
+      ) : !categories.length || (recipes.length === 0 && (categories.length < 8 || (space.groupId && (data?.enabledCount ?? 0) > 0))) ? (
+        <View style={styles.empty}><Text style={styles.done}>{categories.length ? "No meals match your filters" : "No categories selected"}</Text>
+          <Button label="Discover filters" icon="options-outline" onPress={() => openSettings({ section: "discover" })} /></View>
       ) : recipes.length === 0 && space.groupId ? (
         <View style={styles.empty}>
           <View style={styles.emptyCard} testID="group-discover-empty">

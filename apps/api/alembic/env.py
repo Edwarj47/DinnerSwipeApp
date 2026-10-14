@@ -11,6 +11,7 @@ from app.models import (
     entities,  # noqa: F401
     nutrition,  # noqa: F401
     security,  # noqa: F401
+    workouts,  # noqa: F401
 )
 from app.models.base import Base
 

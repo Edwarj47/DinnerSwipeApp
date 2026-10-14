@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import select
@@ -22,8 +22,14 @@ from app.services.recipes import (
     retire_slot_choices,
     serialize_plan,
 )
+from app.services.week_history import history
 
 router = APIRouter(prefix="/weekly-plans", tags=["weekly-plans"])
+
+
+@router.get("/history")
+def historical_plan(week_start: date, db: DbDep, current_user: BasicUser) -> dict[str, object]:
+    return history(db, current_user, week_start)
 
 
 @router.get("/current")

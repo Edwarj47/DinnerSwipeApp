@@ -9,6 +9,8 @@ import { apiFetch } from "@/services/api";
 import { Household, SafetyFilterMode } from "@/services/types";
 import { GroupManager } from "./GroupManager";
 import { GroupPlanningPanel } from "./GroupPlanningPanel";
+import { WorkoutGroupPanel } from "@/features/workouts/WorkoutGroupPanel";
+import { useIsWorkoutMode } from "@/features/workouts/WorkoutRuntime";
 import { useSpace } from "./useSpace";
 
 export function HouseholdPanel({ initialView }: { initialView?: "choices" } = {}) {
@@ -17,6 +19,7 @@ export function HouseholdPanel({ initialView }: { initialView?: "choices" } = {}
 }
 
 function HouseholdContent({ household, initialView }: { household?: Household; initialView?: "choices" }) {
+  const workouts = useIsWorkoutMode();
   const client = useQueryClient();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [transferTarget, setTransferTarget] = useState<Household["members"][number] | null>(null);
@@ -30,7 +33,7 @@ function HouseholdContent({ household, initialView }: { household?: Household; i
     <GroupManager current={household} />
     {household?.id && !household.is_personal ? <>
       <Text style={styles.title}>{household.name}</Text>
-      <GroupPlanningPanel household={household} initialView={initialView} />
+      {workouts ? <WorkoutGroupPanel groupId={household.id} role={household.current_user_role} /> : <GroupPlanningPanel household={household} initialView={initialView} />}
       {owner ? <Button label={settingsOpen ? "Close group safety settings" : "Group safety settings"} icon="warning-outline" onPress={() => setSettingsOpen(!settingsOpen)} /> : null}
       {owner && settingsOpen ? <View style={styles.settings}>
         <Text style={styles.heading}>Group safety settings</Text>

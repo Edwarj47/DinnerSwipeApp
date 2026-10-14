@@ -2,14 +2,16 @@ import { Image } from "expo-image";
 import { StyleSheet, View } from "react-native";
 
 import { Colors } from "@/components/theme";
+import { ExperienceSelector } from "@/features/workouts/ExperienceSelector";
 
 type Props = {
   size?: number;
   framed?: boolean;
+  experienceSelector?: boolean;
 };
 
-export function BrandLogo({ size = 64, framed = false }: Props) {
-  return (
+export function BrandLogo({ size = 64, framed = false, experienceSelector = false }: Props) {
+  const logo = (
     <View
       accessibilityLabel="Dinner Swipe logo"
       accessibilityRole="image"
@@ -22,6 +24,7 @@ export function BrandLogo({ size = 64, framed = false }: Props) {
       <Image source={require("../assets/icon.png")} style={styles.image} contentFit="cover" />
     </View>
   );
+  return experienceSelector ? <ExperienceSelector>{logo}</ExperienceSelector> : logo;
 }
 
 const styles = StyleSheet.create({

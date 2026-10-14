@@ -21,6 +21,7 @@ import { SummaryPeriod, summaryDays } from "./SummaryPeriod";
 import { RecipeMacroLogger } from "@/features/recipes/RecipeMacroLogger";
 import { MacroDatePicker } from "./MacroDatePicker";
 import { MacroCalculator } from "./MacroCalculator";
+import { MealAssistant } from "./MealAssistant";
 import { NutritionAttribution } from "./NutritionAttribution";
 import { NutritionPendingNotice } from "./NutritionPendingNotice";
 import { TourTarget } from "@/features/onboarding/TourTarget";
@@ -67,6 +68,7 @@ export function PremiumMacroPanel() {
   const recipeFingerprint = JSON.stringify(recipeDraft);
   const [recipeLog, setRecipeLog] = useState<MacroConfirmation | "new" | null>(null);
   const [calculator, setCalculator] = useState<string | "new" | null>(null);
+  const [mealAssistant, setMealAssistant] = useState(false);
   const [summarySelection, setSummarySelection] = useState<number | null>(null);
   const profile = useQuery({ queryKey: ["profile"], queryFn: () => apiFetch<UserProfile>("/api/v1/profile") });
   const summaryRange = summarySelection ?? summaryDays(profile.data?.notification_preferences?.macro_summary_days) ?? 7;
@@ -83,6 +85,9 @@ export function PremiumMacroPanel() {
     retry: false
   });
   const premiumActive = Boolean(subscription.data?.premium_active ?? subscription.data?.active);
+  const assistantStatus = useQuery({ queryKey: ["meal-assistant-status"],
+    queryFn: () => apiFetch<{ enabled: boolean; voice_enabled: boolean }>("/api/v1/nutrition/ai/status"),
+    enabled: premiumActive, retry: false });
   const summary = useQuery({
     queryKey: ["macro-summary", summaryRange, summaryEnd],
     queryFn: () => apiFetch<MacroSummary>(`/api/v1/macros/summary?days=${summaryRange}&end_date=${summaryEnd}`),
@@ -277,6 +282,7 @@ export function PremiumMacroPanel() {
           {macroView !== "day" && (macroView === "analytics" ? analytics.data : calendarAnalytics.data)?.nutrition_unavailable_count ? <NutritionPendingNotice refreshing={activeQuery.isFetching} onRefresh={() => { void activeQuery.refetch(); }} /> : null}
           {macroView === "day" ? (
             <><Button label="Log a saved recipe" icon="restaurant-outline" onPress={() => setRecipeLog("new")} />
+            {assistantStatus.data?.enabled ? <Button label="Describe a meal" icon="sparkles-outline" disabled={offline} onPress={() => setMealAssistant(true)} /> : null}
             <DayMacroView
               selectedDate={selectedDate}
               setSelectedDate={setSelectedDate}
@@ -319,6 +325,11 @@ export function PremiumMacroPanel() {
             onClose={() => setCalculator(null)} onSaved={result => {
               if (result.entry_id) { setSelectedDate(result.meal_date ?? todayISO()); setMacroView("day"); }
               setStatus(result.recipe_id ? "Recipe saved with ingredients and nutrition." : "Calculation added to your macro entries.");
+            }} /> : null}
+          {mealAssistant ? <MealAssistant voiceEnabled={assistantStatus.data?.voice_enabled === true} onClose={() => setMealAssistant(false)}
+            onSaved={result => {
+              if (result.entry_id) { setSelectedDate(result.meal_date ?? todayISO()); setMacroView("day"); }
+              setStatus(result.recipe_id ? "Recipe saved." : "Meal added to your macro entries.");
             }} /> : null}
 
           {macroView === "grid" ? (

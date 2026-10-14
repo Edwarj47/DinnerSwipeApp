@@ -70,7 +70,10 @@ def source_for(db: Session, user: User, kind: str, resource_id: str) -> str:
                 select(Recipe.id).where(Recipe.photo_url == object_url(media.id))
             ).all()
             if not any(allowed_recipe(db, user, value) for value in references):
-                raise HTTPException(404, "Photo not found")
+                from app.services.workout_media import allows_photo
+
+                if not allows_photo(db, user, media):
+                    raise HTTPException(404, "Photo not found")
         value = object_url(media.id)
     else:
         value = None

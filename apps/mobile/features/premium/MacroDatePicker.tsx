@@ -14,29 +14,31 @@ const calendarTheme = {
   "stylesheet.day.basic": { base: { width: "100%", minHeight: 44, paddingVertical: 4, alignItems: "center", justifyContent: "center" } }
 };
 
-export function MacroDatePicker({ value, onChange }: { value: string; onChange: (value: string) => void }) {
+export function MacroDatePicker({ value, onChange, maxDate, label = "Choose macro date", title = "Choose date", todayLabel = "Today" }: {
+  value: string; onChange: (value: string) => void; maxDate?: string; label?: string; title?: string; todayLabel?: string;
+}) {
   const [open, setOpen] = useState(false);
   function choose(day: string) { onChange(day); setOpen(false); }
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel="Choose macro date" onPress={() => { Keyboard.dismiss(); setOpen(true); }} style={styles.icon}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => { Keyboard.dismiss(); setOpen(true); }} style={styles.icon}>
       <Ionicons name="calendar-outline" size={22} color={Colors.tomato} />
     </Pressable>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
       <View style={styles.backdrop}>
         <Pressable style={StyleSheet.absoluteFill} accessibilityRole="button" accessibilityLabel="Close calendar" onPress={() => setOpen(false)} />
         <View style={styles.popup} accessibilityViewIsModal>
-          <View style={styles.header}><Text style={styles.heading}>Choose date</Text>
+          <View style={styles.header}><Text style={styles.heading}>{title}</Text>
             <Pressable accessibilityRole="button" accessibilityLabel="Dismiss calendar" onPress={() => setOpen(false)} style={styles.icon}>
               <Ionicons name="close" size={24} color={Colors.ink} />
             </Pressable>
           </View>
           <ScrollView>
-            {open ? <Calendar testID="macro-calendar" initialDate={isISODate(value) ? value : todayISO()} firstDay={1} enableSwipeMonths
+            {open ? <Calendar testID="macro-calendar" initialDate={isISODate(value) ? value : todayISO()} firstDay={1} enableSwipeMonths maxDate={maxDate}
               markedDates={{ [value]: { selected: true, selectedColor: Colors.tomato } }}
-              onDayPress={day => choose(day.dateString)}
+              onDayPress={day => { if (!maxDate || day.dateString <= maxDate) choose(day.dateString); }}
               theme={calendarTheme} /> : null}
           </ScrollView>
-          <Button label="Today" icon="today-outline" onPress={() => choose(todayISO())} />
+          <Button label={todayLabel} icon="today-outline" onPress={() => choose(maxDate && todayISO() > maxDate ? maxDate : todayISO())} />
         </View>
       </View>
     </Modal>

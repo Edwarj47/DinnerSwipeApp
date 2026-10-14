@@ -26,6 +26,11 @@ class Settings(BaseSettings):
     ai_ingestion_enabled: bool = False
     ai_recipe_enabled: bool = False
     ai_recipe_model: str = "gpt-5.4-mini"
+    nutrition_ai_enabled: bool = False
+    nutrition_voice_enabled: bool = False
+    nutrition_transcription_model: str = "gpt-transcribe"
+    nutrition_ai_daily_drafts: int = Field(default=20, ge=1, le=100)
+    workouts_enabled: bool = False
     ai_basic_daily_attempts: int = Field(default=10, ge=1, le=1000)
     ai_premium_daily_attempts: int = Field(default=100, ge=1, le=10000)
     ai_daily_dispatch_budget: int = Field(default=500, ge=1, le=10000)

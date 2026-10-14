@@ -9,6 +9,7 @@ import { syncPlanningReminder, syncGroupPlanningReminders } from "@/services/pla
 import { useAppAccess, useAuthSession } from "@/services/session";
 import { Household, UserProfile, WeeklyPlanningSettings } from "@/services/types";
 import { applyGroupChange } from "@/features/groups/groupAccess";
+import { setWorkoutsEnabled, updateWorkoutPreferences, useWorkoutMode } from "@/services/workoutMode";
 
 export function PlanningRuntime() {
   const { email } = useAuthSession();
@@ -43,10 +44,22 @@ export function PlanningRuntime() {
     }) });
     const open = (response: Notifications.NotificationResponse) => {
       if (response.notification.request.content.data?.route === "/week") {
-        const groupId = response.notification.request.content.data.household_id;
-        if (typeof groupId === "string") {
-          void apiFetch<Household>(`/api/v1/households/${groupId}/switch`, { method: "POST" }).then(async group => { await applyGroupChange(client, group); router.push("/week"); }).catch(() => router.push("/week"));
-        } else router.push("/week");
+        const data = response.notification.request.content.data;
+        void (async () => {
+          try {
+            if (typeof data.household_id === "string") {
+              const group = await apiFetch<Household>(`/api/v1/households/${data.household_id}/switch`, { method: "POST" });
+              await applyGroupChange(client, group);
+            }
+            const mode = data.experience === "workouts" ? "workouts" : "nutrition";
+            if (mode === "workouts") {
+              const status = await apiFetch<{ enabled: boolean }>("/api/v1/workouts/status");
+              setWorkoutsEnabled(status.enabled);
+            }
+            if (useWorkoutMode.getState().mode !== mode) await updateWorkoutPreferences({ mode });
+          } catch { /* An unavailable group or experience opens the user's accessible current week. */ }
+          router.push("/week");
+        })();
         void Notifications.clearLastNotificationResponseAsync().catch(() => undefined);
       }
     };

@@ -20,8 +20,11 @@ import { MeasurementSettings } from "@/features/preferences/MeasurementSettings"
 import { WeeklyPlanningSettings } from "@/features/preferences/WeeklyPlanningSettings";
 
 import { SettingsSection } from "./SettingsSection";
+import { DiscoverSettings } from "@/features/discover/DiscoverSettings";
+import { WorkoutSettings } from "@/features/workouts/WorkoutSettings";
+import { useWorkoutMode } from "@/services/workoutMode";
 
-type UserSection = "account" | "meals" | "macros";
+type UserSection = "account" | "meals" | "macros" | "discover" | "workouts";
 type AccountAction = "overview" | "reset" | "data" | "delete";
 type GroceryRetailer = UserProfile["preferred_grocery_retailer"];
 
@@ -33,6 +36,7 @@ const GROCERY_RETAILER_OPTIONS: { label: string; value: GroceryRetailer }[] = [
 ];
 
 export function UserSettingsPanel({ initialSection, initialFocus, initialResetToken, onExit }: { initialSection?: UserSection; initialFocus?: "subscription" | "planning"; initialResetToken?: string; onExit?: () => void }) {
+  const workoutsEnabled = useWorkoutMode(state => state.enabled);
   const queryClient = useQueryClient();
   const router = useRouter();
   const [section, setSection] = useState<UserSection | null>(initialSection ?? null);
@@ -402,6 +406,8 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
           <Button label="Save preferences" icon="save" variant="primary" disabled={!profile.data || saveProfile.isPending || resetPreference.isPending} onPress={() => saveProfile.mutate()} />
         </View></TourTarget>
       </SettingsSection>
+      <SettingsSection title="Discover" icon="options-outline" expanded={section === "discover"} onToggle={() => setSection(section === "discover" ? null : "discover")}><DiscoverSettings /></SettingsSection>
+      {workoutsEnabled ? <SettingsSection title="Workout settings" icon="barbell-outline" expanded={section === "workouts"} onToggle={() => setSection(section === "workouts" ? null : "workouts")}><WorkoutSettings /></SettingsSection> : null}
       {premiumActive ? <SettingsSection title="Macro settings" icon="speedometer-outline" expanded={section === "macros"} onToggle={() => setSection(section === "macros" ? null : "macros")}>
         <SettingsSection title="Macro targets" icon="flag-outline"><MacroTargetSettings /></SettingsSection>
       </SettingsSection> : null}

@@ -138,8 +138,9 @@ test.each(["Approve", "Reject"])("web %s collapses review immediately after succ
     await screen.findByText("Review recipe");
     expect(screen.queryByLabelText("Review recipe photo URL")).toBeNull();
     await waitFor(() => expect(screen.getByLabelText(action).props.accessibilityState.disabled).toBe(false));
-    fireEvent.press(screen.getByLabelText(action));
-    await waitFor(() => expect(screen.queryByText("Review recipe")).toBeNull());
+    await act(async () => { fireEvent.press(screen.getByLabelText(action)); });
+    await waitFor(() => expect(screen.queryByText("Review recipe")).toBeNull(), { timeout: 5000 });
+    expect(request).toHaveBeenCalledWith(`/api/v1/url-ingestion/web/${action.toLowerCase()}`, expect.objectContaining({ method: "POST" }));
     expect(screen.getByText("Recent web drafts")).toBeTruthy();
   } finally { screen.close(); }
 });

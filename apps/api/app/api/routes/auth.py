@@ -339,6 +339,8 @@ def _audit_event_for_account_export(event: AuditEvent) -> dict[str, object]:
 
 @router.get("/account/export")
 def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
+    from app.services.workouts import account_export as export_workouts
+
     profile = current_user.profile
     household = (
         db.get(Household, profile.household_id) if profile and profile.household_id else None
@@ -545,6 +547,7 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
             ).all()
         ],
         "account_activity": [_audit_event_for_account_export(event) for event in audit_events],
+        "workouts": export_workouts(db, current_user),
     }
 
 

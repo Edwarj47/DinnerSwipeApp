@@ -12,6 +12,7 @@ from app.api.routes import (
     health,
     imports,
     ingestion,
+    meal_assistant,
     media,
     nutrition,
     offline,
@@ -19,6 +20,7 @@ from app.api.routes import (
     premium,
     profile,
     recipes,
+    workouts,
 )
 
 api_router = APIRouter(prefix="/api/v1")
@@ -39,4 +41,6 @@ api_router.include_router(group_planning.reminder_router)
 api_router.include_router(premium.router)
 api_router.include_router(offline.router)
 api_router.include_router(nutrition.router)
+api_router.include_router(meal_assistant.router)
+api_router.include_router(workouts.router)
 api_router.include_router(media.router)

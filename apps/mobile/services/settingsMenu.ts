@@ -1,6 +1,6 @@
 export type SettingsRequest = {
   tab?: "user" | "group";
-  section?: "account" | "meals" | "macros";
+  section?: "account" | "meals" | "macros" | "discover" | "workouts";
   focus?: "subscription" | "planning";
   resetToken?: string;
   groupView?: "choices";

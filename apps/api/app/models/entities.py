@@ -16,8 +16,9 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    event,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, Session, mapped_column, relationship
 
 from app.models.base import Base
 
@@ -310,6 +311,7 @@ class WeeklyPlanSlot(Base, TimestampMixin):
     servings: Mapped[int] = mapped_column(Integer, default=4)
     is_locked: Mapped[bool] = mapped_column(Boolean, default=False)
     sort_order: Mapped[int] = mapped_column(Integer, default=0)
+    history_snapshot: Mapped[dict[str, object] | None] = mapped_column(JSON, nullable=True)
 
 
 class MealSwipe(Base, TimestampMixin):
@@ -601,3 +603,10 @@ Index(
     MealMacroConfirmation.user_id,
     MealMacroConfirmation.meal_date,
 )
+
+
+@event.listens_for(Session, "before_flush")
+def capture_weekly_selections(session: Session, flush_context: object, instances: object) -> None:
+    from app.services.week_history import capture_slots
+
+    capture_slots(session)

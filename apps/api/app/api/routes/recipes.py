@@ -24,6 +24,7 @@ from app.schemas.common import (
     RecipeOut,
     SwipeRequest,
 )
+from app.services.discovery import filter_query as discover_filter
 from app.services.planning import planning_settings, week_bounds
 from app.services.private_media import canonical_photo, object_url, photo_url, store_image
 from app.services.recipes import (
@@ -56,8 +57,11 @@ def list_recipes(
     limit: int = Query(30, ge=1, le=100),
     offset: int = Query(0, ge=0),
     collection: Literal["library", "hidden", "archived"] | None = None,
+    discover: bool = False,
 ) -> list[dict[str, object]]:
     query = accessible_recipes_query(current_user, include_archived=collection == "archived")
+    if discover:
+        query = discover_filter(query, current_user)
     hidden_ids = select(HiddenRecipe.recipe_id).where(HiddenRecipe.user_id == current_user.id)
     if collection == "archived":
         query = query.where(

@@ -107,6 +107,7 @@ export function cacheable(path: string) {
   return /^\/api\/v1\/recipes(?:\/[a-zA-Z0-9-]+)?$/.test(base)
     || /^\/api\/v1\/households(?:\/current|\/[a-zA-Z0-9-]+\/(?:weekly-plans\/current|grocery-lists\/(?:current|pantry)|library))$/.test(base)
     || base === "/api/v1/households"
+    || /^\/api\/v1\/(?:households\/[a-zA-Z0-9-]+\/)?weekly-plans\/history$/.test(base)
     || ["/api/v1/profile", "/api/v1/weekly-plans/current", "/api/v1/grocery-lists/current", "/api/v1/grocery-lists/pantry",
       "/api/v1/macros/entries", "/api/v1/macros/targets", "/api/v1/macros/summary", "/api/v1/macros/analytics"].includes(base);
 }

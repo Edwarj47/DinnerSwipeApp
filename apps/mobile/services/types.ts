@@ -130,6 +130,8 @@ export type UserProfile = {
   walmart_zip: string | null;
   preferred_grocery_retailer: "walmart" | "publix" | "kroger" | "instacart";
   notification_preferences: Record<string, unknown>;
+  discover_preferences?: { categories: string[] };
+  experience_preferences?: { mode: "nutrition" | "workouts"; weight_unit: "kg" | "lb" };
   weekly_planning?: WeeklyPlanningSettings;
   onboarding_completed_at?: string | null;
   tutorial_completed_at?: string | null;
@@ -282,3 +284,5 @@ export type WeeklyPlan = {
     sort_order: number;
   }[];
 };
+
+export type WeeklyPlanHistory = Omit<WeeklyPlan, "id"> & { id: string | null; read_only: true };

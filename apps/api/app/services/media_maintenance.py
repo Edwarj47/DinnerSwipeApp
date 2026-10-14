@@ -14,6 +14,8 @@ from app.services.private_media import LOCAL_KEY, object_url
 
 
 def referenced(db: Session, media: MediaObject) -> bool:
+    from app.services.workout_media import referenced as workout_referenced
+
     prefixes = [
         object_url(media.id),
         f"{settings.public_api_url.rstrip('/')}/media/{media.storage_key}",
@@ -47,7 +49,7 @@ def referenced(db: Session, media: MediaObject) -> bool:
             )
             .limit(1)
         )
-    )
+    ) or workout_referenced(db, media)
 
 
 def backfill_local_media(db: Session) -> dict[str, int]:

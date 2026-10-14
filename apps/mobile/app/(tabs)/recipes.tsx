@@ -20,11 +20,18 @@ import { useTransientMessage } from "@/components/useTransientMessage";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { TourTarget } from "@/features/onboarding/TourTarget";
+import { WorkoutsScreen } from "@/features/workouts/WorkoutsScreen";
+import { useIsWorkoutMode } from "@/features/workouts/WorkoutRuntime";
 
 type PageMode = "library" | "add" | "review";
 type AddMode = "web" | "manual" | "ai";
 
 export default function RecipesScreen() {
+  const workouts = useIsWorkoutMode();
+  return workouts ? <WorkoutsScreen /> : <NutritionRecipesScreen />;
+}
+
+function NutritionRecipesScreen() {
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ mode?: string; method?: string; tour?: string }>();
   const [q, setQ] = useState("");
@@ -120,7 +127,7 @@ export default function RecipesScreen() {
   return (
     <Screen contentWidth={960} header={
       <View style={styles.header}>
-        <BrandLogo size={44} framed />
+        <BrandLogo size={44} framed experienceSelector />
         <View style={{ flex: 1 }}>
           <Text style={styles.kicker}>Dinner Swipe</Text>
           <Text style={styles.title}>Recipes</Text>

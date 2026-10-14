@@ -12,19 +12,43 @@ class RequestBodyLimitMiddleware:
 
     def __init__(self, app: ASGIApp) -> None:
         self.app = app
+        self.voice_uploads = 0
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        voice = (
+            scope["type"] == "http"
+            and scope["path"].rstrip("/") == "/api/v1/nutrition/ai/transcriptions"
+        )
+        if voice and self.voice_uploads >= 2:
+            await JSONResponse(
+                {"detail": "Voice is busy. Try again shortly."}, 503, headers={"Retry-After": "10"}
+            )(scope, receive, send)
+            return
+        if voice:
+            self.voice_uploads += 1
+        try:
+            await self.bounded(scope, receive, send)
+        finally:
+            if voice:
+                self.voice_uploads -= 1
+
+    async def bounded(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
         headers = dict(scope.get("headers", []))
+        voice_upload = scope["path"].rstrip("/") == "/api/v1/nutrition/ai/transcriptions"
         limit = (
-            262144
-            if scope["path"].rstrip("/") == "/api/v1/premium/stripe/webhook"
+            6 * 1024 * 1024 + 65536
+            if voice_upload
             else (
-                16777216
-                if headers.get(b"content-type", b"").lower().startswith(b"multipart/form-data")
-                else 1048576
+                262144
+                if scope["path"].rstrip("/") == "/api/v1/premium/stripe/webhook"
+                else (
+                    16777216
+                    if headers.get(b"content-type", b"").lower().startswith(b"multipart/form-data")
+                    else 1048576
+                )
             )
         )
         try:
@@ -38,7 +62,7 @@ class RequestBodyLimitMiddleware:
         with tempfile.SpooledTemporaryFile(max_size=262144) as body:
             total = 0
             try:
-                async with asyncio.timeout(120):
+                async with asyncio.timeout(30 if voice_upload else 120):
                     while True:
                         message = await receive()
                         if message["type"] == "http.disconnect":

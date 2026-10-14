@@ -21,14 +21,15 @@ import { NutritionAttribution } from "./NutritionAttribution";
 
 type Lookup = { data: Record<string, unknown> };
 
-export function MacroCalculator({ calculationId, onClose, onSaved }: {
+export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, initialName, initialMealLabel }: {
   calculationId?: string; onClose: () => void; onSaved?: (result: Calculation) => void;
+  initialRows?: CalculatorRow[]; initialName?: string; initialMealLabel?: MealLabel;
 }) {
   const client = useQueryClient();
   const offline = useOfflineStatus(state => state.offline);
-  const [rows, setRows] = useState<CalculatorRow[]>([]);
+  const [rows, setRows] = useState<CalculatorRow[]>(initialRows ?? []);
   const [editing, setEditing] = useState<string | null>(null);
-  const [itemOpen, setItemOpen] = useState(true);
+  const [itemOpen, setItemOpen] = useState(!initialRows?.length);
   const [itemName, setItemName] = useState("");
   const [portions, setPortions] = useState("1");
   const [fields, setFields] = useState(EMPTY_NUTRITION);
@@ -45,8 +46,8 @@ export function MacroCalculator({ calculationId, onClose, onSaved }: {
   const [error, setError] = useState("");
   const [destination, setDestination] = useState<"entry" | "recipe" | null>(null);
   const [existing, setExisting] = useState<Pick<Calculation, "recipe_id" | "meal_date"> | null>(null);
-  const [name, setName] = useState("");
-  const [mealLabel, setMealLabel] = useState<MealLabel>("dinner");
+  const [name, setName] = useState(initialName ?? "");
+  const [mealLabel, setMealLabel] = useState<MealLabel>(initialMealLabel ?? "dinner");
   const [recipeServings, setRecipeServings] = useState("1");
   const request = useRef<{ payload: string; id: string } | null>(null);
   const previewRow = currentItemPreview();

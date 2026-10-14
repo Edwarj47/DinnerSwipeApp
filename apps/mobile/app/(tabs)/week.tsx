@@ -23,16 +23,34 @@ import { usePlannerStore } from "@/stores/plannerStore";
 import { plannerContextKey, useCurrentWeek } from "@/features/planner/useCurrentWeek";
 import { TourTarget } from "@/features/onboarding/TourTarget";
 import { todayISO } from "@/features/premium/macroDates";
+import { HistoricalWeek } from "@/features/planner/HistoricalWeek";
+import { monday, WeekNavigator } from "@/features/planner/WeekNavigator";
+import { WorkoutWeek } from "@/features/workouts/WorkoutWeek";
+import { useIsWorkoutMode } from "@/features/workouts/WorkoutRuntime";
 
 type WeeklySlot = WeeklyPlan["slots"][number];
 type SlotPatch = Partial<Omit<WeeklySlot, "id" | "recipe_name" | "recipe_photo_url" | "recipe_total_minutes" | "recipe_difficulty">>;
 
 export default function WeekScreen() {
-  const space = useSpace();
-  return <WeekContent key={space.key} />;
+  const workouts = useIsWorkoutMode();
+  return workouts ? <WorkoutWeek /> : <NutritionWeekScreen />;
 }
 
-function WeekContent() {
+function NutritionWeekScreen() {
+  const space = useSpace();
+  return <WeekSelection key={space.key} />;
+}
+
+function WeekSelection() {
+  const [selected, setSelected] = useState<string | null>(null);
+  const [current, setCurrent] = useState(monday(todayISO()));
+  function navigate(week: string, currentWeek = current) {
+    setCurrent(currentWeek); setSelected(week >= currentWeek ? null : week);
+  }
+  return selected ? <HistoricalWeek week={selected} currentWeek={current} onChange={navigate} /> : <WeekContent onNavigate={navigate} />;
+}
+
+function WeekContent({ onNavigate }: { onNavigate: (week: string, current: string) => void }) {
   const space = useSpace();
   const apiFetch = <T,>(path: string, init?: RequestInit) => init ? remoteFetch<T>(space.path(path), init) : remoteFetch<T>(space.path(path));
   const [portion, setPortion] = useState(1);
@@ -197,6 +215,7 @@ function WeekContent() {
         {space.canManage ? <Button label="" accessibilityLabel="Reset week" icon="refresh" disabled={!data || busy} onPress={() => requestReset({ date: null, label: "This week" })} /> : null}
       </View>}>
       <SpaceSelector />
+      {data ? <WeekNavigator week={data.week_start} currentWeek={data.week_start} onChange={week => onNavigate(week, data.week_start)} /> : null}
       {status ? <Text accessibilityLiveRegion="polite" accessibilityRole={statusIsError ? "alert" : undefined} style={[styles.status, statusIsError && styles.error]}>{status}</Text> : null}
       {error ? <Button label="Retry loading week" icon="refresh" onPress={() => { void refetch(); }} /> : null}
       {!premiumActive ? (
@@ -244,7 +263,7 @@ function WeekContent() {
               </Pressable> : null}
             </View>
             </TourTarget>
-            {!group.slots.length ? <Text style={styles.emptyDay}>No dinner planned</Text> : null}
+            {!group.slots.length ? <Text style={styles.emptyDay}>No meals planned</Text> : null}
         {group.slots.map((slot) => {
           const isExpanded = expandedSlotId === slot.id;
           return (
