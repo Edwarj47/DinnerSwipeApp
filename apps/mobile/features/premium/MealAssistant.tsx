@@ -57,7 +57,8 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
     const background = () => {
       if (Platform.OS === "web" && !document.hidden) return;
       abort.current?.abort(); inFlight.current = false; transcription.current = null; voiceRef.current.clear();
-      setBusy(false); setTranscribing(false); setVoiceFailure(false); setRows(null); setItems([]); setDraft(null); setResults(null);
+      setBusy(false); setTranscribing(false); setVoiceFailure(false); setRows(null); setItems([]); setDraft(null);
+      setSearching(null); setQuery(""); setResults(null); setResultsExpire(0); setError("");
     };
     const subscription = AppState.addEventListener("change", state => { if (state !== "active") background(); });
     if (Platform.OS === "web") document.addEventListener("visibilitychange", background);
@@ -128,6 +129,10 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
   function updateItem(key: string, changes: Partial<ReviewedFood>) {
     setItems(current => current.map(item => item.key === key ? { ...item, ...changes } : item)); setError("");
   }
+  function closeSearch() {
+    abort.current?.abort(); abort.current = null; inFlight.current = false;
+    setBusy(false); setSearching(null); setResults(null); setResultsExpire(0); setQuery(""); setError("");
+  }
   async function search(signal: AbortSignal) {
     const result = await apiFetch<{ data: Record<string, unknown> }>(`/api/v1/nutrition/foods/search?query=${encodeURIComponent(query.trim())}`, { signal });
     if (!signal.aborted) { setResults(objects((result.data.foods as Record<string, unknown>)?.food)); setResultsExpire(Date.now() + PROVIDER_VIEW_MS); }
@@ -141,7 +146,7 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
     const changes = { food_id: String(food.food_id), food_name: String(detail.food_name),
       servings: objects((detail.servings as Record<string, unknown>)?.serving) };
     updateItem(searching, { ...changes, ...prefillServing({ ...item, ...changes }), expires: Date.now() + PROVIDER_VIEW_MS });
-    setSearching(null); setResults(null); setQuery("");
+    setSearching(null); setResults(null); setResultsExpire(0); setQuery("");
   }
   function review() { try { setRows(reviewedRows(items)); setError(""); } catch (reason) { setError(message(reason)); } }
   if (rows && draft) return <MacroCalculator initialRows={rows} initialName={draft.name} initialMealLabel={draft.meal_label}
@@ -169,12 +174,29 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
             <Button label={busy && !transcribing ? "Preparing..." : "Preview meal"} icon="sparkles-outline" variant="primary"
               disabled={busy || offline || voice.recording || !!voice.audio || description.trim().length < 3} onPress={() => { void run(describe); }} />
           </> : <>
-            {items.map(item => <View key={item.key} style={styles.item}>
+            {items.map(item => <View key={item.key} testID="meal-review-item" style={styles.item}>
               <View style={styles.row}><Text style={[styles.label, styles.equal]}>{item.name}</Text>
-                <Button label="" icon="trash-outline" accessibilityLabel={`Remove ${item.name}`} variant="quiet" disabled={busy} onPress={() => setItems(current => current.filter(row => row.key !== item.key))} /></View>
+                <Button label="" icon="trash-outline" accessibilityLabel={`Remove ${item.name}`} variant="quiet" disabled={busy} onPress={() => {
+                  if (searching === item.key) closeSearch();
+                  setItems(current => current.filter(row => row.key !== item.key));
+                }} /></View>
               {item.quantity != null ? <Text style={styles.meta}>Reported: {item.quantity} {item.unit}</Text> : <Text style={styles.meta}>Amount needed</Text>}
               <Text style={styles.meta}>{item.food_name ? `${item.food_name}${item.food_id === item.recommended_food_id ? " (Recommended)" : ""}` : "Choose a database match"}</Text>
-              <Button label="Change match" icon="search-outline" disabled={busy || offline} onPress={() => { setSearching(item.key); setQuery(item.search_term); setResults(null); }} />
+              {searching === item.key ? <View style={styles.section}>
+                <View style={styles.row}><Text style={[styles.label, styles.equal]}>Choose a food</Text>
+                  <Button label="" icon="close" accessibilityLabel="Close food search" variant="quiet" onPress={closeSearch} /></View>
+                <SearchField accessibilityLabel="Food search" placeholder="Search database" value={query} editable={!busy && !offline}
+                  returnKeyType="search" onSubmitEditing={() => { if (query.trim().length >= 2) void run(search); }}
+                  onChangeText={value => { setQuery(value); setResults(null); setResultsExpire(0); setError(""); }} />
+                <Button label="Search Database" icon="search-outline" disabled={busy || offline || query.trim().length < 2} onPress={() => { void run(search); }} />
+                {results?.map(food => <Button key={String(food.food_id)}
+                  label={`${String(food.food_name)}${String(food.food_id) === item.recommended_food_id ? " (Recommended)" : ""}`}
+                  disabled={busy || offline} onPress={() => { void run(signal => chooseFood(food, signal)); }} />)}
+                {results?.length === 0 ? <Text style={styles.meta}>No matching foods.</Text> : null}
+                {busy ? <Text accessibilityLiveRegion="polite" style={styles.meta}>Working...</Text> : null}
+                {error ? <Text accessibilityRole="alert" style={styles.error}>{error}</Text> : null}
+              </View> : <>
+              <Button label="Change match" icon="search-outline" disabled={busy || offline} onPress={() => { setSearching(item.key); setQuery(item.search_term); setResults(null); setResultsExpire(0); setError(""); }} />
               <MacroChoice label={`Serving size for ${item.name}`} value={item.serving_id} disabled={busy || !item.servings?.length}
                 options={[{ value: "", label: "Choose serving size" }, ...(item.servings ?? []).map(serving => ({ value: String(serving.serving_id),
                   label: `${String(serving.serving_description ?? "Serving")}${String(serving.serving_id) === item.recommended_serving_id ? " (Recommended)" : ""}` }))]}
@@ -186,22 +208,14 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
               <Text style={styles.label}>Servings eaten</Text>
               <TextInput style={styles.input} keyboardType="decimal-pad" accessibilityLabel={`Servings eaten for ${item.name}`} value={item.amount}
                 placeholder="Enter amount" editable={!busy} onChangeText={value => updateItem(item.key, { amount: value })} />
+              </>}
             </View>)}
-            {searching ? <View style={styles.section}>
-              <View style={styles.row}><Text style={[styles.label, styles.equal]}>Choose a food</Text><Button label="" icon="close" accessibilityLabel="Close food search" variant="quiet" onPress={() => setSearching(null)} /></View>
-              <SearchField accessibilityLabel="Food search" placeholder="Search database" value={query} onChangeText={value => { setQuery(value); setResults(null); }} />
-              <Button label="Search Database" icon="search-outline" disabled={busy || offline || query.trim().length < 2} onPress={() => { void run(search); }} />
-              {results?.map(food => <Button key={String(food.food_id)}
-                label={`${String(food.food_name)}${String(food.food_id) === items.find(item => item.key === searching)?.recommended_food_id ? " (Recommended)" : ""}`}
-                disabled={busy} onPress={() => { void run(signal => chooseFood(food, signal)); }} />)}
-              {results?.length === 0 ? <Text style={styles.meta}>No matching foods.</Text> : null}
-            </View> : null}
             <Button label="Continue to calculator" icon="calculator-outline" variant="primary" disabled={busy || offline || !items.length || !!searching} onPress={review} />
             <Button label="Start over" icon="refresh-outline" disabled={busy} onPress={() => { setDraft(null); setItems([]); setSearching(null); setResults(null); request.current = null; }} />
             <NutritionAttribution />
           </>}
-          {busy ? <Text accessibilityLiveRegion="polite" style={styles.meta}>{transcribing ? "Transcribing..." : "Working..."}</Text> : null}
-          {error || voice.error ? <Text accessibilityRole="alert" style={styles.error}>{error || voice.error}</Text> : null}
+          {busy && !searching ? <Text accessibilityLiveRegion="polite" style={styles.meta}>{transcribing ? "Transcribing..." : "Working..."}</Text> : null}
+          {(!searching && error) || voice.error ? <Text accessibilityRole="alert" style={styles.error}>{(!searching && error) || voice.error}</Text> : null}
           {error && !draft && accepted && !voice.audio ? <Button label="Try again" icon="refresh-outline" disabled={busy || offline || description.trim().length < 3}
             onPress={() => { request.current = null; void run(describe); }} /> : null}
           {offline ? <Text style={styles.error}>Connect to use the meal assistant.</Text> : null}

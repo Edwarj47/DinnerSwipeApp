@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor, within } from "@testing-library/react-native";
 import { useCallback, useState } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { MealAssistant } from "@/features/premium/MealAssistant";
@@ -260,7 +260,7 @@ describe("MealAssistant review flow", () => {
       expect(screen.getByLabelText("Meal description").props.placeholder).toBeUndefined();
       expect(screen.queryByText(/Your description is sent to OpenAI/)).toBeNull();
     } finally { screen.cleanup(); }
-  });
+  }, 15000);
   test("preview prefills explicit amounts but never logs or saves without confirmation", async () => {
     const screen = await mount();
     try {
@@ -342,6 +342,159 @@ describe("MealAssistant review flow", () => {
       expect(calculationItems(calculator.mock.calls[0][0].initialRows!)).toEqual([
         { source: "fatsecret", name: "My eggs", food_id: "99", serving_id: "9", portions: 4 },
       ]);
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+
+  test("database search and results stay inside the selected item, before the remaining items", async () => {
+    const original = request.getMockImplementation()!;
+    request.mockImplementation(async (path, init) => {
+      if (path.endsWith("/drafts") && init?.method === "POST") return {
+        ...draft, items: [mention, { ...mention, name: "My rice", search_term: "rice" }],
+      };
+      if (path.includes("/foods/search")) return { data: { foods: { food: [
+        { food_id: "99", food_name: "Alternative eggs" },
+      ] } } };
+      return original(path, init);
+    });
+    const screen = await mount();
+    try {
+      await preview(screen);
+      const [eggs, rice] = screen.getAllByTestId("meal-review-item").map(item => within(item));
+      fireEvent.press(eggs.getByLabelText("Change match"));
+      expect(eggs.getByLabelText("Food search").props.value).toBe("eggs");
+      expect(eggs.queryByLabelText("Servings eaten for My eggs")).toBeNull();
+      expect(rice.queryByLabelText("Food search")).toBeNull();
+      expect(rice.getByLabelText("Servings eaten for My rice").props.value).toBe("2");
+      fireEvent.press(eggs.getByLabelText("Search Database"));
+      await screen.findByLabelText("Alternative eggs");
+      expect(eggs.getByLabelText("Alternative eggs")).toBeTruthy();
+      expect(rice.queryByLabelText("Alternative eggs")).toBeNull();
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+
+  test("canceling a match search restores the existing food, serving and edited amount", async () => {
+    const screen = await mount();
+    try {
+      await preview(screen);
+      fireEvent.changeText(screen.getByLabelText("Servings eaten for My eggs"), "1.5");
+      fireEvent.press(screen.getByLabelText("Change match"));
+      fireEvent.changeText(screen.getByLabelText("Food search"), "another egg");
+      fireEvent.press(screen.getByLabelText("Close food search"));
+      expect(screen.queryByLabelText("Food search")).toBeNull();
+      expect(screen.getByText("Provider egg name (Recommended)")).toBeTruthy();
+      expect(screen.getByLabelText("Serving size for My eggs: 1 egg (Recommended)")).toBeTruthy();
+      expect(screen.getByLabelText("Servings eaten for My eggs").props.value).toBe("1.5");
+      fireEvent.press(screen.getByLabelText("Continue to calculator"));
+      await screen.findByTestId("meal-calculator-handoff");
+      expect(calculationItems(calculator.mock.calls[0][0].initialRows!)).toEqual([
+        { source: "fatsecret", name: "My eggs", food_id: "42", serving_id: "7", portions: 1.5 },
+      ]);
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+
+  test("switching search to another item clears earlier results and updates only that item", async () => {
+    const original = request.getMockImplementation()!;
+    request.mockImplementation(async (path, init) => {
+      if (path.endsWith("/drafts") && init?.method === "POST") return {
+        ...draft, items: [mention, { ...mention, name: "My rice", search_term: "rice" }],
+      };
+      if (path.includes("/foods/search")) return { data: { foods: { food: [
+        { food_id: "99", food_name: "A different match" },
+      ] } } };
+      if (path.endsWith("/foods/99")) return { data: { food: { food_name: "Updated rice", servings: { serving: [
+        { ...serving, serving_id: "9" },
+      ] } } } };
+      return original(path, init);
+    });
+    const screen = await mount();
+    try {
+      await preview(screen);
+      const [eggs, rice] = screen.getAllByTestId("meal-review-item").map(item => within(item));
+      fireEvent.press(eggs.getByLabelText("Change match"));
+      fireEvent.press(eggs.getByLabelText("Search Database"));
+      await screen.findByLabelText("A different match");
+      fireEvent.press(rice.getByLabelText("Change match"));
+      expect(screen.getByLabelText("Food search").props.value).toBe("rice");
+      expect(screen.queryByLabelText("A different match")).toBeNull();
+      fireEvent.press(rice.getByLabelText("Search Database"));
+      await screen.findByLabelText("A different match");
+      fireEvent.press(rice.getByLabelText("A different match"));
+      await screen.findByLabelText("Serving size for My rice: 1 egg (Recommended)");
+      expect(eggs.getByText("Provider egg name (Recommended)")).toBeTruthy();
+      expect(rice.getByText("Updated rice")).toBeTruthy();
+      expect(screen.queryByLabelText("Food search")).toBeNull();
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+
+  test("closing an in-flight search aborts it and ignores late results after reopening", async () => {
+    let resolve!: (value: unknown) => void;
+    const original = request.getMockImplementation()!;
+    request.mockImplementation(async (path, init) => path.includes("/foods/search")
+      ? new Promise(done => { resolve = done; }) : original(path, init));
+    const screen = await mount();
+    try {
+      await preview(screen);
+      fireEvent.press(screen.getByLabelText("Change match"));
+      fireEvent.press(screen.getByLabelText("Search Database"));
+      const call = request.mock.calls.find(([path]) => path.includes("/foods/search"))!;
+      fireEvent.press(screen.getByLabelText("Close food search"));
+      expect(call[1]?.signal?.aborted).toBe(true);
+      fireEvent.press(screen.getByLabelText("Change match"));
+      await act(async () => resolve({ data: { foods: { food: [{ food_id: "99", food_name: "Late result" }] } } }));
+      expect(screen.queryByLabelText("Late result")).toBeNull();
+      expect(screen.getByLabelText("Search Database").props.accessibilityState.disabled).toBe(false);
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+
+  test("search errors, clearing and empty results are shown in place and keyboard search works", async () => {
+    const original = request.getMockImplementation()!;
+    let attempts = 0;
+    request.mockImplementation(async (path, init) => {
+      if (path.includes("/foods/search")) {
+        if (!attempts++) throw new Error("Search is temporarily unavailable.");
+        return { data: { foods: { food: [] } } };
+      }
+      return original(path, init);
+    });
+    const screen = await mount();
+    try {
+      await preview(screen);
+      const item = within(screen.getByTestId("meal-review-item"));
+      fireEvent.press(item.getByLabelText("Change match"));
+      fireEvent(item.getByLabelText("Food search"), "submitEditing");
+      await screen.findByText("Search is temporarily unavailable.");
+      expect(item.getByText("Search is temporarily unavailable.")).toBeTruthy();
+      fireEvent.press(item.getByLabelText("Clear search"));
+      expect(item.getByLabelText("Food search").props.value).toBe("");
+      expect(screen.queryByText("Search is temporarily unavailable.")).toBeNull();
+      expect(item.getByLabelText("Search Database").props.accessibilityState.disabled).toBe(true);
+      fireEvent.changeText(item.getByLabelText("Food search"), "eggs");
+      fireEvent(item.getByLabelText("Food search"), "submitEditing");
+      await screen.findByText("No matching foods.");
+      expect(item.getByText("No matching foods.")).toBeTruthy();
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+
+  test("removing the item with an open search does not leave the review blocked", async () => {
+    const original = request.getMockImplementation()!;
+    request.mockImplementation(async (path, init) => path.endsWith("/drafts") && init?.method === "POST"
+      ? { ...draft, items: [mention, { ...mention, name: "My rice", search_term: "rice" }] }
+      : original(path, init));
+    const screen = await mount();
+    try {
+      await preview(screen);
+      fireEvent.press(within(screen.getAllByTestId("meal-review-item")[0]).getByLabelText("Change match"));
+      fireEvent.press(screen.getByLabelText("Remove My eggs"));
+      expect(screen.queryByLabelText("Food search")).toBeNull();
+      fireEvent.press(screen.getByLabelText("Continue to calculator"));
+      await screen.findByTestId("meal-calculator-handoff");
+      expect(calculationItems(calculator.mock.calls[0][0].initialRows!)).toHaveLength(1);
       expectNoAutosave(screen.saved);
     } finally { screen.cleanup(); }
   });

@@ -614,7 +614,7 @@ def test_draft_recommends_nonfirst_result_with_identifiers_only_and_no_extra_cal
     assert_no_saved_meal(db_session)
     providers.ai.assert_awaited_once()
     assert [call.args for call in providers.nutrition.request.call_args_list] == [
-        ("foods.search", {"search_expression": "eggs", "page_number": "0", "max_results": "5"}),
+        ("foods.search", {"search_expression": "eggs", "page_number": "0", "max_results": "20"}),
         ("food.get.v5", {"food_id": "42"}),
     ]
 
@@ -673,8 +673,146 @@ def test_unrelated_search_results_leave_user_text_without_recommendation_or_deta
     assert job.status == "succeeded" and job.progress["draft"] == MENTIONS
     providers.ai.assert_awaited_once()
     providers.nutrition.request.assert_called_once_with(
-        "foods.search", {"search_expression": "eggs", "page_number": "0", "max_results": "5"}
+        "foods.search", {"search_expression": "eggs", "page_number": "0", "max_results": "20"}
     )
+    assert_no_saved_meal(db_session)
+
+
+@pytest.mark.parametrize(
+    ("name", "search", "fallback", "matched_name", "brand"),
+    [
+        (
+            "cheeseburger with pickles", "cheeseburger pickles", "cheeseburger",
+            "Cheese Burger", None,
+        ),
+        ("waffle fries with ketchup", "ketchup", "waffle fries", "Waffle Fries", None),
+        (
+            "Example Diner cheeseburger with pickles",
+            "Example Diner cheeseburger pickles",
+            "Example Diner cheeseburger",
+            "Cheeseburger",
+            "Example Diner",
+        ),
+        (
+            "chicken breast with sauce",
+            "Example Kitchen grilled chicken breast with sauce",
+            "Example Kitchen grilled chicken breast",
+            "Grilled Chicken Breast",
+            "Example Kitchen",
+        ),
+    ],
+)
+def test_topping_only_results_retry_main_food_and_persist_only_identifiers(
+    client: TestClient,
+    assistant_headers: dict[str, str],
+    db_session: Session,
+    providers: SimpleNamespace,
+    name: str,
+    search: str,
+    fallback: str,
+    matched_name: str,
+    brand: str | None,
+) -> None:
+    mention = {"name": name, "search_term": search, "quantity": 3, "unit": "each"}
+    providers.ai.return_value = ai_output(MENTIONS | {"items": [mention]})
+    providers.nutrition.request.side_effect = [
+        {"foods": {"food": [{"food_id": "99", "food_name": "Pickles and Ketchup"}]}},
+        {"foods": {"food": [{"food_id": "42", "food_name": matched_name, "brand_name": brand}]}},
+        deepcopy(DETAIL),
+    ]
+    payload = body()
+    response = client.post(f"{ROOT}/drafts", headers=assistant_headers, json=payload)
+    assert response.status_code == 200, response.text
+    assert response.json()["items"][0]["food_id"] == "42"
+    assert response.json()["items"][0]["name"] == name
+    assert draft_job(db_session, payload["request_id"]).progress["draft"] == MENTIONS | {
+        "items": [mention | {"food_id": "42"}]
+    }
+    assert [call.args for call in providers.nutrition.request.call_args_list] == [
+        ("foods.search", {"search_expression": search, "page_number": "0", "max_results": "20"}),
+        ("foods.search", {"search_expression": fallback, "page_number": "0", "max_results": "20"}),
+        ("food.get.v5", {"food_id": "42"}),
+    ]
+    assert_no_saved_meal(db_session)
+
+
+def test_fallback_searches_are_limited_per_draft_and_never_choose_only_toppings(
+    client: TestClient,
+    assistant_headers: dict[str, str],
+    db_session: Session,
+    providers: SimpleNamespace,
+) -> None:
+    mentions = [
+        {
+            "name": f"{food} with ketchup", "search_term": f"{food} ketchup",
+            "quantity": 1, "unit": "each",
+        }
+        for food in ["cheeseburger", "waffle fries", "chicken", "fish", "potatoes"]
+    ]
+    providers.ai.return_value = ai_output(MENTIONS | {"items": mentions})
+    providers.nutrition.request.side_effect = None
+    providers.nutrition.request.return_value = {
+        "foods": {"food": [{"food_id": "99", "food_name": "Ketchup"}]}
+    }
+    response = client.post(f"{ROOT}/drafts", headers=assistant_headers, json=body())
+    assert response.status_code == 200, response.text
+    assert response.json()["items"] == mentions
+    searches = providers.nutrition.request.call_args_list
+    assert len(searches) == len(mentions) + 3
+    assert all(call.args[0] == "foods.search" for call in searches)
+    assert [call.args[1]["search_expression"] for call in searches] == [
+        "cheeseburger ketchup", "cheeseburger", "waffle fries ketchup", "waffle fries",
+        "chicken ketchup", "chicken", "fish ketchup", "potatoes ketchup",
+    ]
+    assert_no_saved_meal(db_session)
+
+
+@pytest.mark.parametrize("code", ["rate_limited", "daily_budget_exhausted", "invalid_response"])
+def test_failed_initial_search_does_not_attempt_fallback(
+    client: TestClient,
+    assistant_headers: dict[str, str],
+    providers: SimpleNamespace,
+    code: str,
+) -> None:
+    providers.ai.return_value = ai_output(MENTIONS | {"items": [
+        {
+            "name": "waffle fries with ketchup", "search_term": "waffle fries ketchup",
+            "quantity": 1, "unit": "each",
+        }
+    ]})
+    providers.nutrition.request.side_effect = NutritionError(code)
+    response = client.post(f"{ROOT}/drafts", headers=assistant_headers, json=body())
+    assert response.status_code == 200, response.text
+    assert response.json()["items"][0]["lookup_unavailable"] is True
+    providers.nutrition.request.assert_called_once()
+
+
+def test_draft_canceled_after_initial_search_never_performs_fallback(
+    client: TestClient,
+    assistant_headers: dict[str, str],
+    db_session: Session,
+    providers: SimpleNamespace,
+) -> None:
+    providers.ai.return_value = ai_output(MENTIONS | {"items": [
+        {
+            "name": "waffle fries with ketchup", "search_term": "waffle fries ketchup",
+            "quantity": 1, "unit": "each",
+        }
+    ]})
+    payload = body()
+
+    def cancel(method: str, parameters: dict[str, str]) -> dict[str, Any]:
+        job = draft_job(db_session, payload["request_id"])
+        job.status = "discarded"
+        job.progress = {}
+        db_session.commit()
+        return {"foods": {"food": [{"food_id": "99", "food_name": "Ketchup"}]}}
+
+    providers.nutrition.request.side_effect = cancel
+    response = client.post(f"{ROOT}/drafts", headers=assistant_headers, json=payload)
+    assert response.status_code == 410, response.text
+    providers.nutrition.request.assert_called_once()
+    assert draft_job(db_session, payload["request_id"]).progress == {}
     assert_no_saved_meal(db_session)
 
 
@@ -705,6 +843,8 @@ def test_valid_draft_is_temporary_recommendation_only_and_does_not_save_a_meal(
     sent = providers.ai.call_args.args[0]
     assert sent["store"] is False
     assert sent["input"][-1] == {"role": "user", "content": DESCRIPTION}
+    assert "main food" in sent["input"][0]["content"]
+    assert "separately quantified" in sent["input"][0]["content"]
     schema = sent["text"]["format"]
     assert schema["strict"] is True and schema["schema"]["properties"]["items"]["maxItems"] == 10
 
