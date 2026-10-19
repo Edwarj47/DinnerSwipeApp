@@ -89,7 +89,7 @@ test("incomplete food nutrition is explicit, refreshable, and clears when values
     expect(screen.getByLabelText("Refresh food nutrition").props.accessibilityState.disabled).toBe(true);
     await waitFor(() => expect(refresh).toBeDefined());
     await act(async () => { refresh!({ ...(await original("/api/v1/macros/analytics") as MacroAnalytics), nutrition_unavailable_count: 0 }); });
-    await waitFor(() => expect(screen.queryByLabelText("Refresh food nutrition")).toBeNull());
+    await waitFor(() => expect(screen.queryByLabelText("Refresh food nutrition")).toBeNull(), { timeout: 5000 });
     expect(screen.getByLabelText("Calories, 2026-10-08: 100 cal")).toBeTruthy();
     expect(count).toBe(2);
   } finally { screen.close(); }

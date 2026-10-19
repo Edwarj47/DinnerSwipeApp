@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { RecipeMacroLogger } from "@/features/recipes/RecipeMacroLogger";
+import { RecipeNutritionPanel } from "@/features/recipes/RecipeNutritionPanel";
 import { RecipeLibrarySection } from "@/features/recipes/RecipeLibrarySection";
 import { EMPTY_NUTRITION, nutritionInputs, parseNutrition } from "@/features/recipes/recipeNutrition";
 import { apiFetch } from "@/services/api";
@@ -43,6 +44,59 @@ test("recipe logging scales portions, permits individual overrides and saves its
   } finally { screen.close(); }
 });
 
+test("Log meal preserves a sauce recipe category instead of defaulting to Dinner", async () => {
+  request.mockImplementation(async path => path.endsWith("subscription/status") ? { premium_active: true } : {});
+  const screen = mount(<RecipeNutritionPanel recipe={{ ...recipe, meal_type: "sauce" }} />);
+  try {
+    fireEvent.press(await screen.findByLabelText("Log meal"));
+    expect(screen.getByRole("button", { name: "Sauce" }).props.accessibilityState.selected).toBe(true);
+    expect(screen.getByRole("button", { name: "Dinner" }).props.accessibilityState.selected).toBe(false);
+    fireEvent.press(screen.getByLabelText("Save entry"));
+    await waitFor(() => expect(screen.queryByLabelText("Save entry")).toBeNull());
+    const writes = request.mock.calls.filter(([, init]) => init?.method);
+    expect(writes).toHaveLength(1);
+    expect(writes[0][0]).toBe("/api/v1/macros/entries");
+    expect(JSON.parse(String(writes[0][1]?.body))).toMatchObject({ recipe_id: recipe.id, meal_label: "sauce" });
+  } finally { screen.close(); }
+});
+
+test("recipe picker logging preserves a custom meal type and permits an explicit change", async () => {
+  request.mockResolvedValue([{ ...recipe, meal_type: "side_dish" }]);
+  const screen = mount(<RecipeMacroLogger onClose={jest.fn()} />);
+  try {
+    fireEvent.press(await screen.findByLabelText("Log Rice bowl"));
+    expect(screen.getByRole("button", { name: "Side Dish" }).props.accessibilityState.selected).toBe(true);
+    fireEvent.press(screen.getByLabelText("Save entry"));
+    await waitFor(() => expect(request.mock.calls.some(([, init]) => init?.method === "POST")).toBe(true));
+    expect(JSON.parse(String(request.mock.calls.find(([, init]) => init?.method === "POST")![1]?.body)).meal_label).toBe("side_dish");
+    await waitFor(() => expect(screen.getByLabelText("Save entry").props.accessibilityState.disabled).toBe(false));
+    fireEvent.press(screen.getByRole("button", { name: "Lunch" }));
+    fireEvent.press(screen.getByLabelText("Save entry"));
+    await waitFor(() => expect(request.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(2));
+    expect(JSON.parse(String(request.mock.calls.filter(([, init]) => init?.method === "POST")[1][1]?.body)).meal_label).toBe("lunch");
+  } finally { screen.close(); }
+});
+
+test.each(["sauce", "dessert", "Appetizer", "side_dish"])("logged %s entries retain their category on edit and Save as recipe", async mealLabel => {
+  const entry = { id: "custom-entry", recipe_id: recipe.id, entry_name: "My recipe", meal_label: mealLabel,
+    meal_date: "2026-10-19", servings_consumed: 1, calories: 100 } as MacroConfirmation;
+  const screen = mount(<RecipeMacroLogger entry={entry} onClose={jest.fn()} />);
+  try {
+    const display = mealLabel.replaceAll("_", " ").replace(/\b\w/g, letter => letter.toUpperCase());
+    expect(screen.getByRole("button", { name: display }).props.accessibilityState.selected).toBe(true);
+    fireEvent.changeText(screen.getByLabelText("Recipe log notes"), "Keep this category");
+    fireEvent.press(screen.getByLabelText("Save as recipe"));
+    fireEvent.press(screen.getByLabelText("Save recipe"));
+    await screen.findByText("Recipe saved to your library.");
+    const savedRecipe = request.mock.calls.find(([path]) => path === "/api/v1/recipes")!;
+    expect(JSON.parse(String(savedRecipe[1]?.body)).meal_type).toBe(mealLabel);
+    fireEvent.press(screen.getByLabelText("Save entry"));
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/macros/entries/custom-entry", expect.objectContaining({ method: "PUT" })));
+    const updated = request.mock.calls.find(([path]) => path.endsWith("entries/custom-entry"))!;
+    expect(JSON.parse(String(updated[1]?.body))).toMatchObject({ meal_label: mealLabel, notes: "Keep this category" });
+  } finally { screen.close(); }
+});
+
 test("logged-meal editor saves reviewed nutrition as a recipe without changing the diary entry", async () => {
   const entry = { id: "entry-1", entry_name: "Rice bowl", recipe_id: "recipe-1", meal_date: "2026-09-28", meal_label: "dinner",
     servings_consumed: 1, calories: 400, protein_g: 20, carbs_g: null, fat_g: 0, fiber_g: null } as MacroConfirmation;
@@ -68,8 +122,8 @@ test("logged-meal editor saves reviewed nutrition as a recipe without changing t
   } finally { screen.close(); }
 });
 
-test("logged database items copy references and portions, never the temporary nutrition totals", async () => {
-  const entry = { id: "entry-1", calculator_id: "calc-1", entry_name: "My eggs", meal_date: "2026-09-28", meal_label: "breakfast",
+test.each(["breakfast", "sauce"])("logged database %s items copy references, portions and meal labels, never temporary totals", async mealLabel => {
+  const entry = { id: "entry-1", calculator_id: "calc-1", entry_name: "My eggs", meal_date: "2026-09-28", meal_label: mealLabel,
     servings_consumed: 2, calories: 148, protein_g: 12.58 } as MacroConfirmation;
   request.mockImplementation(async (path) => path.endsWith("calc-1") ? {
     items: [{ source: "fatsecret", name: "Egg", portions: 2, food_id: "3092", serving_id: "11206" }]
@@ -83,7 +137,7 @@ test("logged database items copy references and portions, never the temporary nu
     const call = request.mock.calls.find(([, init]) => init?.method === "POST")!;
     expect(call[0]).toBe("/api/v1/nutrition/calculations");
     const payload = JSON.parse(String(call[1]?.body));
-    expect(payload).toMatchObject({ name: "My eggs", destination: "recipe", servings: 1,
+    expect(payload).toMatchObject({ name: "My eggs", destination: "recipe", servings: 1, meal_label: mealLabel,
       items: [{ source: "fatsecret", name: "Egg", portions: 3, food_id: "3092", serving_id: "11206" }] });
     expect(payload.items[0].nutrition).toBeUndefined();
   } finally { screen.close(); }

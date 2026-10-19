@@ -74,7 +74,7 @@ def preview_calculation(
     require_premium(db, user)
     if any(item.source == "fatsecret" for item in payload.items):
         require_nutrition_consent(user)
-    auth_rate_limiter.check(f"nutrition:lookup:{user.id}", 20, 60)
+    auth_rate_limiter.check(f"nutrition:calculation:{user.id}", 20, 60)
     for item in payload.items:
         if item.source == "fatsecret" and not db.get(
             NutritionServing, (item.food_id, item.serving_id)
@@ -107,7 +107,7 @@ def get_calculation(
     from app.services.billing import require_premium
 
     require_premium(db, user)
-    auth_rate_limiter.check(f"nutrition:lookup:{user.id}", 20, 60)
+    auth_rate_limiter.check(f"nutrition:calculation:{user.id}", 20, 60)
     calculation = db.get(NutritionCalculation, calculation_id)
     if not calculation:
         raise HTTPException(404, "Calculation not found.")
@@ -156,9 +156,22 @@ def lookup(db: DbDep, response: Response, method: str, params: dict[str, str]) -
             "persist_identifiers_only": True,
         }
     except NutritionError as error:
+        messages = {
+            "account_budget_exhausted": "Your daily nutrition lookup allowance is used up.",
+            "daily_budget_exhausted": "The daily nutrition lookup allowance is used up.",
+            "background_budget_exhausted": "The background nutrition lookup allowance is used up.",
+            "rate_limited": "The nutrition provider has paused lookups. Please retry later.",
+            "provider_paused": "Nutrition lookups are paused. Please retry after the cooldown.",
+            "busy": "Nutrition lookups are busy. Please wait and try again.",
+            "paced": "Nutrition lookups are busy. Please wait and try again.",
+        }
         raise HTTPException(
             status_code=429 if "budget" in error.code else 503,
-            detail={"message": "Nutrition lookup is temporarily unavailable.", "code": error.code},
+            detail={
+                "message": messages.get(error.code, "Nutrition lookup is temporarily unavailable."),
+                "code": error.code,
+                "retry_after_seconds": error.retry_seconds,
+            },
             headers={"Retry-After": str(error.retry_seconds), "Cache-Control": "no-store"},
         ) from None
 
@@ -173,10 +186,10 @@ def search_foods(
 ) -> dict[str, Any]:
     require_premium(db, user)
     require_nutrition_consent(user)
-    auth_rate_limiter.check(f"nutrition:lookup:{user.id}", 20, 60)
     expression = " ".join(query.split())
     if len(expression) < 2:
         raise HTTPException(status_code=422, detail="Enter at least two characters.")
+    auth_rate_limiter.check(f"nutrition:lookup:{user.id}", 20, 60)
     return lookup(
         db,
         response,

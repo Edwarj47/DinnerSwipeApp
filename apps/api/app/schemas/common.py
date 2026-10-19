@@ -15,6 +15,7 @@ from pydantic import (
 )
 
 from app.core.meal_categories import normalize_beverage_category
+from app.schemas.photo_credit import PhotoCredit
 
 
 class ApiModel(BaseModel):
@@ -370,6 +371,7 @@ class RecipeOut(ApiModel):
     name: str
     description: str | None
     photo_url: str | None
+    photo_credit: PhotoCredit | None = None
     servings: int
     prep_minutes: int | None
     cook_minutes: int | None

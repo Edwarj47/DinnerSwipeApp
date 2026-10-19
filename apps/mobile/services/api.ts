@@ -4,6 +4,7 @@ import * as Crypto from "expo-crypto";
 import { expireNutrition, hasTemporaryNutrition } from "./temporaryNutrition";
 import { clearPlanningReminders } from "./planningReminders";
 import { MacroConfirmation, PremiumStatus } from "./types";
+import { apiErrorDetails } from "./apiErrors";
 import { cacheable, changeOffline, deviceOffline, findMacro, loadOffline, macroAfter, offlineAccess, offlineOwner,
   OfflineEdit, overlay, readOffline, setDeviceOffline, setOfflineOwner, useOfflineStatus } from "./offlineStore";
 import { forgetOfflineSession } from "./offlineStore";
@@ -24,7 +25,7 @@ let webMigration: Promise<void> | null = null;
 let sessionEpoch = 0;
 let syncInFlight: Promise<void> | null = null;
 export class ApiError extends Error {
-  constructor(message: string, public status: number) { super(message); }
+  constructor(message: string, public status: number, public retryAfterSeconds?: number, public code?: string) { super(message); }
 }
 export class ConnectionError extends Error {}
 export function isAuthenticationError(error: unknown) { return error instanceof ApiError && error.status === 401; }
@@ -159,7 +160,7 @@ async function doRefreshAuthTokens() {
       return false;
     }
     if (response.status === 429) throw new ConnectionError("Sign-in is temporarily busy. Try again shortly.");
-    throw new ApiError(await responseErrorMessage(response), response.status);
+    throw await responseError(response);
   }
   await setAuthTokens((await response.json()) as AuthTokenPair, true);
   return true;
@@ -179,43 +180,10 @@ function shouldSetJsonContentType(init: RequestInit) {
   return true;
 }
 
-function validationMessage(issue: unknown) {
-  if (!issue || typeof issue !== "object") return "";
-  const detail = issue as { loc?: unknown[]; msg?: unknown; type?: unknown };
-  const field =
-    Array.isArray(detail.loc) && detail.loc.length > 0
-      ? String(detail.loc[detail.loc.length - 1] ?? "")
-      : "";
-  const message = typeof detail.msg === "string" ? detail.msg : "";
-  const type = typeof detail.type === "string" ? detail.type : "";
-
-  if (field === "email") return "Enter a valid email address.";
-  if (field === "password" && (type.includes("too_short") || message.includes("at least"))) {
-    return "Password must be at least 8 characters.";
-  }
-  if (message) return message.replace(/^Value error,\s*/i, "");
-  return "";
-}
-
-function errorMessageFromBody(body: string, fallback: string) {
-  if (!body.trim()) return fallback;
-  try {
-    const parsed = JSON.parse(body) as { detail?: unknown; message?: unknown };
-    const detail = parsed.detail ?? parsed.message;
-    if (typeof detail === "string") return detail;
-    if (Array.isArray(detail)) {
-      const messages = detail.map(validationMessage).filter(Boolean);
-      return messages.length ? Array.from(new Set(messages)).join(" ") : fallback;
-    }
-  } catch {
-    return body;
-  }
-  return fallback;
-}
-
-async function responseErrorMessage(response: Response) {
+async function responseError(response: Response) {
   const body = await response.text();
-  return errorMessageFromBody(body, `Request failed with status ${response.status}.`);
+  const details = apiErrorDetails(body, response.status, response.headers?.get("Retry-After"));
+  return new ApiError(details.message, response.status, details.retryAfterSeconds, details.code);
 }
 
 export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
@@ -330,7 +298,7 @@ async function authorizedFetch<T>(path: string, init: RequestInit, canRefresh: b
   if (!response.ok) {
     if (response.status === 409) emitAuthChanged();
     if (response.status === 401 && !path.startsWith("/api/v1/auth/")) await clearAuthTokens();
-    throw new ApiError(await responseErrorMessage(response), response.status);
+    throw await responseError(response);
   }
   return response.json() as Promise<T>;
 }

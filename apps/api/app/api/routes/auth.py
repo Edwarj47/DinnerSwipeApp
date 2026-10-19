@@ -338,9 +338,11 @@ def _audit_event_for_account_export(event: AuditEvent) -> dict[str, object]:
 
 
 @router.get("/account/export")
-def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
+def export_account(db: DbDep, current_user: CurrentUser, response: Response) -> dict[str, object]:
+    from app.services.content_automation import account_export as export_content_automation
     from app.services.workouts import account_export as export_workouts
 
+    response.headers["Cache-Control"] = "no-store"
     profile = current_user.profile
     household = (
         db.get(Household, profile.household_id) if profile and profile.household_id else None
@@ -548,6 +550,7 @@ def export_account(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
         ],
         "account_activity": [_audit_event_for_account_export(event) for event in audit_events],
         "workouts": export_workouts(db, current_user),
+        "content_automation": export_content_automation(db, current_user),
     }
 
 

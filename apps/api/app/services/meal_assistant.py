@@ -63,6 +63,39 @@ MAX_SEARCH_RESULTS = 20
 MAX_DRAFT_FALLBACKS = 3
 
 
+class _MealLookups:
+    """Deduplicate one workflow in RAM, including failures, without retrying providers."""
+
+    def __init__(self) -> None:
+        self.results: dict[
+            tuple[str, tuple[tuple[str, str], ...]], dict[str, Any] | NutritionError
+        ] = {}
+        self.backoff: NutritionError | None = None
+
+    def request(self, method: str, parameters: dict[str, str]) -> dict[str, Any]:
+        normalized = dict(parameters)
+        if "search_expression" in normalized:
+            normalized["search_expression"] = " ".join(
+                normalized["search_expression"].split()
+            ).casefold()
+        key = (method, tuple(sorted(normalized.items())))
+        result = self.results.get(key)
+        if result is None:
+            if self.backoff is not None:
+                raise self.backoff
+            try:
+                result = nutrition_client.request(method, parameters)
+            except NutritionError as error:
+                self.results[key] = error
+                if error.code not in {"food_not_found", "request_rejected", "invalid_response"}:
+                    self.backoff = error
+                raise
+            self.results[key] = result
+        if isinstance(result, NutritionError):
+            raise result
+        return result
+
+
 class FoodMention(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=1, max_length=100)
@@ -349,12 +382,15 @@ async def extract(description: str) -> MealMentions:
     return MealMentions.model_validate_json(output)
 
 
-def food_view(db: Session, item: dict[str, Any]) -> dict[str, Any]:
+def food_view(
+    db: Session, item: dict[str, Any], lookups: _MealLookups | None = None
+) -> dict[str, Any]:
     result = dict(item)
     if not item.get("food_id"):
         return result
+    lookups = lookups or _MealLookups()
     try:
-        payload = nutrition_client.request("food.get.v5", {"food_id": item["food_id"]})
+        payload = lookups.request("food.get.v5", {"food_id": item["food_id"]})
         store_identifiers(db, payload, detailed=True)
         food = payload.get("food", {})
         result["food_name"] = food.get("food_name")
@@ -364,19 +400,22 @@ def food_view(db: Session, item: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
-def draft_view(db: Session, job: IngestionJob) -> dict[str, Any]:
+def draft_view(
+    db: Session, job: IngestionJob, lookups: _MealLookups | None = None
+) -> dict[str, Any]:
     if job.status == "running":
         return {"request_id": job.idempotency_key, "status": "running"}
     if job.status != "succeeded":
         raise HTTPException(503, "Meal lookup was interrupted. Please try again.")
     draft = cast(dict[str, Any], job.progress["draft"])
+    lookups = lookups or _MealLookups()
     return {
         "request_id": job.idempotency_key,
         "status": "ready",
         "temporary": True,
         "name": draft["name"],
         "meal_label": draft["meal_label"],
-        "items": [food_view(db, item) for item in draft["items"]],
+        "items": [food_view(db, item, lookups) for item in draft["items"]],
     }
 
 
@@ -385,9 +424,10 @@ async def prepare(db: Session, user: User, request_id: str, description: str) ->
     job, fresh = reserve(db, user, request_id, fingerprint, JOB_TYPE)
     if not fresh:
         return await run_in_threadpool(draft_view, db, owned_job(db, user, request_id))
+    lookups = _MealLookups()
     try:
         draft = await extract(description)
-        items = await run_in_threadpool(match_mentions, db, job, draft)
+        items = await run_in_threadpool(match_mentions, db, job, draft, lookups)
         db.refresh(job)
         if job.status == "discarded":
             raise HTTPException(410, "Draft cancelled.")
@@ -412,10 +452,13 @@ async def prepare(db: Session, user: User, request_id: str, description: str) ->
         if isinstance(error, HTTPException):
             raise
         raise HTTPException(503, "Unable to prepare meal. No entry was saved.") from None
-    return await run_in_threadpool(draft_view, db, job)
+    return await run_in_threadpool(draft_view, db, job, lookups)
 
 
-def match_mentions(db: Session, job: IngestionJob, draft: MealMentions) -> list[dict[str, Any]]:
+def match_mentions(
+    db: Session, job: IngestionJob, draft: MealMentions, lookups: _MealLookups | None = None
+) -> list[dict[str, Any]]:
+    lookups = lookups or _MealLookups()
     items: list[dict[str, Any]] = []
     fallbacks = 0
     for mention in draft.items:
@@ -440,7 +483,7 @@ def match_mentions(db: Session, job: IngestionJob, draft: MealMentions) -> list[
                     db.refresh(job)
                     if job.status == "discarded":
                         raise HTTPException(410, "Draft cancelled.")
-                payload = nutrition_client.request(
+                payload = lookups.request(
                     "foods.search",
                     {
                         "search_expression": query,

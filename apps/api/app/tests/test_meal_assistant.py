@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import time
 from copy import deepcopy
 from datetime import timedelta
 from pathlib import Path
@@ -911,6 +912,135 @@ def test_duplicate_request_runs_ai_and_search_once(
     ]
     assert len(searches) == 1
     assert db_session.scalar(select(func.count()).select_from(IngestionJob)) == 1
+
+
+def test_repeated_mentions_share_normalized_search_and_details_without_merging_quantities(
+    client: TestClient,
+    assistant_headers: dict[str, str],
+    db_session: Session,
+    providers: SimpleNamespace,
+) -> None:
+    mentions = [
+        MENTIONS["items"][0],
+        {"name": "Eggs", "search_term": "  EGGS  ", "quantity": 3, "unit": "each"},
+    ]
+    providers.ai.return_value = ai_output(MENTIONS | {"items": mentions})
+    payload = body()
+    response = client.post(f"{ROOT}/drafts", headers=assistant_headers, json=payload)
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert [item["quantity"] for item in items] == [2, 3]
+    assert [item["food_id"] for item in items] == ["42", "42"]
+    assert all(item["servings"][0]["calories"] == PROVIDER_CALORIES for item in items)
+    assert [call.args[0] for call in providers.nutrition.request.call_args_list] == [
+        "foods.search",
+        "food.get.v5",
+    ]
+    stored = cast(dict[str, Any], draft_job(db_session, payload["request_id"]).progress["draft"])
+    stored_items = stored["items"]
+    assert [item["quantity"] for item in stored_items] == [2, 3]
+    assert_no_saved_meal(db_session)
+
+
+def test_different_searches_resolving_same_food_share_one_detail_per_draft_view(
+    client: TestClient,
+    assistant_headers: dict[str, str],
+    providers: SimpleNamespace,
+) -> None:
+    mentions = [
+        MENTIONS["items"][0],
+        {"name": "large eggs", "search_term": "large eggs", "quantity": 3, "unit": "each"},
+    ]
+    providers.ai.return_value = ai_output(MENTIONS | {"items": mentions})
+    providers.nutrition.request.side_effect = [deepcopy(SEARCH), deepcopy(SEARCH), deepcopy(DETAIL)]
+    payload = body()
+    response = client.post(f"{ROOT}/drafts", headers=assistant_headers, json=payload)
+    assert response.status_code == 200, response.text
+    assert [item["food_id"] for item in response.json()["items"]] == ["42", "42"]
+    assert [call.args[0] for call in providers.nutrition.request.call_args_list] == [
+        "foods.search",
+        "foods.search",
+        "food.get.v5",
+    ]
+    providers.nutrition.request.reset_mock(side_effect=True)
+    providers.nutrition.request.return_value = deepcopy(DETAIL)
+    read = client.get(f"{ROOT}/drafts/{payload['request_id']}", headers=assistant_headers)
+    assert read.status_code == 200 and read.json() == response.json()
+    providers.nutrition.request.assert_called_once_with("food.get.v5", {"food_id": "42"})
+
+
+@pytest.mark.parametrize("code", ["rate_limited", "provider_paused", "daily_budget_exhausted"])
+def test_provider_backoff_stops_remaining_searches_and_details_in_same_workflow(
+    client: TestClient,
+    assistant_headers: dict[str, str],
+    providers: SimpleNamespace,
+    code: str,
+) -> None:
+    providers.ai.return_value = ai_output(
+        MENTIONS
+        | {"items": [
+            MENTIONS["items"][0],
+            {"name": "rice", "search_term": "rice", "quantity": 1, "unit": "cup"},
+            {"name": "salmon", "search_term": "salmon", "quantity": 2, "unit": "oz"},
+        ]}
+    )
+    providers.nutrition.request.side_effect = [deepcopy(SEARCH), NutritionError(code, 86400)]
+    response = client.post(f"{ROOT}/drafts", headers=assistant_headers, json=body())
+    assert response.status_code == 200, response.text
+    assert all(item["lookup_unavailable"] for item in response.json()["items"])
+    assert [call.args[0] for call in providers.nutrition.request.call_args_list] == [
+        "foods.search",
+        "foods.search",
+    ]
+
+
+def test_duplicate_food_specific_search_failure_is_not_retried_or_applied_to_other_foods(
+    client: TestClient,
+    assistant_headers: dict[str, str],
+    providers: SimpleNamespace,
+) -> None:
+    mentions = [
+        MENTIONS["items"][0],
+        MENTIONS["items"][0] | {"quantity": 3, "search_term": " EGGS "},
+        {"name": "rice", "search_term": "rice", "quantity": 1, "unit": "cup"},
+    ]
+    providers.ai.return_value = ai_output(MENTIONS | {"items": mentions})
+    providers.nutrition.request.side_effect = [
+        NutritionError("invalid_response"),
+        {"foods": {"food": [{"food_id": "42", "food_name": "Rice"}]}},
+        deepcopy(DETAIL),
+    ]
+    response = client.post(f"{ROOT}/drafts", headers=assistant_headers, json=body())
+    assert response.status_code == 200, response.text
+    items = response.json()["items"]
+    assert all(item["lookup_unavailable"] for item in items[:2])
+    assert items[2]["food_id"] == "42" and "lookup_unavailable" not in items[2]
+    assert [call.args[0] for call in providers.nutrition.request.call_args_list] == [
+        "foods.search",
+        "foods.search",
+        "food.get.v5",
+    ]
+
+
+def test_draft_read_does_not_consume_shared_food_lookup_bucket(
+    client: TestClient,
+    assistant_headers: dict[str, str],
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(time, "time", lambda: 120.1)
+    payload = body()
+    assert client.post(f"{ROOT}/drafts", headers=assistant_headers, json=payload).status_code == 200
+    user = db_session.scalar(select(User))
+    assert user
+    for _ in range(20):
+        auth_rate_limiter.check(f"nutrition:lookup:{user.id}", 20, 60)
+    for _ in range(20):
+        read = client.get(f"{ROOT}/drafts/{payload['request_id']}", headers=assistant_headers)
+        assert read.status_code == 200, read.text
+    read = client.get(f"{ROOT}/drafts/{payload['request_id']}", headers=assistant_headers)
+    assert read.status_code == 429 and read.json()["detail"]["code"] == "rate_limit"
+    assert read.headers["retry-after"] == "60"
 
 
 def test_same_request_with_different_description_conflicts_without_another_ai_attempt(

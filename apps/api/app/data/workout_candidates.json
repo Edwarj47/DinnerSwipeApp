@@ -1,0 +1,504 @@
+{
+  "version": 1,
+  "authored_by": "Dinner Swipe editorial catalog",
+  "reviewed_on": "2026-10-16",
+  "editorial_note": "These are original suggested combinations, doses and form cues for generally healthy adults, informed by CDC/NHS activity principles. The publishers did not author, endorse or clinically validate these individual routines. Source fragments label local catalog entries, not publisher-owned workouts. Shared photos illustrate related activity and are not instructional demonstrations. This is a finite authored pool, not 175 promised workouts; stop at exhaustion instead of renaming routines. The opening five deliberately sample different categories, equipment, settings and levels.",
+  "safety": "Start within your current ability and use a comfortable, pain-free range. Choose light resistance that leaves about 2 controlled reps available; breathe throughout, without straining. Rest a day between hard sessions for the same muscles. Stop for pain, dizziness, chest discomfort or unusual breathlessness; get medical help for concerning symptoms. Ask a qualified professional before starting if you have a condition, injury, pregnancy, recent surgery or doubts about suitability. Check equipment and keep water nearby.",
+  "guidance": {
+    "cdc_activity": {"url": "https://www.cdc.gov/physical-activity-basics/adding-adults/", "title": "CDC: Adding Physical Activity as an Adult", "scope": "General adult aerobic and strengthening activity, gradual participation and when to seek individual advice; not these authored prescriptions."},
+    "cdc_intensity": {"url": "https://www.cdc.gov/physical-activity-basics/measuring/index.html", "title": "CDC: How to Measure Physical Activity Intensity", "scope": "General intensity guidance and conversation-based effort monitoring; not a calorie calculator or individual target."},
+    "nhs_strength": {"url": "https://www.nhs.uk/live-well/exercise/strength-exercises/", "title": "NHS: Strength exercises", "scope": "Stable-chair setup, controlled bodyweight and light-resistance movements and gradual progression; not endorsement of the catalog combinations."},
+    "nhs_resistance": {"url": "https://www.nhs.uk/live-well/exercise/how-to-improve-strength-flexibility/", "title": "NHS: How to improve your strength and flexibility", "scope": "General resistance-training principles, bodyweight, bands, weights and major-muscle coverage; individual gym exercises and doses are editorial suggestions."},
+    "nhs_walking": {"url": "https://www.nhs.uk/live-well/exercise/walking-for-health/", "title": "NHS: Walking for health", "scope": "Comfortable footwear, gradual walking participation and conversational brisk effort; not a clinical walking program."},
+    "nhs_warmup": {"url": "https://www.nhs.uk/live-well/exercise/how-to-warm-up-before-exercising/", "title": "NHS: How to warm up before exercising", "scope": "General gradual preparation and at least six minutes of warm-up; catalog warm-ups are independently worded adaptations, not copied routines."},
+    "nhs_cooldown": {"url": "https://www.nhs.uk/live-well/exercise/how-to-stretch-after-exercising/", "title": "NHS: How to stretch after exercising", "scope": "General gentle cooldown and comfortable stretching, with individual advice for health concerns; no promise of injury prevention."}
+  },
+  "photos": {
+    "push_up": {
+      "page_url": "https://commons.wikimedia.org/wiki/File:RECRUIT_PUSH_UPS_DVIDS1078131.jpg",
+      "license": "Public domain", "license_template": "PD-USGov-Military-Coast_Guard",
+      "creator": "Chief Petty Officer Thomas Sperduto / U.S. Coast Guard",
+      "source": "U.S. Coast Guard released photograph, DVIDS image 1078131, Cape May, New Jersey; caption dated 2005-11-01.",
+      "license_evidence": "The individual file Licensing section explicitly identifies official-duty U.S. Coast Guard work as public domain. The Summary credits Thomas Sperduto; this is not inferred from Commons footer terms.",
+      "depicts": "Adults performing ordinary beach push-ups without partner loading; related bodyweight pressing, not a demonstration of wall or counter modifications."
+    },
+    "bands": {
+      "page_url": "https://commons.wikimedia.org/wiki/File:Resistance_training_develops_functional_strength_(9834695).jpg",
+      "license": "Public domain", "license_template": "PD-USGov-Military-Army",
+      "creator": "Sgt. Deziree Keay / U.S. Army",
+      "source": "U.S. Army released image 260727-A-UP558-4824, DVIDS image 9834695, Daegu, South Korea, July 2026.",
+      "license_evidence": "The individual file Licensing section explicitly identifies official-duty U.S. Army work as public domain in the United States. The Summary and camera metadata credit Sgt. Deziree Keay.",
+      "depicts": "An adult doing an overhead elastic resistance-band triceps extension outdoors; related upper-body band training, not suspension-strap exercise.",
+      "warnings": ["The photo illustrates elastic-band training; the session does not prescribe the photographed overhead triceps extension."]
+    },
+    "squat": {
+      "page_url": "https://commons.wikimedia.org/wiki/File:Junior_enlisted_Soldiers_enhance_leadership_skills_during_Desert_Forge_(9484005).jpg",
+      "license": "Public domain", "license_template": "PD-USGov-Military-Air_Force",
+      "creator": "Tech. Sgt. Justin Norton / U.S. Air Force",
+      "source": "U.S. Air Force released image 260114-F-ZJ473-1223, DVIDS image 9484005, January 2026.",
+      "license_evidence": "The individual Licensing section explicitly marks official-duty U.S. Air Force work as public domain in the United States; metadata also names the photographer and Public Domain status.",
+      "depicts": "A group performing bodyweight squats during physical training; an illustrative lower-body training photograph."
+    },
+    "walk": {
+      "page_url": "https://commons.wikimedia.org/wiki/File:A_man_doing_Isometric_walking.jpg",
+      "license": "CC0", "license_template": "Cc-zero",
+      "creator": "Vlad Kozh",
+      "source": "Photographer's own work uploaded to Wikimedia Commons, dated 2024-11-10.",
+      "license_evidence": "The photographer explicitly releases this file under CC0 1.0 Universal in its Licensing section; this is not inferred from Commons structured-data licensing.",
+      "depicts": "An adult walking outdoors on a path with handheld resistance grips; the routine does not prescribe the pictured grips or named isometric walking method."
+    },
+    "dumbbells": {
+      "page_url": "https://commons.wikimedia.org/wiki/File:US_Navy_101122-N-7948R-093_Engineman_3rd_Class_Joseph_Rocca_performs_dumbbell_curls_in_the_gym_aboard_the_amphibious_dock_landing_ship_USS_Pearl_Ha.jpg",
+      "license": "Public domain", "license_template": "PD-USGov-Military-Navy",
+      "creator": "Mass Communication Specialist 2nd Class Michael Russell / U.S. Navy",
+      "source": "U.S. Navy released image 101122-N-7948R-093, dated 2010-11-22, aboard USS Pearl Harbor.",
+      "license_evidence": "The individual file Licensing section states this is official-duty U.S. Navy work in the public domain in the United States; the Summary credits Michael Russell.",
+      "depicts": "An adult using dumbbells in a gym, illustrating resistance training rather than all exercises in the session."
+    },
+    "aerobics": {
+      "page_url": "https://commons.wikimedia.org/wiki/File:Aerobics_class.jpg",
+      "license": "Public domain", "license_template": "PD-USGov-HHS-NIH",
+      "creator": "Bill Branson / National Institutes of Health",
+      "source": "National Cancer Institute Visuals Online, Aerobics Class, photograph dated October 1988; Commons Summary credits Bill Branson.",
+      "license_evidence": "The file Summary states Reuse Restrictions None and names the photographer. Its Licensing section explicitly identifies public-domain NIH official-duty work.",
+      "depicts": "Adults participating in indoor standing aerobics, illustrating low-impact movement."
+    },
+    "bike": {
+      "page_url": "https://commons.wikimedia.org/wiki/File:US_Navy_101024-N-7103C-079_Lt._j.g._Neal_Soladay,_left,_from_Columbia,_S.C.,_finishes_his_20-minute_cycle_on_an_exercise_bicycle_during_an_indoor_t.jpg",
+      "license": "Public domain", "license_template": "PD-USGov-Military-Navy",
+      "creator": "Mass Communication Specialist 3rd Class David A. Cox / U.S. Navy",
+      "source": "U.S. Navy released image 101024-N-7103C-079, dated 2010-10-24, aboard USS George Washington.",
+      "license_evidence": "The individual Licensing section identifies this official-duty U.S. Navy exercise-bicycle photograph as public domain in the United States.",
+      "depicts": "An adult using a stationary exercise bicycle in a shipboard gym."
+    },
+    "row": {
+      "page_url": "https://commons.wikimedia.org/wiki/File:U.S._Navy_Cmdr._David_Haas_uses_a_rowing_machine_to_work_the_same_muscle_groups_used_while_swimming_Aug._17,_2009,_in_the_Persian_Gulf_090817-N-RC734-784.jpg",
+      "license": "Public domain", "license_template": "PD-USGov-Military-Navy",
+      "creator": "Mass Communication Specialist 2nd Class Joseph M. Buliavac / U.S. Navy",
+      "source": "U.S. Navy image 090817-N-RC734-784, dated 2009-08-17; Commons records defenseimagery.mil as the source.",
+      "license_evidence": "The individual file Permission field identifies a public-domain defenseimagery photograph, and its Licensing section separately states official-duty U.S. Navy public-domain status.",
+      "depicts": "An adult exercising on a rowing machine."
+    },
+    "treadmill": {
+      "page_url": "https://commons.wikimedia.org/wiki/File:US_Navy_100526-N-3283P-152_Senior_Chief_Navy_Counselor_Johannes_Gonzalez_runs_on_a_treadmill_to_raise_money_for_the_Navy_and_Marine_Corps_Relief_Society_during_the_Far_East_Chiefs_117-Hour_Run.jpg",
+      "license": "Public domain", "license_template": "PD-USGov-Military-Navy",
+      "creator": "Mass Communication Specialist 3rd Class Dominique Pineiro / U.S. Navy",
+      "source": "U.S. Navy released image 100526-N-3283P-152, dated 2010-05-26, Yokosuka, Japan.",
+      "license_evidence": "The individual Licensing section identifies official-duty U.S. Navy work and public-domain status in the United States; the Summary credits Dominique Pineiro.",
+      "depicts": "An adult on a treadmill at an outdoor fundraising event; the catalog uses the same equipment for walking rather than the photographed running pace."
+    }
+  },
+  "warmups": {
+    "upper": "March gently for 3 minutes. Spend 1 minute on relaxed shoulder rolls, then 2 minutes rehearsing arm movements without resistance. Extend preparation if still stiff.",
+    "lower": "Walk easily for 3 minutes. Spend 1 minute each on shallow knee bends, unloaded hip hinges and gentle heel taps, without forcing range. Use a fixed support if balance requires it.",
+    "full_body": "March for 3 minutes. Use 1 minute each for shoulder rolls, comfortable shallow squats and unloaded hip hinges, gradually increasing movement.",
+    "cardio": "Move easily for 3 minutes, then use 3 minutes of gentle marching, heel taps and shoulder rolls. Build pace gradually without jumping.",
+    "bike": "Pedal very easily for 3 minutes, then gradually add a little resistance for 3 minutes. Check saddle height and keep a soft bend in the knee at the bottom.",
+    "row": "With low resistance, row very gently for 3 minutes. Spend 3 more minutes rehearsing legs-body-arms on the drive and arms-body-legs on the return.",
+    "treadmill": "Attach the safety clip and start the belt slowly. Walk easily for 3 minutes and build gradually for 3 minutes, staying at a comfortable pace."
+  },
+  "cooldowns": {
+    "upper": "Walk gently for 3 minutes. For 2 minutes, relax the shoulders and use comfortable chest and upper-back stretches, holding each 15-20 seconds without bouncing.",
+    "lower": "Walk slowly for 3 minutes. Spend 2 minutes on gentle supported calf and hamstring stretches, 15-20 seconds per side without pulling into pain.",
+    "full_body": "Walk easily for 3 minutes. Spend 2 minutes on gentle chest, calf and hamstring stretches, holding 15-20 seconds without forcing the position.",
+    "cardio": "Reduce speed or resistance over 3 minutes rather than stopping suddenly. Spend 2 minutes on relaxed calf and thigh stretches, supported if needed."
+  },
+  "movements": {
+    "wall_press": {"name": "Wall press-up", "cue": "Place hands at chest height on a solid wall. Keep the body aligned, bend the elbows comfortably and press away without shrugging.", "equipment": ["Solid wall"]},
+    "bottle_curl": {"name": "Water-bottle biceps curl", "cue": "Use equally filled sealed bottles. Keep elbows beside the ribs and lower slowly; do not swing the body.", "equipment": ["Two sealed water bottles"]},
+    "wall_slide": {"name": "Standing wall arm slide", "cue": "Stand with a relaxed back near the wall. Slide arms upward only as far as the shoulders allow without arching or pain.", "equipment": ["Solid wall"]},
+    "band_row": {"name": "Seated resistance-band row", "cue": "Use an intact band rated for foot-loop rows; secure it around the midfeet in shoes, never just the toes. Keep knees soft and draw elbows back, away from the face; release slowly. Do not use a slipping band.", "equipment": ["Intact long resistance band", "Exercise mat", "Closed-toe shoes"]},
+    "band_pullapart": {"name": "Resistance-band pull-apart", "cue": "Hold an intact light band at chest height. Open the arms without shrugging or locking elbows, then control the return.", "equipment": ["Intact long resistance band"]},
+    "band_curl": {"name": "Standing resistance-band curl", "cue": "Stand securely on the intact band's middle in shoes. Keep wrists straight and elbows still; use a light band without overstretching it.", "equipment": ["Intact long resistance band", "Closed-toe shoes"]},
+    "incline_push": {"name": "Incline push-up", "cue": "Place hands on a fixed counter or secured bench that cannot tip. Lower the chest with a straight body; choose a higher support if form slips.", "equipment": ["Fixed counter or secured exercise bench"]},
+    "db_row": {"name": "Supported one-arm dumbbell row", "cue": "Brace the free hand on a secured bench. Keep hips level, draw the elbow toward the hip and lower without twisting; complete both sides.", "equipment": ["Dumbbell", "Secured exercise bench"]},
+    "db_floor_press": {"name": "Dumbbell floor press", "cue": "Use light weights you can position safely while lying down with bent knees. Keep wrists above elbows, touch upper arms softly to the floor and press without flaring wide; set weights down under control.", "equipment": ["Dumbbells", "Exercise mat"]},
+    "db_shoulder_press": {"name": "Seated dumbbell shoulder press", "cue": "Sit against a stable back support. Press light weights within comfortable shoulder range; keep ribs down and avoid leaning back.", "equipment": ["Dumbbells", "Stable backed chair or adjustable bench"]},
+    "lateral_raise": {"name": "Dumbbell lateral raise", "cue": "With soft elbows, raise very light weights out to the sides no higher than shoulders. Lower slowly without shrugging or swinging.", "equipment": ["Dumbbells"]},
+    "hammer_curl": {"name": "Dumbbell hammer curl", "cue": "Keep palms facing inward and elbows close to the ribs. Curl without swinging, then lower under control.", "equipment": ["Dumbbells"]},
+    "floor_push": {"name": "Floor push-up", "cue": "Keep head, ribs and hips aligned as the chest lowers. Use a comfortable elbow angle; stop before the back sags and switch to an incline if needed.", "equipment": ["Exercise mat"]},
+    "prone_w": {"name": "Prone W arm raise", "cue": "Lie face down with forehead resting on a folded towel. Make a W with the arms and lift them slightly without lifting the chest or craning the neck.", "equipment": ["Exercise mat", "Folded towel"]},
+    "plank": {"name": "Forearm plank", "cue": "Place elbows below shoulders, brace gently and breathe. Keep hips level; lower knees if needed and finish the hold before the back sags.", "equipment": ["Exercise mat"]},
+    "db_triceps": {"name": "Lying dumbbell triceps extension", "cue": "Lie on a mat, upper arms pointing up. Bend elbows to bring light weights beside the head, not over the face; extend without moving the upper arms.", "equipment": ["Dumbbells", "Exercise mat"]},
+    "band_press": {"name": "Standing resistance-band chest press", "cue": "Pass an intact light band behind the upper back, below the neck. Press hands forward without locking elbows; keep the band secure and clear of the face.", "equipment": ["Intact long resistance band"]},
+    "band_external": {"name": "Resistance-band external rotation", "cue": "With elbows bent and tucked beside the ribs, gently separate the hands against a light band. Keep the movement small and shoulders relaxed.", "equipment": ["Intact long resistance band"]},
+    "machine_chest": {"name": "Machine chest press", "cue": "Ask staff to check the seat so handles sit near chest height. Keep the back supported, press smoothly and return without letting the stack crash.", "equipment": ["Chest-press machine"]},
+    "cable_row": {"name": "Seated cable row", "cue": "Set a light load, brace the feet and sit tall. Pull toward the lower ribs without rocking, then extend arms slowly without rounding the back.", "equipment": ["Seated cable-row machine"]},
+    "cable_curl": {"name": "Cable biceps curl", "cue": "Face a low pulley and stand balanced. Keep elbows beside the body and curl without leaning; lower the stack gently.", "equipment": ["Low cable pulley with curl handle"]},
+    "pulldown": {"name": "Front lat pulldown", "cue": "Secure thighs under the pads. Draw the handle toward the upper chest, never behind the neck; avoid swinging or pulling with the lower back.", "equipment": ["Lat-pulldown machine"]},
+    "chest_row": {"name": "Chest-supported dumbbell row", "cue": "Rest the chest on a secured incline bench with feet planted. Row toward the hips without lifting the chest; lower slowly.", "equipment": ["Dumbbells", "Adjustable exercise bench"]},
+    "reverse_fly": {"name": "Chest-supported dumbbell reverse fly", "cue": "Support the chest on an incline bench. With very light weights and soft elbows, open arms only to shoulder level; do not shrug.", "equipment": ["Dumbbells", "Adjustable exercise bench"]},
+    "incline_db_press": {"name": "Incline dumbbell press", "cue": "Use a modest bench incline and light weights. Plant feet, keep wrists stacked and press without arching; use a comfortable shoulder depth.", "equipment": ["Dumbbells", "Adjustable exercise bench"]},
+    "cable_triceps": {"name": "Cable triceps pressdown", "cue": "Stand balanced with elbows by the ribs. Press the handle down without moving the shoulders or leaning body weight into it.", "equipment": ["High cable pulley with pressdown handle"]},
+    "face_pull": {"name": "Cable face pull", "cue": "Set a light rope pulley near eye height. Pull toward the sides of the face with controlled elbows; do not jerk the cable or arch the back.", "equipment": ["Adjustable cable pulley with rope handle"]},
+    "cable_press": {"name": "Standing cable chest press", "cue": "Use a light load and stable split stance with handles near chest height. Press forward with ribs down, then return slowly without twisting.", "equipment": ["Dual cable station with handles"]},
+    "flat_db_press": {"name": "Flat-bench dumbbell press", "cue": "Use weights you can position and set down safely. Plant feet, keep wrists over elbows and press without bouncing or forcing shoulder depth.", "equipment": ["Dumbbells", "Secured exercise bench"]},
+    "sit_stand": {"name": "Chair sit-to-stand", "cue": "Use a non-wheeled chair against a wall on a non-slip floor, with feet flat when seated. Lean slightly forward, stand through the feet and sit back slowly; use hands lightly if needed.", "equipment": ["Stable non-wheeled chair", "Solid wall"]},
+    "calf_raise": {"name": "Supported calf raise", "cue": "Hold a fixed support lightly. Rise onto both forefeet, pause briefly and lower heels slowly without rolling ankles outward.", "equipment": ["Fixed hand support"]},
+    "hip_abduction": {"name": "Standing supported side leg lift", "cue": "Hold a fixed support and stand tall. Lift one leg a small distance sideways with toes forward; keep the trunk still and repeat on both sides.", "equipment": ["Fixed hand support"]},
+    "mini_squat": {"name": "Supported mini-squat", "cue": "Hold a fixed support. Sit the hips back a little, bend knees comfortably in line with toes and stand without pulling on the arms.", "equipment": ["Fixed hand support"]},
+    "bridge": {"name": "Glute bridge", "cue": "Lie with knees bent and feet planted. Lift hips by pressing through the feet, stopping before the lower back arches; lower gently.", "equipment": ["Exercise mat"]},
+    "clam": {"name": "Side-lying clamshell", "cue": "Lie on one side with knees bent and heels together. Open the top knee without rolling the pelvis back; finish both sides.", "equipment": ["Exercise mat"]},
+    "step_up": {"name": "Low step-up", "cue": "Use a low fixed step and handrail. Place the whole foot on top, stand through the leading leg and step down softly; complete both sides.", "equipment": ["Low fixed step", "Handrail or fixed hand support"]},
+    "hip_extension": {"name": "Standing supported hip extension", "cue": "Hold a fixed support. Move one straight leg slightly behind you without bending the trunk or arching the back; repeat on both sides.", "equipment": ["Fixed hand support"]},
+    "goblet_squat": {"name": "Dumbbell goblet squat", "cue": "Hold a light dumbbell near the chest. Sit hips down between the feet with knees following toes; stop at a depth you control and stand steadily.", "equipment": ["Dumbbell"]},
+    "db_rdl": {"name": "Dumbbell Romanian deadlift", "cue": "Soften knees and push hips back with weights close to the legs. Keep the spine steady; stop when the hamstrings limit the hinge, then stand tall.", "equipment": ["Dumbbells"]},
+    "split_squat": {"name": "Supported split squat", "cue": "Take a short split stance beside a fixed support. Bend both knees within comfortable range, keeping the front heel down; finish both sides.", "equipment": ["Fixed hand support"]},
+    "single_bridge": {"name": "Single-leg glute bridge", "cue": "From a bridge setup, hold one foot off the floor. Lift only as far as hips stay level; lower and repeat both sides, or use two feet if needed.", "equipment": ["Exercise mat"]},
+    "side_leg": {"name": "Side-lying straight-leg raise", "cue": "Lie on one side with the lower knee bent. Lift the top leg slightly with toes facing forward; keep hips stacked and work both sides.", "equipment": ["Exercise mat"]},
+    "reverse_lunge": {"name": "Bodyweight reverse lunge", "cue": "Step back with enough width for balance. Bend both knees comfortably, keep the front foot planted and push through it to return; alternate sides.", "equipment": []},
+    "band_walk": {"name": "Mini-band lateral walk", "cue": "Place an intact light loop above the knees. Take short sideways steps with soft knees and level hips, then reverse direction; do not let knees collapse inward.", "equipment": ["Intact mini resistance band"]},
+    "wall_sit": {"name": "Shallow wall sit", "cue": "Rest the back against a solid wall with feet forward. Slide down only a little, keep breathing and stand before strain; do not force a right-angle squat.", "equipment": ["Solid wall"]},
+    "single_rdl": {"name": "Supported single-leg hip hinge", "cue": "Use a fixed support and no added weight. Hinge at the standing hip as the other leg travels back; keep hips square and repeat both sides.", "equipment": ["Fixed hand support"]},
+    "single_calf": {"name": "Supported single-leg calf raise", "cue": "Hold a fixed support and lift one foot. Rise and lower slowly on the standing forefoot without rolling the ankle; work both sides.", "equipment": ["Fixed hand support"]},
+    "leg_press": {"name": "Machine leg press", "cue": "Have staff check the seat and safety stops. Keep hips and back against pads, lower only within comfortable range and press without locking knees.", "equipment": ["Leg-press machine"]},
+    "leg_curl": {"name": "Seated machine leg curl", "cue": "Align knees with the machine pivot and secure pads as instructed. Curl smoothly without lifting the hips; return the stack slowly.", "equipment": ["Seated leg-curl machine"]},
+    "seated_calf": {"name": "Seated calf raise", "cue": "Adjust the pad above the knees and place forefeet securely on the platform. Raise heels without bouncing and lower within comfortable ankle range.", "equipment": ["Seated calf-raise machine"]},
+    "leg_extension": {"name": "Machine leg extension", "cue": "Ask staff to align the knee pivot and ankle pad. Straighten knees smoothly without snapping into lockout; keep the back supported.", "equipment": ["Leg-extension machine"]},
+    "cable_abduction": {"name": "Standing cable hip abduction", "cue": "Fit the ankle cuff and use a fixed support. With a very light load, move the leg sideways without leaning; return slowly and work both sides.", "equipment": ["Low cable pulley with ankle cuff", "Fixed hand support"]},
+    "db_lunge": {"name": "Dumbbell reverse lunge", "cue": "Hold light weights by the sides and step back under control. Keep a stable stance and the front heel planted; finish both sides without rushing.", "equipment": ["Dumbbells"]},
+    "hip_thrust": {"name": "Bodyweight bench hip thrust", "cue": "Secure the bench against movement and rest upper back on its edge. Drive through planted feet, lift hips to a straight trunk and avoid arching the back.", "equipment": ["Secured exercise bench"]},
+    "cable_pullthrough": {"name": "Cable pull-through", "cue": "Face away from a low rope pulley, gripping between the legs. Step clear, hinge at the hips and stand tall with a light load; do not lean back.", "equipment": ["Low cable pulley with rope handle"]},
+    "lateral_lunge": {"name": "Bodyweight lateral lunge", "cue": "Step sideways and sit hips toward the stepping heel. Keep both feet grounded and use a shallow range before returning; work both sides.", "equipment": []},
+    "machine_abduction": {"name": "Seated machine hip abduction", "cue": "Adjust the seat and pads as instructed. Open knees slowly against a light load without rocking the torso; control the return.", "equipment": ["Seated hip-abduction machine"]},
+    "walk": {"name": "Level brisk walk", "cue": "Choose an even, well-lit route and comfortable shoes. Walk purposefully with relaxed arms; aim for an effort where conversation is possible but singing is difficult.", "equipment": ["Comfortable supportive shoes", "Clear level walking route"]},
+    "march": {"name": "Low-impact marching", "cue": "March in place with quiet steps and relaxed arm swings. Keep knee lifts comfortable and breathing conversational; reduce pace if needed.", "equipment": ["Supportive shoes", "Clear non-slip floor"]},
+    "step_touch": {"name": "Side step-touch", "cue": "Step sideways and bring the other foot alongside without jumping. Keep knees soft and steps short enough to remain balanced.", "equipment": ["Supportive shoes", "Clear non-slip floor"]},
+    "heel_dig": {"name": "Alternating heel digs", "cue": "Tap one heel forward at a time while the supporting knee stays soft. Add small arm swings, not forceful punches or jumps.", "equipment": ["Supportive shoes", "Clear non-slip floor"]},
+    "dance": {"name": "Easy side-step dance", "cue": "Use a comfortable music tempo with small side and forward steps. Keep one foot grounded and turns gentle; leave room around you.", "equipment": ["Supportive shoes", "Clear non-slip floor"]},
+    "grapevine": {"name": "Walking grapevine step", "cue": "Step sideways, cross the trailing foot gently behind, step sideways again and tap. Reverse slowly; replace crossing with side steps if balance feels uncertain.", "equipment": ["Supportive shoes", "Clear non-slip floor"]},
+    "hill_walk": {"name": "Gentle uphill walk", "cue": "Use a familiar gentle slope with secure footing. Shorten steps and keep talking comfortably; choose a milder route if you need to gasp or lean heavily.", "equipment": ["Comfortable supportive shoes", "Safe gentle-slope walking route"]},
+    "timed_step": {"name": "Low-platform stepping", "cue": "Use a fixed low step with hand support. Step up and down without jumping, alternate the lead foot halfway through each set and keep the whole foot on the step.", "equipment": ["Low fixed step", "Handrail or fixed hand support", "Supportive shoes"]},
+    "stairs": {"name": "Easy stair walking", "cue": "Use a clear, well-lit short flight and handrail. Walk up and down, taking extra care descending; choose one step at a time and never race.", "equipment": ["Stairs with handrail", "Supportive shoes"]},
+    "shadowbox": {"name": "Gentle standing shadowboxing", "cue": "Use light alternating punches below shoulder height with small walking steps. Do not lock elbows or twist sharply through planted knees; keep effort moderate.", "equipment": ["Supportive shoes", "Clear non-slip floor"]},
+    "shuffle": {"name": "Walking lateral shuffle", "cue": "Take two small side steps each way without crossing feet or jumping. Stay upright with soft knees and enough clear space to change direction safely.", "equipment": ["Supportive shoes", "Clear non-slip floor"]},
+    "bike": {"name": "Stationary cycling", "cue": "Set saddle height so the knee stays slightly bent at the bottom. Pedal smoothly at conversational effort; keep resistance light enough to avoid rocking the hips.", "equipment": ["Stationary exercise bicycle", "Closed-toe shoes"]},
+    "row": {"name": "Steady rowing ergometer", "cue": "Ask staff to check foot straps and technique. Drive legs, then body, then arms; return arms, body, legs. Use low resistance and a pace that allows conversation.", "equipment": ["Rowing ergometer", "Closed-toe shoes"]},
+    "treadmill_walk": {"name": "Level treadmill walk", "cue": "Attach the safety clip and use a manageable belt speed. Look ahead and walk naturally; slow the belt before stepping off, never jump onto moving rails.", "equipment": ["Treadmill with safety clip", "Supportive shoes"]},
+    "treadmill_incline": {"name": "Gentle-incline treadmill walk", "cue": "Attach the safety clip and choose a small incline. Stay upright without hanging on the rails; reduce incline or speed to keep conversation comfortable.", "equipment": ["Treadmill with safety clip", "Supportive shoes"]},
+    "dead_bug": {"name": "Alternating dead bug", "cue": "Lie on the back with arms up and knees bent. Slowly extend opposite arm and leg only as far as the back stays still, then switch sides while breathing.", "equipment": ["Exercise mat"]},
+    "bird_dog": {"name": "Bird dog", "cue": "From hands and knees, reach opposite arm and leg without tilting the hips. Keep the neck relaxed, return slowly and alternate sides.", "equipment": ["Exercise mat"]},
+    "db_deadlift": {"name": "Dumbbell deadlift from raised blocks", "cue": "Place light dumbbells on secure low blocks. Bend hips and knees, keep weights close and stand without rounding; use a height that permits a steady back.", "equipment": ["Dumbbells", "Secure lifting blocks"]},
+    "farmer_carry": {"name": "Two-dumbbell farmer carry", "cue": "Hold light weights by the sides and walk slowly along a clear route. Stay tall, breathe and set weights down under control before grip or posture fails.", "equipment": ["Dumbbells", "Clear walking space"]},
+    "band_squat": {"name": "Standing resistance-band squat", "cue": "Stand securely on an intact long band in shoes and hold ends near the hips. Squat comfortably with knees following toes; stand without jerking the band.", "equipment": ["Intact long resistance band", "Closed-toe shoes"]},
+    "pallof": {"name": "Resistance-band anti-rotation press", "cue": "Use a manufacturer-rated anchor at chest height and inspect the band. Stand sideways, press hands forward without turning, return slowly and work both sides.", "equipment": ["Intact long resistance band", "Manufacturer-rated fixed band anchor"]},
+    "suitcase": {"name": "Single-dumbbell suitcase carry", "cue": "Carry a light weight on one side along a clear route. Keep shoulders level and do not lean; switch hands halfway through each timed set.", "equipment": ["Dumbbell", "Clear walking space"]},
+    "cable_pallof": {"name": "Cable anti-rotation press", "cue": "Set a light cable at chest height. Stand sideways and press hands away without turning the trunk; return slowly and complete both sides.", "equipment": ["Adjustable cable pulley with handle"]},
+    "machine_shoulder": {"name": "Machine shoulder press", "cue": "Have staff check the seat and start position. Press with the back supported and ribs down, staying inside a comfortable shoulder range.", "equipment": ["Shoulder-press machine"]},
+    "side_plank": {"name": "Side plank from bent knees", "cue": "Place the elbow below the shoulder and lift hips from bent knees while breathing. Switch sides halfway through each set; stop before the trunk rolls or sags.", "equipment": ["Exercise mat"]}
+  },
+  "routines": [
+    {
+      "catalog_id": "ds-workout-v1-wall-and-bottle-upper", "title": "Wall Presses and Bottle Curls", "category": "upper", "setting": "home", "difficulty": "beginner",
+      "purpose": "A standing introduction to upper-body strength using a wall and light household weights, with shoulder movement between the pressing and curling work.",
+      "guidance": "nhs_strength", "photo": "push_up", "warmup": "upper", "cooldown": "upper",
+      "exercises": [{"movement": "wall_press", "sets": 2, "reps": "6-10", "rest_seconds": 60}, {"movement": "bottle_curl", "sets": 2, "reps": "8-10", "rest_seconds": 60}, {"movement": "wall_slide", "sets": 2, "reps": "6-8", "rest_seconds": 45}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-chair-and-standing-legs", "title": "Chair Stands and Supported Legs", "category": "lower", "setting": "home", "difficulty": "beginner",
+      "purpose": "Start with the everyday sit-to-stand pattern, then work the calves and side hips while holding a fixed support. No floor transfers are required.",
+      "guidance": "nhs_strength", "photo": "squat", "warmup": "lower", "cooldown": "lower",
+      "exercises": [{"movement": "sit_stand", "sets": 2, "reps": "5-8", "rest_seconds": 75}, {"movement": "calf_raise", "sets": 2, "reps": "8-10", "rest_seconds": 60}, {"movement": "hip_abduction", "sets": 2, "reps": "6-8 each side", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-row-and-cycle", "title": "Rowing and Cycling Cross-Training", "category": "cardio", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "Combine an upper-and-lower-body rowing pattern with seated cycling. Keep both blocks moderate, and use the changeover to reset posture rather than rushing.",
+      "guidance": "cdc_intensity", "photo": "row", "warmup": "row", "cooldown": "cardio",
+      "exercises": [{"movement": "row", "sets": 1, "duration_seconds": 600, "rest_seconds": 120}, {"movement": "bike", "sets": 1, "duration_seconds": 720, "rest_seconds": 0}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-home-band-whole-body", "title": "Band Squat, Press, Pull and Brace", "category": "full_body", "setting": "home", "difficulty": "beginner",
+      "purpose": "A whole-body band session covering legs, chest, back and resistance to trunk rotation. The anti-rotation exercise requires a properly rated fixed anchor, not loose furniture.",
+      "guidance": "nhs_resistance", "photo": "bands", "warmup": "full_body", "cooldown": "full_body",
+      "exercises": [{"movement": "band_squat", "sets": 2, "reps": "8-10", "rest_seconds": 75}, {"movement": "band_press", "sets": 2, "reps": "8-10", "rest_seconds": 60}, {"movement": "band_row", "sets": 2, "reps": "8-10", "rest_seconds": 60}, {"movement": "pallof", "sets": 2, "reps": "6 each side", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-vertical-pull-and-arms", "title": "Pulldowns, Face Pulls and Hammer Curls", "category": "upper", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "Combine a vertical pull with a lighter high-cable upper-back exercise and neutral-grip curls. Treat the face pull as controlled practice, not a heavy lift.",
+      "guidance": "nhs_resistance", "photo": "dumbbells", "warmup": "upper", "cooldown": "upper",
+      "exercises": [{"movement": "pulldown", "sets": 3, "reps": "8-12", "rest_seconds": 90}, {"movement": "face_pull", "sets": 2, "reps": "10-12", "rest_seconds": 60}, {"movement": "hammer_curl", "sets": 2, "reps": "8-12", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-home-band-pull", "title": "Home Band Back and Biceps", "category": "upper", "setting": "home", "difficulty": "beginner",
+      "purpose": "A pulling-focused band session combining a row, a light upper-back opening movement and elbow flexion without needing gym machines.",
+      "guidance": "nhs_resistance", "photo": "bands", "warmup": "upper", "cooldown": "upper",
+      "exercises": [{"movement": "band_row", "sets": 2, "reps": "8-12", "rest_seconds": 60}, {"movement": "band_pullapart", "sets": 2, "reps": "8-10", "rest_seconds": 60}, {"movement": "band_curl", "sets": 2, "reps": "8-12", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-incline-and-floor-upper", "title": "Counter Push and Floor Press", "category": "upper", "setting": "home", "difficulty": "beginner",
+      "purpose": "Pair an elevated bodyweight press with a supported dumbbell row and floor press. The floor limits pressing depth while the row adds a complementary pull.",
+      "guidance": "nhs_resistance", "photo": "push_up", "warmup": "upper", "cooldown": "upper",
+      "exercises": [{"movement": "incline_push", "sets": 2, "reps": "6-8", "rest_seconds": 75}, {"movement": "db_row", "sets": 2, "reps": "8 each side", "rest_seconds": 75}, {"movement": "db_floor_press", "sets": 2, "reps": "8-10", "rest_seconds": 75}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-home-shoulders-and-arms", "title": "Seated Shoulders and Hammer Curls", "category": "upper", "setting": "home", "difficulty": "beginner",
+      "purpose": "Use back-supported overhead pressing, very light side raises and neutral-grip curls for a short shoulder-and-arm session with controlled loads.",
+      "guidance": "nhs_resistance", "photo": "dumbbells", "warmup": "upper", "cooldown": "upper",
+      "exercises": [{"movement": "db_shoulder_press", "sets": 2, "reps": "8-10", "rest_seconds": 75}, {"movement": "lateral_raise", "sets": 2, "reps": "8-10", "rest_seconds": 60}, {"movement": "hammer_curl", "sets": 2, "reps": "8-12", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-bodyweight-upper-control", "title": "Push-Up and Upper-Back Control", "category": "upper", "setting": "home", "difficulty": "intermediate",
+      "purpose": "Combine floor pressing with a small-range prone upper-back movement and a braced hold. This session emphasizes body alignment rather than speed.",
+      "guidance": "nhs_resistance", "photo": "push_up", "warmup": "upper", "cooldown": "upper",
+      "exercises": [{"movement": "floor_push", "sets": 3, "reps": "6-10", "rest_seconds": 90}, {"movement": "prone_w", "sets": 2, "reps": "8-10", "rest_seconds": 60}, {"movement": "plank", "sets": 2, "duration_seconds": 20, "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-home-dumbbell-push-pull", "title": "Floor Press, Row and Triceps", "category": "upper", "setting": "home", "difficulty": "intermediate",
+      "purpose": "A dumbbell push-and-pull session with lying triceps work. Use separate manageable weights for each movement instead of forcing the same load throughout.",
+      "guidance": "nhs_resistance", "photo": "dumbbells", "warmup": "upper", "cooldown": "upper",
+      "exercises": [{"movement": "db_floor_press", "sets": 3, "reps": "8-12", "rest_seconds": 90}, {"movement": "db_row", "sets": 3, "reps": "8 each side", "rest_seconds": 90}, {"movement": "db_triceps", "sets": 2, "reps": "8-10", "rest_seconds": 75}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-band-press-row-rotation", "title": "Band Press, Row and Shoulder Rotation", "category": "upper", "setting": "home", "difficulty": "beginner",
+      "purpose": "A compact band-only upper-body session balancing forward pressing, rowing and small-range shoulder rotation, with no door anchor required.",
+      "guidance": "nhs_resistance", "photo": "bands", "warmup": "upper", "cooldown": "upper",
+      "exercises": [{"movement": "band_press", "sets": 2, "reps": "8-10", "rest_seconds": 60}, {"movement": "band_row", "sets": 2, "reps": "8-10", "rest_seconds": 60}, {"movement": "band_external", "sets": 2, "reps": "8-10", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-machine-upper-start", "title": "Machine Press and Cable Row Basics", "category": "upper", "setting": "gym", "difficulty": "beginner",
+      "purpose": "Learn supported pressing and seated pulling, then finish with a light cable curl. Have gym staff check the machine adjustments before adding resistance.",
+      "guidance": "nhs_resistance", "photo": "dumbbells", "warmup": "upper", "cooldown": "upper",
+      "exercises": [{"movement": "machine_chest", "sets": 2, "reps": "8-12", "rest_seconds": 75}, {"movement": "cable_row", "sets": 2, "reps": "8-12", "rest_seconds": 75}, {"movement": "cable_curl", "sets": 2, "reps": "8-10", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-supported-back", "title": "Pulldown and Supported Back Work", "category": "upper", "setting": "gym", "difficulty": "beginner",
+      "purpose": "Explore vertical pulling and chest-supported rowing, with very light reverse flies. Bench support reduces the need to hold a bent-over stance.",
+      "guidance": "nhs_resistance", "photo": "dumbbells", "warmup": "upper", "cooldown": "upper",
+      "exercises": [{"movement": "pulldown", "sets": 2, "reps": "8-12", "rest_seconds": 75}, {"movement": "chest_row", "sets": 2, "reps": "8-10", "rest_seconds": 75}, {"movement": "reverse_fly", "sets": 2, "reps": "8-10", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-incline-pressing", "title": "Incline Press and Supported Shoulders", "category": "upper", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "A pressing-focused gym session combining incline dumbbells, seated shoulder work and cable pressdowns. Keep all sets controlled and comfortably short of failure.",
+      "guidance": "nhs_resistance", "photo": "dumbbells", "warmup": "upper", "cooldown": "upper",
+      "exercises": [{"movement": "incline_db_press", "sets": 3, "reps": "8-10", "rest_seconds": 90}, {"movement": "db_shoulder_press", "sets": 2, "reps": "8-10", "rest_seconds": 90}, {"movement": "cable_triceps", "sets": 2, "reps": "10-12", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-cable-upper-balance", "title": "Cable Push-Pull and Side Raises", "category": "upper", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "Balance a standing cable press with seated cable rowing, then use light dumbbells for shoulder raises. Stable foot placement matters more than load.",
+      "guidance": "nhs_resistance", "photo": "dumbbells", "warmup": "upper", "cooldown": "upper",
+      "exercises": [{"movement": "cable_press", "sets": 3, "reps": "8-10", "rest_seconds": 90}, {"movement": "cable_row", "sets": 3, "reps": "8-10", "rest_seconds": 90}, {"movement": "lateral_raise", "sets": 2, "reps": "10-12", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-bench-row-accessories", "title": "Bench Press, One-Arm Row and Accessories", "category": "upper", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "A longer upper-body session using flat-bench dumbbells and unilateral rowing, followed by light rear-shoulder and triceps work with separate rest periods.",
+      "guidance": "nhs_resistance", "photo": "dumbbells", "warmup": "upper", "cooldown": "upper",
+      "exercises": [{"movement": "flat_db_press", "sets": 3, "reps": "8-10", "rest_seconds": 90}, {"movement": "db_row", "sets": 3, "reps": "8 each side", "rest_seconds": 90}, {"movement": "reverse_fly", "sets": 2, "reps": "10-12", "rest_seconds": 60}, {"movement": "cable_triceps", "sets": 2, "reps": "10-12", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-mini-squats-and-mat-hips", "title": "Mini-Squats, Bridges and Clamshells", "category": "lower", "setting": "home", "difficulty": "beginner",
+      "purpose": "Mix a supported shallow squat with two mat-based hip exercises. Move between standing and the floor slowly and use only a comfortable range.",
+      "guidance": "nhs_strength", "photo": "squat", "warmup": "lower", "cooldown": "lower",
+      "exercises": [{"movement": "mini_squat", "sets": 2, "reps": "6-10", "rest_seconds": 60}, {"movement": "bridge", "sets": 2, "reps": "8-10", "rest_seconds": 60}, {"movement": "clam", "sets": 2, "reps": "8 each side", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-step-and-standing-hips", "title": "Low Steps and Standing Hip Work", "category": "lower", "setting": "home", "difficulty": "beginner",
+      "purpose": "Practice a supported step-up, a small backward leg lift and slow heel raises. Use an actual fixed low step, never a chair or unstable box.",
+      "guidance": "nhs_strength", "photo": "squat", "warmup": "lower", "cooldown": "lower",
+      "exercises": [{"movement": "step_up", "sets": 2, "reps": "6 each side", "rest_seconds": 75}, {"movement": "hip_extension", "sets": 2, "reps": "8 each side", "rest_seconds": 60}, {"movement": "calf_raise", "sets": 2, "reps": "8-12", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-home-squat-hinge-bridge", "title": "Goblet Squat and Hip-Hinge Basics", "category": "lower", "setting": "home", "difficulty": "beginner",
+      "purpose": "Introduce light loaded squatting and hip hinging, then finish on the mat with bridges. Rehearse both standing patterns without weight before the work sets.",
+      "guidance": "nhs_resistance", "photo": "squat", "warmup": "lower", "cooldown": "lower",
+      "exercises": [{"movement": "goblet_squat", "sets": 2, "reps": "8-10", "rest_seconds": 90}, {"movement": "db_rdl", "sets": 2, "reps": "8-10", "rest_seconds": 90}, {"movement": "bridge", "sets": 2, "reps": "10-12", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-single-leg-mat-and-split", "title": "Split Squats and Single-Leg Bridges", "category": "lower", "setting": "home", "difficulty": "intermediate",
+      "purpose": "Work each leg separately through a supported split squat, a single-leg bridge and a side-lying lift. Use support freely to keep the pelvis steady.",
+      "guidance": "nhs_resistance", "photo": "squat", "warmup": "lower", "cooldown": "lower",
+      "exercises": [{"movement": "split_squat", "sets": 3, "reps": "8 each side", "rest_seconds": 90}, {"movement": "single_bridge", "sets": 2, "reps": "6-8 each side", "rest_seconds": 75}, {"movement": "side_leg", "sets": 2, "reps": "8-10 each side", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-lunge-lateral-and-hold", "title": "Reverse Lunges, Band Steps and Wall Hold", "category": "lower", "setting": "home", "difficulty": "intermediate",
+      "purpose": "Combine backward stepping, sideways band work and a short shallow isometric hold. This session changes movement direction without jumps or added dumbbells.",
+      "guidance": "nhs_resistance", "photo": "squat", "warmup": "lower", "cooldown": "lower",
+      "exercises": [{"movement": "reverse_lunge", "sets": 3, "reps": "8 each side", "rest_seconds": 90}, {"movement": "band_walk", "sets": 2, "reps": "8 each side", "rest_seconds": 60}, {"movement": "wall_sit", "sets": 2, "duration_seconds": 20, "rest_seconds": 75}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-supported-single-leg-standing", "title": "Single-Leg Hinges, Steps and Calves", "category": "lower", "setting": "home", "difficulty": "intermediate",
+      "purpose": "An all-standing unilateral session with a fixed hand support. Alternate a hip hinge, low step-up and single-leg heel raise without adding external load.",
+      "guidance": "nhs_resistance", "photo": "squat", "warmup": "lower", "cooldown": "lower",
+      "exercises": [{"movement": "single_rdl", "sets": 2, "reps": "8 each side", "rest_seconds": 75}, {"movement": "step_up", "sets": 3, "reps": "8 each side", "rest_seconds": 90}, {"movement": "single_calf", "sets": 2, "reps": "8 each side", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-supported-leg-machines", "title": "Leg Press, Seated Curl and Calves", "category": "lower", "setting": "gym", "difficulty": "beginner",
+      "purpose": "A supported-machine introduction for the legs. Learn the seat, pad and safety-stop adjustments with staff before using a light, controlled working load.",
+      "guidance": "nhs_resistance", "photo": "squat", "warmup": "lower", "cooldown": "lower",
+      "exercises": [{"movement": "leg_press", "sets": 2, "reps": "8-12", "rest_seconds": 90}, {"movement": "leg_curl", "sets": 2, "reps": "8-12", "rest_seconds": 75}, {"movement": "seated_calf", "sets": 2, "reps": "10-12", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-hinge-extension-abduction", "title": "Dumbbell Hinge and Leg Accessories", "category": "lower", "setting": "gym", "difficulty": "beginner",
+      "purpose": "Pair a light hip hinge with seated knee-extension work and a supported cable side lift. Keep the standing cable load very light for balance.",
+      "guidance": "nhs_resistance", "photo": "squat", "warmup": "lower", "cooldown": "lower",
+      "exercises": [{"movement": "db_rdl", "sets": 2, "reps": "8-10", "rest_seconds": 90}, {"movement": "leg_extension", "sets": 2, "reps": "8-12", "rest_seconds": 75}, {"movement": "cable_abduction", "sets": 2, "reps": "8 each side", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-squat-lunge-curl", "title": "Goblet Squats, Loaded Lunges and Curls", "category": "lower", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "Use a bilateral squat, a light loaded reverse lunge and a seated hamstring curl. Take enough rest to maintain the same controlled technique on both legs.",
+      "guidance": "nhs_resistance", "photo": "squat", "warmup": "lower", "cooldown": "lower",
+      "exercises": [{"movement": "goblet_squat", "sets": 3, "reps": "8-12", "rest_seconds": 90}, {"movement": "db_lunge", "sets": 2, "reps": "8 each side", "rest_seconds": 90}, {"movement": "leg_curl", "sets": 2, "reps": "10-12", "rest_seconds": 75}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-hip-drive-and-calves", "title": "Bench Hip Thrusts and Cable Hinges", "category": "lower", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "Emphasize hip extension through a bodyweight bench thrust and a low-cable hinge, finishing with seated calves. The hip thrust does not require a barbell.",
+      "guidance": "nhs_resistance", "photo": "squat", "warmup": "lower", "cooldown": "lower",
+      "exercises": [{"movement": "hip_thrust", "sets": 3, "reps": "10-12", "rest_seconds": 90}, {"movement": "cable_pullthrough", "sets": 3, "reps": "8-12", "rest_seconds": 90}, {"movement": "seated_calf", "sets": 2, "reps": "10-12", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-sideways-leg-strength", "title": "Side Lunges, Leg Press and Band Walks", "category": "lower", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "Add controlled sideways movement around a supported leg press. Use shallow lateral lunges and short band steps so direction changes stay balanced.",
+      "guidance": "nhs_resistance", "photo": "squat", "warmup": "lower", "cooldown": "lower",
+      "exercises": [{"movement": "lateral_lunge", "sets": 2, "reps": "8 each side", "rest_seconds": 75}, {"movement": "leg_press", "sets": 3, "reps": "8-12", "rest_seconds": 90}, {"movement": "band_walk", "sets": 2, "reps": "8 each side", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-hip-machine-and-hinge", "title": "Seated Hips, Hamstrings and Supported Hinge", "category": "lower", "setting": "gym", "difficulty": "beginner",
+      "purpose": "Combine seated side-hip and hamstring machines with an unloaded single-leg hinge using hand support. Keep the standing movement small while learning it.",
+      "guidance": "nhs_resistance", "photo": "squat", "warmup": "lower", "cooldown": "lower",
+      "exercises": [{"movement": "machine_abduction", "sets": 2, "reps": "8-12", "rest_seconds": 60}, {"movement": "leg_curl", "sets": 2, "reps": "8-12", "rest_seconds": 75}, {"movement": "single_rdl", "sets": 2, "reps": "6 each side", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-level-outdoor-walk", "title": "Conversational Level Walk", "category": "cardio", "setting": "home", "difficulty": "beginner",
+      "purpose": "A simple outdoor walking session on an even route near home. The main block is purposeful but conversational, not a race or a requirement to hit a fixed speed.",
+      "guidance": "nhs_walking", "photo": "walk", "warmup": "cardio", "cooldown": "cardio",
+      "exercises": [{"movement": "walk", "sets": 1, "duration_seconds": 720, "rest_seconds": 0}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-indoor-march-and-taps", "title": "Indoor March, Side Steps and Heel Taps", "category": "cardio", "setting": "home", "difficulty": "beginner",
+      "purpose": "A low-impact indoor aerobic session with three straightforward standing patterns. Keep one foot on the floor and reduce pace whenever conversation becomes difficult.",
+      "guidance": "cdc_intensity", "photo": "aerobics", "warmup": "cardio", "cooldown": "cardio",
+      "exercises": [{"movement": "march", "sets": 1, "duration_seconds": 240, "rest_seconds": 30}, {"movement": "step_touch", "sets": 1, "duration_seconds": 240, "rest_seconds": 30}, {"movement": "heel_dig", "sets": 1, "duration_seconds": 180, "rest_seconds": 0}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gentle-dance-footwork", "title": "Easy Dance and Walking Grapevines", "category": "cardio", "setting": "home", "difficulty": "beginner",
+      "purpose": "Use music and simple walking dance patterns for aerobic movement without jumps. The grapevine is optional; ordinary side steps are a useful balance-friendly substitute.",
+      "guidance": "cdc_intensity", "photo": "aerobics", "warmup": "cardio", "cooldown": "cardio",
+      "exercises": [{"movement": "dance", "sets": 1, "duration_seconds": 300, "rest_seconds": 30}, {"movement": "grapevine", "sets": 1, "duration_seconds": 180, "rest_seconds": 30}, {"movement": "march", "sets": 1, "duration_seconds": 180, "rest_seconds": 0}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gentle-hill-and-level-walk", "title": "Gentle Hill and Level Walking", "category": "cardio", "setting": "home", "difficulty": "intermediate",
+      "purpose": "Walk a familiar gentle uphill section before a level block. Terrain changes the muscular demand without needing to jog; avoid steep, slippery or isolated routes.",
+      "guidance": "nhs_walking", "photo": "walk", "warmup": "cardio", "cooldown": "cardio",
+      "exercises": [{"movement": "hill_walk", "sets": 1, "duration_seconds": 480, "rest_seconds": 90}, {"movement": "walk", "sets": 1, "duration_seconds": 600, "rest_seconds": 0}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-low-step-and-march", "title": "Low-Step Intervals and Marching", "category": "cardio", "setting": "home", "difficulty": "intermediate",
+      "purpose": "Use a secured low platform for short stepping blocks, with easy recovery between sets and a marching finish. The goal is steady aerobic work, not speed or jumping.",
+      "guidance": "cdc_intensity", "photo": "aerobics", "warmup": "cardio", "cooldown": "cardio",
+      "exercises": [{"movement": "timed_step", "sets": 4, "duration_seconds": 90, "rest_seconds": 60}, {"movement": "march", "sets": 1, "duration_seconds": 240, "rest_seconds": 0}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-stairs-and-level-walk", "title": "Careful Stair Blocks and Level Walking", "category": "cardio", "setting": "home", "difficulty": "intermediate",
+      "purpose": "Combine short handrail-supported stair blocks with level walking. Descend slowly and use an easy walk during rests; stairs are not suitable if balance or knee symptoms interfere.",
+      "guidance": "nhs_resistance", "photo": "walk", "warmup": "cardio", "cooldown": "cardio",
+      "exercises": [{"movement": "stairs", "sets": 3, "duration_seconds": 60, "rest_seconds": 90}, {"movement": "walk", "sets": 1, "duration_seconds": 600, "rest_seconds": 0}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-boxing-and-side-footwork", "title": "Light Shadowboxing and Side Footwork", "category": "cardio", "setting": "home", "difficulty": "intermediate",
+      "purpose": "A standing aerobic session alternating gentle punching practice and non-jumping lateral movement. Use easy steps during recovery and keep shoulders relaxed.",
+      "guidance": "cdc_intensity", "photo": "aerobics", "warmup": "cardio", "cooldown": "cardio",
+      "exercises": [{"movement": "shadowbox", "sets": 3, "duration_seconds": 120, "rest_seconds": 60}, {"movement": "shuffle", "sets": 2, "duration_seconds": 90, "rest_seconds": 60}, {"movement": "step_touch", "sets": 1, "duration_seconds": 180, "rest_seconds": 0}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-steady-cycle", "title": "Comfortable Stationary Cycle", "category": "cardio", "setting": "gym", "difficulty": "beginner",
+      "purpose": "An uncomplicated seated cycling block at a manageable conversational effort. Ask staff to check the bicycle setup before settling into a smooth pedal rhythm.",
+      "guidance": "cdc_intensity", "photo": "bike", "warmup": "bike", "cooldown": "cardio",
+      "exercises": [{"movement": "bike", "sets": 1, "duration_seconds": 900, "rest_seconds": 0}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-rowing-foundations", "title": "Steady Rowing Technique Session", "category": "cardio", "setting": "gym", "difficulty": "beginner",
+      "purpose": "Learn the rowing sequence with a low-resistance, conversational main block. A staff technique check is preferable to adding resistance or chasing a distance target.",
+      "guidance": "cdc_intensity", "photo": "row", "warmup": "row", "cooldown": "cardio",
+      "exercises": [{"movement": "row", "sets": 1, "duration_seconds": 600, "rest_seconds": 0}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-level-treadmill", "title": "Level Treadmill Walking", "category": "cardio", "setting": "gym", "difficulty": "beginner",
+      "purpose": "Practice ordinary walking on a level treadmill with the safety clip attached. Adjust speed to your current ability instead of matching another person's settings.",
+      "guidance": "nhs_walking", "photo": "treadmill", "warmup": "treadmill", "cooldown": "cardio",
+      "exercises": [{"movement": "treadmill_walk", "sets": 1, "duration_seconds": 900, "rest_seconds": 0}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-incline-and-bike", "title": "Incline Walking and Seated Cycling", "category": "cardio", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "Share the aerobic session between gentle-incline walking and cycling. Pause safely between machines and start pedaling easily before resuming conversational effort.",
+      "guidance": "cdc_intensity", "photo": "treadmill", "warmup": "treadmill", "cooldown": "cardio",
+      "exercises": [{"movement": "treadmill_incline", "sets": 1, "duration_seconds": 600, "rest_seconds": 120}, {"movement": "bike", "sets": 1, "duration_seconds": 600, "rest_seconds": 0}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-walk-and-row", "title": "Treadmill Walk and Rowing Combination", "category": "cardio", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "Move from upright level walking to a controlled rowing block. Begin rowing with a few gentle strokes during the transition before reaching conversational working effort.",
+      "guidance": "cdc_intensity", "photo": "row", "warmup": "treadmill", "cooldown": "cardio",
+      "exercises": [{"movement": "treadmill_walk", "sets": 1, "duration_seconds": 720, "rest_seconds": 120}, {"movement": "row", "sets": 1, "duration_seconds": 480, "rest_seconds": 0}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-chair-wall-band-whole-body", "title": "Chair, Wall and Band Whole Body", "category": "full_body", "setting": "home", "difficulty": "beginner",
+      "purpose": "Cover a chair squat, wall press, seated band pull and gentle trunk control in one introductory session. Set up the chair and band before beginning.",
+      "guidance": "nhs_strength", "photo": "bands", "warmup": "full_body", "cooldown": "full_body",
+      "exercises": [{"movement": "sit_stand", "sets": 2, "reps": "6-8", "rest_seconds": 75}, {"movement": "wall_press", "sets": 2, "reps": "6-10", "rest_seconds": 60}, {"movement": "band_row", "sets": 2, "reps": "8-10", "rest_seconds": 60}, {"movement": "dead_bug", "sets": 2, "reps": "6 each side", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-counter-and-mat-whole-body", "title": "Supported Squat, Counter Push and Mat Work", "category": "full_body", "setting": "home", "difficulty": "beginner",
+      "purpose": "Pair supported standing exercises with a bird dog and glute bridge. This bodyweight combination avoids jumping and does not need dumbbells or a band.",
+      "guidance": "nhs_strength", "photo": "push_up", "warmup": "full_body", "cooldown": "full_body",
+      "exercises": [{"movement": "mini_squat", "sets": 2, "reps": "6-10", "rest_seconds": 60}, {"movement": "incline_push", "sets": 2, "reps": "6-8", "rest_seconds": 75}, {"movement": "bird_dog", "sets": 2, "reps": "6 each side", "rest_seconds": 60}, {"movement": "bridge", "sets": 2, "reps": "8-10", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-home-dumbbell-lift-and-carry", "title": "Dumbbell Lift, Press, Row and Carry", "category": "full_body", "setting": "home", "difficulty": "beginner",
+      "purpose": "Practice lifting from raised blocks, floor pressing, supported rowing and carrying light weights. Clear the carry route and use loads that are easy to set down.",
+      "guidance": "nhs_resistance", "photo": "dumbbells", "warmup": "full_body", "cooldown": "full_body",
+      "exercises": [{"movement": "db_deadlift", "sets": 2, "reps": "8-10", "rest_seconds": 90}, {"movement": "db_floor_press", "sets": 2, "reps": "8-10", "rest_seconds": 75}, {"movement": "db_row", "sets": 2, "reps": "8 each side", "rest_seconds": 75}, {"movement": "farmer_carry", "sets": 2, "duration_seconds": 30, "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-home-bodyweight-four-patterns", "title": "Push-Ups, Lunges and Trunk Control", "category": "full_body", "setting": "home", "difficulty": "intermediate",
+      "purpose": "Combine floor pressing, alternating backward lunges, gentle prone upper-back work and a short plank. Keep each exercise as a separate controlled block, not a timed race.",
+      "guidance": "nhs_resistance", "photo": "push_up", "warmup": "full_body", "cooldown": "full_body",
+      "exercises": [{"movement": "floor_push", "sets": 3, "reps": "6-10", "rest_seconds": 90}, {"movement": "reverse_lunge", "sets": 2, "reps": "8 each side", "rest_seconds": 90}, {"movement": "prone_w", "sets": 2, "reps": "8-10", "rest_seconds": 60}, {"movement": "plank", "sets": 2, "duration_seconds": 25, "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-home-squat-overhead-and-carry", "title": "Goblet Squat, Shoulder Press and Suitcase Carry", "category": "full_body", "setting": "home", "difficulty": "intermediate",
+      "purpose": "Move through a loaded squat, back-supported overhead press, supported row and one-sided carry. The carry challenges steady posture without a heavy load.",
+      "guidance": "nhs_resistance", "photo": "squat", "warmup": "full_body", "cooldown": "full_body",
+      "exercises": [{"movement": "goblet_squat", "sets": 3, "reps": "8-10", "rest_seconds": 90}, {"movement": "db_shoulder_press", "sets": 2, "reps": "8-10", "rest_seconds": 90}, {"movement": "db_row", "sets": 2, "reps": "8 each side", "rest_seconds": 75}, {"movement": "suitcase", "sets": 2, "duration_seconds": 40, "rest_seconds": 75}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-home-step-pull-and-stability", "title": "Step, Band Pull and Whole-Body Stability", "category": "full_body", "setting": "home", "difficulty": "beginner",
+      "purpose": "Use a low step and fixed hand support for leg work, add seated band rowing, and finish with controlled opposite-limb movement on the mat.",
+      "guidance": "nhs_strength", "photo": "bands", "warmup": "full_body", "cooldown": "full_body",
+      "exercises": [{"movement": "step_up", "sets": 2, "reps": "6 each side", "rest_seconds": 75}, {"movement": "band_row", "sets": 2, "reps": "8-10", "rest_seconds": 60}, {"movement": "hip_abduction", "sets": 2, "reps": "6 each side", "rest_seconds": 60}, {"movement": "dead_bug", "sets": 2, "reps": "6 each side", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-machine-whole-body", "title": "Supported Gym Whole-Body Basics", "category": "full_body", "setting": "gym", "difficulty": "beginner",
+      "purpose": "Use supported machines for legs, chest and back, then practice a light cable anti-rotation press. Get each station fitted before starting its work sets.",
+      "guidance": "nhs_resistance", "photo": "squat", "warmup": "full_body", "cooldown": "full_body",
+      "exercises": [{"movement": "leg_press", "sets": 2, "reps": "8-12", "rest_seconds": 90}, {"movement": "machine_chest", "sets": 2, "reps": "8-12", "rest_seconds": 75}, {"movement": "pulldown", "sets": 2, "reps": "8-12", "rest_seconds": 75}, {"movement": "cable_pallof", "sets": 2, "reps": "6 each side", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-hinge-incline-row-carry", "title": "Hip Hinge, Incline Press and Carry", "category": "full_body", "setting": "gym", "difficulty": "beginner",
+      "purpose": "Combine a light dumbbell hip hinge with incline pressing, seated cable rowing and a brief two-handed carry. Adjust resistance separately for each movement.",
+      "guidance": "nhs_resistance", "photo": "dumbbells", "warmup": "full_body", "cooldown": "full_body",
+      "exercises": [{"movement": "db_rdl", "sets": 2, "reps": "8-10", "rest_seconds": 90}, {"movement": "incline_db_press", "sets": 2, "reps": "8-10", "rest_seconds": 75}, {"movement": "cable_row", "sets": 2, "reps": "8-10", "rest_seconds": 75}, {"movement": "farmer_carry", "sets": 2, "duration_seconds": 30, "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-hip-row-shoulder-brace", "title": "Hip Thrust, Supported Row and Shoulder Machine", "category": "full_body", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "Combine bodyweight bench hip thrusts with chest-supported rowing, machine overhead pressing and cable trunk bracing. Keep the bench secure and all transitions unhurried.",
+      "guidance": "nhs_resistance", "photo": "dumbbells", "warmup": "full_body", "cooldown": "full_body",
+      "exercises": [{"movement": "hip_thrust", "sets": 3, "reps": "10-12", "rest_seconds": 90}, {"movement": "chest_row", "sets": 3, "reps": "8-10", "rest_seconds": 90}, {"movement": "machine_shoulder", "sets": 2, "reps": "8-10", "rest_seconds": 90}, {"movement": "cable_pallof", "sets": 2, "reps": "8 each side", "rest_seconds": 60}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-lunge-bench-pull-side-brace", "title": "Loaded Lunge, Bench Press and Side Brace", "category": "full_body", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "Pair unilateral leg strength with flat-bench dumbbell pressing and vertical pulling, then finish with a short bent-knee side plank on each side.",
+      "guidance": "nhs_resistance", "photo": "dumbbells", "warmup": "full_body", "cooldown": "full_body",
+      "exercises": [{"movement": "db_lunge", "sets": 2, "reps": "8 each side", "rest_seconds": 90}, {"movement": "flat_db_press", "sets": 3, "reps": "8-10", "rest_seconds": 90}, {"movement": "pulldown", "sets": 3, "reps": "8-10", "rest_seconds": 90}, {"movement": "side_plank", "sets": 2, "duration_seconds": 40, "rest_seconds": 75}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-leg-press-face-pull-carry", "title": "Leg Press, Face Pull and One-Sided Carry", "category": "full_body", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "Combine supported leg pressing with light high-cable pulling, seated shoulder pressing and a balanced suitcase carry. Switch the carry hand midway through each set.",
+      "guidance": "nhs_resistance", "photo": "dumbbells", "warmup": "full_body", "cooldown": "full_body",
+      "exercises": [{"movement": "leg_press", "sets": 3, "reps": "8-12", "rest_seconds": 90}, {"movement": "face_pull", "sets": 2, "reps": "10-12", "rest_seconds": 60}, {"movement": "db_shoulder_press", "sets": 2, "reps": "8-10", "rest_seconds": 90}, {"movement": "suitcase", "sets": 2, "duration_seconds": 40, "rest_seconds": 75}]
+    },
+    {
+      "catalog_id": "ds-workout-v1-gym-five-pattern-whole-body", "title": "Five-Pattern Dumbbell and Cable Session", "category": "full_body", "setting": "gym", "difficulty": "intermediate",
+      "purpose": "A longer whole-body session covering squat, hinge, pull, press and controlled trunk movement. Work station by station with full rests rather than reserving equipment as a circuit.",
+      "guidance": "nhs_resistance", "photo": "squat", "warmup": "full_body", "cooldown": "full_body",
+      "exercises": [{"movement": "goblet_squat", "sets": 2, "reps": "8-12", "rest_seconds": 90}, {"movement": "cable_pullthrough", "sets": 2, "reps": "8-12", "rest_seconds": 90}, {"movement": "cable_row", "sets": 2, "reps": "8-12", "rest_seconds": 75}, {"movement": "incline_push", "sets": 2, "reps": "8-10", "rest_seconds": 75}, {"movement": "dead_bug", "sets": 2, "reps": "8 each side", "rest_seconds": 60}]
+    }
+  ]
+}

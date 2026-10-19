@@ -13,7 +13,7 @@ import { NutrientWeight, useMeasurementUnits } from "@/services/measurementPrefe
 import { apiFetch, savedMessage } from "@/services/api";
 import { saveProfilePreferences } from "@/services/profilePreferences";
 import { useOfflineStatus } from "@/services/offlineStore";
-import { MealLabel, MEAL_LABEL_OPTIONS, normalizeMealLabel } from "@/services/mealCategories";
+import { mealLabelOptions, normalizeMealLabel } from "@/services/mealCategories";
 import { formatMealType } from "@/features/recipes/recipeDisplay";
 import { parseNutrition } from "@/features/recipes/recipeNutrition";
 import { MacroChoice } from "./MacroChoice";
@@ -54,7 +54,7 @@ export function PremiumMacroPanel() {
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [entryName, setEntryName] = useState("");
-  const [mealLabel, setMealLabel] = useState<MealLabel>("dinner");
+  const [mealLabel, setMealLabel] = useState("dinner");
   const [entryCalories, setEntryCalories] = useState("");
   const [entryProtein, setEntryProtein] = useState("");
   const [entryCarbs, setEntryCarbs] = useState("");
@@ -403,8 +403,8 @@ function DayMacroView({
   onRefreshNutrition: () => void;
   entryName: string;
   setEntryName: (value: string) => void;
-  mealLabel: MealLabel;
-  setMealLabel: (value: MealLabel) => void;
+  mealLabel: string;
+  setMealLabel: (value: string) => void;
   entryCalories: string;
   setEntryCalories: (value: string) => void;
   entryProtein: string;
@@ -454,7 +454,7 @@ function DayMacroView({
         <Text style={styles.subsection}>{editingEntryId ? "Edit entry" : "Add macro entry"}</Text>
         <TextInput accessibilityLabel="Entry name" value={entryName} onChangeText={setEntryName} placeholder="Meal, snack, or beverage" style={styles.input} />
         <Text style={styles.fieldLabel}>Meal type</Text>
-        <MacroChoice label="Meal type" value={mealLabel} onChange={setMealLabel} options={MEAL_LABEL_OPTIONS} disabled={savePending} />
+        <MacroChoice label="Meal type" value={mealLabel} onChange={setMealLabel} options={mealLabelOptions(mealLabel)} disabled={savePending} />
         <View style={styles.grid}>
           <MacroField label="Calories"><TextInput accessibilityLabel="Calories" value={entryCalories} onChangeText={setEntryCalories} keyboardType="number-pad" placeholder="Optional" style={styles.input} /></MacroField>
           <MacroField label={`Protein (${unit})`}><WeightTextInput accessibilityLabel={`Protein ${unit === "g" ? "grams" : "ounces"}`} grams={entryProtein} onChangeGrams={setEntryProtein} unit={unit} placeholder="Optional" style={styles.input} /></MacroField>
@@ -692,7 +692,7 @@ function macroEntryPayload({
   entryNotes
 }: {
   entryName: string;
-  mealLabel: MealLabel;
+  mealLabel: string;
   selectedDate: string;
   entryCalories: string;
   entryProtein: string;

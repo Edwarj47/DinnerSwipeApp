@@ -3,6 +3,7 @@ from __future__ import annotations
 import ipaddress
 import socket
 import zlib
+from collections.abc import Collection
 from urllib.parse import urlparse
 
 import httpx
@@ -51,14 +52,27 @@ def validate_public_url(url: str) -> str:
     return str(ipaddress.ip_address(resolved[0][4][0]))
 
 
-async def fetch_public_html(url: str) -> tuple[str, str]:
+async def fetch_public_html(
+    url: str, *, allowed_hosts: Collection[str] | None = None, https_only: bool = False
+) -> tuple[str, str]:
     content, final_url, encoding = await fetch_public_bytes(
-        url, maximum=settings.max_url_response_size_bytes, kind="html"
+        url,
+        maximum=settings.max_url_response_size_bytes,
+        kind="html",
+        allowed_hosts=allowed_hosts,
+        https_only=https_only,
     )
     return content.decode(encoding or "utf-8", errors="replace"), final_url
 
 
-async def fetch_public_bytes(url: str, *, maximum: int, kind: str) -> tuple[bytes, str, str | None]:
+async def fetch_public_bytes(
+    url: str,
+    *,
+    maximum: int,
+    kind: str,
+    allowed_hosts: Collection[str] | None = None,
+    https_only: bool = False,
+) -> tuple[bytes, str, str | None]:
     limits = httpx.Limits(max_connections=4, max_keepalive_connections=0)
     async with httpx.AsyncClient(
         follow_redirects=False,
@@ -69,6 +83,13 @@ async def fetch_public_bytes(url: str, *, maximum: int, kind: str) -> tuple[byte
     ) as client:
         current = url
         for _ in range(4):
+            parsed = urlparse(current)
+            if https_only and parsed.scheme != "https":
+                raise HTTPException(400, "HTTPS is required for this source")
+            if allowed_hosts is not None and (
+                parsed.hostname not in allowed_hosts or parsed.port not in (None, 443)
+            ):
+                raise HTTPException(400, "Source host is not permitted")
             address = await run_in_threadpool(validate_public_url, current)
             original = httpx.URL(current)
             # Connect to the validated address, but verify TLS against the original

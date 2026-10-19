@@ -119,11 +119,14 @@ def referenced(db: Session, media: MediaObject) -> bool:
 
 
 def render_snapshot(db: Session, user: User, snapshot: dict[str, Any]) -> dict[str, Any]:
+    from app.services.photo_credit import sanitized_photo_credit
     from app.services.private_media import object_url, photo_url, source_for
 
     result = deepcopy(snapshot)
     result["photo_url"] = brand_photo()
     result["photo_reference"] = None
+    if "photo_credit" in snapshot:
+        result["photo_credit"] = None
     source = snapshot.get("photo_reference") or snapshot.get("photo_url")
     media_id = object_id(source) if isinstance(source, str) else None
     if not media_id:
@@ -137,4 +140,6 @@ def render_snapshot(db: Session, user: User, snapshot: dict[str, Any]) -> dict[s
     reference = object_url(media_id)
     result["photo_reference"] = reference
     result["photo_url"] = photo_url(db, user, "objects", media_id, reference) or brand_photo()
+    if "photo_credit" in snapshot:
+        result["photo_credit"] = sanitized_photo_credit(snapshot["photo_credit"])
     return result

@@ -6,6 +6,7 @@ from app.api.routes import (
     ai_recipes,
     auth,
     brand,
+    content_automation,
     grocery,
     group_planning,
     groups,
@@ -44,3 +45,4 @@ api_router.include_router(nutrition.router)
 api_router.include_router(meal_assistant.router)
 api_router.include_router(workouts.router)
 api_router.include_router(media.router)
+api_router.include_router(content_automation.router)

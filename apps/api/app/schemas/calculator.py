@@ -4,8 +4,9 @@ from datetime import date
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from app.core.meal_categories import normalize_beverage_category
 from app.schemas.common import RecipeNutrition
 
 
@@ -41,12 +42,17 @@ class CalculatorPreview(BaseModel):
 class CalculatorSave(BaseModel):
     model_config = ConfigDict(extra="forbid")
     name: str = Field(min_length=2, max_length=160)
-    meal_label: Literal["breakfast", "lunch", "dinner", "snack", "beverage"] = "dinner"
+    meal_label: str = Field(default="dinner", min_length=1, max_length=32)
     meal_date: date
     servings: int = Field(default=1, ge=1, le=30)
     destination: Literal["entry", "recipe"]
     items: list[CalculatorItem] = Field(min_length=1, max_length=30)
     request_id: UUID
+
+    @field_validator("meal_label", mode="before")
+    @classmethod
+    def clean_meal_label(cls, value: object) -> object:
+        return normalize_beverage_category(value.strip()) if isinstance(value, str) else value
 
     @model_validator(mode="after")
     def clean_name(self) -> CalculatorSave:

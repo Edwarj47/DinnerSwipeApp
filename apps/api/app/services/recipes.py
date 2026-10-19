@@ -37,6 +37,7 @@ from app.services.pantry import (
     update_manual_pantry,
 )
 from app.services.parsing import normalize_name, parse_ingredients, recipe_hash
+from app.services.photo_credit import recipe_photo_credit
 from app.services.private_media import canonical_photo, photo_url
 from app.services.retailers import WalmartSearchLinkAdapter
 from app.services.validation import validate_recipe_payload
@@ -142,6 +143,7 @@ def serialize_recipe(
         "photo_url": photo_url(db, user, "recipes", recipe.id, recipe.photo_url)
         if db and user_id and user
         else None,
+        "photo_credit": recipe_photo_credit(db, recipe),
         "servings": recipe.servings,
         "prep_minutes": recipe.prep_minutes,
         "cook_minutes": recipe.cook_minutes,
@@ -595,6 +597,7 @@ def serialize_plan(db: Session, plan: WeeklyPlan) -> dict[str, Any]:
             return {
                 "recipe_name": None,
                 "recipe_photo_url": None,
+                "recipe_photo_credit": None,
                 "recipe_total_minutes": None,
                 "recipe_difficulty": None,
             }
@@ -604,6 +607,7 @@ def serialize_plan(db: Session, plan: WeeklyPlan) -> dict[str, Any]:
             "recipe_photo_url": photo_url(db, viewer, "recipes", recipe.id, recipe.photo_url)
             if recipe and viewer
             else None,
+            "recipe_photo_credit": recipe_photo_credit(db, recipe) if recipe and viewer else None,
             "recipe_total_minutes": recipe_total_minutes(recipe) if recipe else None,
             "recipe_difficulty": recipe.difficulty if recipe else None,
         }

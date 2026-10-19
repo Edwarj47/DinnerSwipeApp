@@ -11,7 +11,7 @@ const request = jest.mocked(apiFetch);
 test("targets stay collapsed and preserve grams, goal and the existing endpoint", async () => {
   request.mockImplementation(async (path, init) => path === "/api/v1/profile" ? { notification_preferences: { protein_unit: "oz" } } :
     init?.method === "PUT" ? JSON.parse(String(init.body)) : { daily_calories: 2000, daily_protein_g: 180, goal: "My goal" });
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } });
   const screen = render(<QueryClientProvider client={client}><SettingsSection title="Macro targets" icon="flag-outline"><MacroTargetSettings /></SettingsSection></QueryClientProvider>);
   try {
     expect(screen.queryByLabelText("Daily calories target")).toBeNull();

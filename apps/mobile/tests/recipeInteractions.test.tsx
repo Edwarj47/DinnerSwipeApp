@@ -1,11 +1,13 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { UrlIngestionPanel } from "@/features/ingestion/UrlIngestionPanel";
+import * as buttons from "@/components/Button";
 import { ManualRecipePanel } from "@/features/recipes/ManualRecipePanel";
 import { RecipeDetailSheet } from "@/features/recipes/RecipeDetailSheet";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
-import { StyleSheet } from "react-native";
+import { usePlannerStore } from "@/stores/plannerStore";
+import { Platform, Pressable, StyleSheet } from "react-native";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-image", () => ({ Image: () => null }));
@@ -89,6 +91,89 @@ test("ingredient weights show an optional equivalent without rewriting preparati
     expect(screen.getByText("3.527 oz")).toBeTruthy();
     expect(request).not.toHaveBeenCalled();
   } finally { screen.close(); }
+});
+
+test("ingredient checkboxes toggle independently with stable targets and no persistent side effects", () => {
+  const duplicate = { ...recipe, ingredients: [recipe.ingredients[0], { ...recipe.ingredients[0] }] };
+  const original = JSON.stringify(duplicate);
+  const planner = usePlannerStore.getState();
+  const onAction = jest.fn(), onUpdated = jest.fn();
+  const screen = mount(<RecipeDetailSheet recipe={duplicate} visible onClose={jest.fn()} onAction={onAction} onUpdated={onUpdated} />);
+  try {
+    const boxes = () => screen.getAllByRole("checkbox", { name: "2 carrots" });
+    const webBoxes = () => screen.UNSAFE_getAllByType(Pressable).filter(box => box.props.accessibilityRole === "checkbox");
+    const targetStyle = StyleSheet.flatten(boxes()[0].props.style);
+    expect(targetStyle.minHeight).toBeGreaterThanOrEqual(44);
+    expect(boxes().map(box => box.props.accessibilityState.checked)).toEqual([false, false]);
+    expect(webBoxes().map(box => box.props["aria-checked"])).toEqual([false, false]);
+    fireEvent.press(boxes()[0]);
+    expect(boxes().map(box => box.props.accessibilityState.checked)).toEqual([true, false]);
+    expect(webBoxes().map(box => box.props["aria-checked"])).toEqual([true, false]);
+    expect(StyleSheet.flatten(boxes()[0].props.style)).toEqual(targetStyle);
+    fireEvent.press(boxes()[1]);
+    fireEvent.press(boxes()[0]);
+    expect(boxes().map(box => box.props.accessibilityState.checked)).toEqual([false, true]);
+    expect(request).not.toHaveBeenCalled();
+    expect(onAction).not.toHaveBeenCalled();
+    expect(onUpdated).not.toHaveBeenCalled();
+    expect(usePlannerStore.getState()).toBe(planner);
+    expect(JSON.stringify(duplicate)).toBe(original);
+  } finally { screen.close(); }
+});
+
+test("web ingredient checkboxes toggle on Space without scrolling or repeating", () => {
+  const platform = Object.getOwnPropertyDescriptor(Platform, "OS")!;
+  Object.defineProperty(Platform, "OS", { configurable: true, value: "web" });
+  const button = jest.spyOn(buttons, "Button").mockReturnValue(<></>);
+  let screen: ReturnType<typeof mount> | undefined;
+  try {
+    screen = mount(<RecipeDetailSheet recipe={recipe} visible onClose={jest.fn()} />);
+    const box = () => screen!.getByRole("checkbox", { name: "2 carrots" });
+    const webBox = () => screen!.UNSAFE_getAllByType(Pressable).find(box => box.props.accessibilityRole === "checkbox")!;
+    const preventDefault = jest.fn();
+    fireEvent(box(), "keyDown", { key: " ", repeat: false, preventDefault });
+    expect(preventDefault).toHaveBeenCalledTimes(1);
+    expect(webBox().props["aria-checked"]).toBe(true);
+    fireEvent(box(), "keyDown", { key: " ", repeat: true, preventDefault });
+    expect(webBox().props["aria-checked"]).toBe(true);
+    fireEvent(box(), "keyDown", { key: "Enter", repeat: false, preventDefault });
+    expect(webBox().props["aria-checked"]).toBe(true);
+    fireEvent(box(), "keyDown", { key: " ", repeat: false, preventDefault });
+    expect(webBox().props["aria-checked"]).toBe(false);
+    expect(request).not.toHaveBeenCalled();
+  } finally { screen?.close(); button.mockRestore(); Object.defineProperty(Platform, "OS", platform); }
+});
+
+test("ingredient checks survive rerenders but reset after closing, switching recipes or unmounting", () => {
+  const onClose = jest.fn();
+  const sheet = (item: Recipe | null, visible = true) => <RecipeDetailSheet recipe={item} visible={visible} onClose={onClose} />;
+  const screen = mount(sheet(recipe));
+  try {
+    fireEvent.press(screen.getByRole("checkbox", { name: "2 carrots" }));
+    screen.rerenderElement(sheet({ ...recipe }));
+    expect(screen.getByRole("checkbox").props.accessibilityState.checked).toBe(true);
+    fireEvent.press(screen.getByLabelText("Close recipe details"));
+    expect(onClose).toHaveBeenCalledTimes(1);
+    screen.rerenderElement(sheet(recipe, false));
+    screen.rerenderElement(sheet(recipe));
+    expect(screen.getByRole("checkbox").props.accessibilityState.checked).toBe(false);
+    fireEvent.press(screen.getByRole("checkbox"));
+    screen.rerenderElement(sheet({ ...recipe, id: "other-recipe" }));
+    expect(screen.getByRole("checkbox").props.accessibilityState.checked).toBe(false);
+    fireEvent.press(screen.getByRole("checkbox"));
+    screen.rerenderElement(sheet(recipe));
+    expect(screen.getByRole("checkbox").props.accessibilityState.checked).toBe(false);
+    fireEvent.press(screen.getByRole("checkbox"));
+    screen.rerenderElement(sheet(null, false));
+    screen.rerenderElement(sheet(recipe));
+    expect(screen.getByRole("checkbox").props.accessibilityState.checked).toBe(false);
+    fireEvent.press(screen.getByRole("checkbox"));
+  } finally { screen.close(); }
+  const reopened = mount(sheet(recipe));
+  try {
+    expect(reopened.getByRole("checkbox").props.accessibilityState.checked).toBe(false);
+    expect(request).not.toHaveBeenCalled();
+  } finally { reopened.close(); }
 });
 
 test("closing an in-flight edit does not reopen the recipe when saving finishes", async () => {

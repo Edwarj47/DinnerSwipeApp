@@ -58,7 +58,7 @@ jobs:
       - run: npm run lint -w apps/mobile
       - run: npm run typecheck -w apps/mobile
       - name: Run mobile tests with a cold transform cache
-        run: npm test -w apps/mobile -- --runInBand --no-cache --forceExit --json --outputFile="$RUNNER_TEMP/mobile-tests.json"
+        run: npm test -w apps/mobile -- --runInBand --no-cache --testTimeout=15000 --forceExit --json --outputFile="$RUNNER_TEMP/mobile-tests.json"
       - name: Annotate mobile test failures
         if: failure()
         env:

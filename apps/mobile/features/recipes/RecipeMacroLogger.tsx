@@ -13,7 +13,7 @@ import { isISODate, todayISO } from "@/features/premium/macroDates";
 import { Calculation } from "@/features/premium/calculator";
 import { apiFetch } from "@/services/api";
 import { useOfflineStatus } from "@/services/offlineStore";
-import { MEAL_LABEL_OPTIONS, normalizeMealLabel } from "@/services/mealCategories";
+import { mealLabelOptions, normalizeMealLabel } from "@/services/mealCategories";
 import { MacroConfirmation, Recipe } from "@/services/types";
 import { NutritionFields } from "./NutritionFields";
 import { nutritionInputs, parseNutrition, scaleNutritionInputs } from "./recipeNutrition";
@@ -129,7 +129,7 @@ export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayIS
         </> : <>
           <Text style={styles.name}>{entry?.entry_name ?? entry?.recipe_name ?? recipe?.name}</Text>
           <View style={styles.header}><TextInput accessibilityLabel="Recipe log date" value={mealDate} onChangeText={setMealDate} style={[styles.input, styles.flexInput]} /><MacroDatePicker value={mealDate} onChange={setMealDate} /></View>
-          <SegmentedControl accessibilityLabel="Logged meal" wrap value={label} onChange={setLabel} options={MEAL_LABEL_OPTIONS} />
+          <SegmentedControl accessibilityLabel="Logged meal" wrap value={label} onChange={setLabel} options={mealLabelOptions(label)} />
           <Text style={styles.name}>Servings eaten</Text>
           <View style={styles.header}>
             <Button label="" accessibilityLabel="Half serving less" icon="remove" disabled={Number(portions) <= 0.5} onPress={() => changePortions(String(Math.max(0.5, Number(portions) - 0.5)))} />

@@ -14,6 +14,7 @@ from app.services.private_media import LOCAL_KEY, object_url
 
 
 def referenced(db: Session, media: MediaObject) -> bool:
+    from app.models.content_automation import ContentCandidate
     from app.services.workout_media import referenced as workout_referenced
 
     prefixes = [
@@ -30,6 +31,15 @@ def referenced(db: Session, media: MediaObject) -> bool:
                     for prefix in prefixes
                 ]
             )
+        )
+        .limit(1)
+    ):
+        return True
+    if db.scalar(
+        select(ContentCandidate.id)
+        .where(
+            ContentCandidate.status == "pending",
+            ContentCandidate.payload["photo_url"].as_string().in_(prefixes),
         )
         .limit(1)
     ):

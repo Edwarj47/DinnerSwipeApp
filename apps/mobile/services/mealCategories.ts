@@ -19,9 +19,15 @@ export function normalizeRecipeCategory(value: string | null | undefined): strin
   return RECIPE_CATEGORY_OPTIONS.some(option => option.value === key) ? key : text;
 }
 
-export function normalizeMealLabel(value: string | null | undefined): MealLabel {
-  const category = normalizeRecipeCategory(value);
-  return MEAL_LABEL_OPTIONS.find(option => option.value === category)?.value ?? "dinner";
+export function normalizeMealLabel(value: string | null | undefined): string {
+  return normalizeRecipeCategory(value);
+}
+
+export function mealLabelOptions(value: string): { label: string; value: string }[] {
+  return MEAL_LABEL_OPTIONS.some(option => option.value === value)
+    ? MEAL_LABEL_OPTIONS : [...MEAL_LABEL_OPTIONS, {
+      label: value.replaceAll("_", " ").replace(/\b\w/g, letter => letter.toUpperCase()), value
+    }];
 }
 
 export function recipeCategoryOptions(value: string) {

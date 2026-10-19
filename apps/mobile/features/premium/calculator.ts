@@ -1,5 +1,4 @@
 import { RecipeNutrition } from "@/services/types";
-import { MealLabel } from "@/services/mealCategories";
 import { NUTRIENTS } from "@/features/recipes/recipeNutrition";
 
 export type CalculatorItem = {
@@ -9,7 +8,7 @@ export type CalculatorItem = {
 export type CalculatorRow = CalculatorItem & { key: string; values: RecipeNutrition; expires?: number; servingLabel?: string; foodLabel?: string };
 export type Calculation = {
   id: string; recipe_id?: string | null; entry_id?: string | null; name: string;
-  meal_label: MealLabel; meal_date?: string | null; servings: number; items: CalculatorItem[];
+  meal_label: string; meal_date?: string | null; servings: number; items: CalculatorItem[];
   resolved_items: RecipeNutrition[]; totals: RecipeNutrition;
   serving_labels?: (string | null)[];
   temporary_nutrition: boolean; nutrition_unavailable: boolean;

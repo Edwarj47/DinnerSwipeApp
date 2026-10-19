@@ -46,7 +46,7 @@ async def describe(
 def get_draft(db: DbDep, user: BasicUser, request_id: UUID, response: Response) -> dict[str, Any]:
     meal_assistant.require_assistant(db, user)
     response.headers["Cache-Control"] = "no-store"
-    auth_rate_limiter.check(f"nutrition:lookup:{user.id}", 20, 60)
+    auth_rate_limiter.check(f"nutrition:draft:read:{user.id}", 20, 60)
     return meal_assistant.draft_view(db, meal_assistant.owned_job(db, user, str(request_id)))
 
 

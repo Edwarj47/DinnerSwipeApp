@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import ipaddress
+import math
 import time
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -38,8 +39,8 @@ class DatabaseRateLimiter:
                     hashlib.sha256,
                 ).hexdigest()
                 reset = datetime.fromtimestamp((bucket + 1) * window, UTC).replace(tzinfo=None)
-                reservations.append((digest, limit, reset))
-            for digest, limit, reset in sorted(reservations):
+                reservations.append((digest, limit, reset, key))
+            for digest, limit, reset, key in sorted(reservations):
                 db.execute(
                     insert(RateLimitCounter)
                     .values(key=digest, count=0, reset_at=reset)
@@ -49,13 +50,22 @@ class DatabaseRateLimiter:
                     select(RateLimitCounter).where(RateLimitCounter.key == digest).with_for_update()
                 ).one()
                 if counter.count >= limit:
+                    retry_seconds = max(1, math.ceil(reset.replace(tzinfo=UTC).timestamp() - now))
+                    message = "Too many attempts. Please wait and try again."
+                    if key.startswith("nutrition:lookup:"):
+                        message = "Nutrition database lookup limit reached. Please wait and retry."
+                    elif key.startswith("nutrition:"):
+                        message = "Nutrition request limit reached. Please wait and try again."
                     raise HTTPException(
                         429,
-                        "Too many attempts. Please wait and try again.",
+                        {
+                            "code": "rate_limit",
+                            "message": message,
+                            "retry_after_seconds": retry_seconds,
+                        },
                         headers={
-                            "Retry-After": str(
-                                max(1, int((reset - datetime.utcnow()).total_seconds()))
-                            )
+                            "Retry-After": str(retry_seconds),
+                            "Cache-Control": "no-store",
                         },
                     )
                 counter.count += 1

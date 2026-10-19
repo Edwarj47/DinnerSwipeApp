@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import {
   Linking,
   Modal,
   PanResponder,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -13,6 +14,7 @@ import {
 } from "react-native";
 
 import { Button } from "@/components/Button";
+import { PhotoCredit } from "@/components/PhotoCredit";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors, shadow } from "@/components/theme";
 import { formatDifficulty, formatMealType, formatSourceType } from "@/features/recipes/recipeDisplay";
@@ -42,11 +44,20 @@ export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, on
   const [savedRecipe, setSavedRecipe] = useState<{ sourceId: string; recipe: Recipe } | null>(null);
   const recipe = savedRecipe && savedRecipe.sourceId === originalRecipe?.id ? savedRecipe.recipe : originalRecipe;
   const [editing, setEditing] = useState(false);
+  const [checkedIngredients, setCheckedIngredients] = useState<Set<number>>(() => new Set());
   const [status, setStatus] = useTransientMessage();
   const current = useRef({ visible, id: originalRecipe?.id });
   current.current = { visible, id: originalRecipe?.id };
   useEffect(() => { setEditing(false); setSavedRecipe(null); }, [originalRecipe?.id, visible]);
+  useEffect(() => { setCheckedIngredients(new Set()); }, [originalRecipe?.id, visible]);
   useEffect(() => { if (!visible) setStatus(""); }, [visible, setStatus]);
+  function toggleIngredient(index: number) {
+    setCheckedIngredients(current => {
+      const next = new Set(current);
+      if (next.has(index)) next.delete(index); else next.add(index);
+      return next;
+    });
+  }
   function applyUpdated(updated: Recipe) {
     if (!current.current.visible || current.current.id !== originalRecipe?.id) return false;
     if (originalRecipe) setSavedRecipe({ sourceId: originalRecipe.id, recipe: updated });
@@ -127,6 +138,7 @@ export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, on
               }} />
             </> : <>
             <RecipePhotoEditor key={`photo-${recipe.id}`} recipe={recipe} onUpdated={applyUpdated} />
+            <PhotoCredit key={`photo-credit-${recipe.id}`} credit={recipe.photo_credit} />
             <View style={styles.titleRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.kicker}>{formatMealType(recipe.meal_type)} • {formatSourceType(recipe.source_type)}</Text>
@@ -191,12 +203,23 @@ export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, on
             <RecipeSection title="Ingredients">
               {recipe.ingredients.map((item, index) => {
                 const equivalent = ingredientWeightNote(item.quantity, item.unit, weightUnit);
+                const checked = checkedIngredients.has(index);
                 return (
-                <View key={`${item.original_text}-${index}`} style={styles.ingredientRow}>
-                  <View style={styles.check} />
-                  <View style={{ flex: 1, gap: 4 }}><Text style={[styles.rowText, { flex: 0 }]}>{item.original_text}</Text>
+                <Pressable key={`${item.original_text}-${index}`} style={styles.ingredientRow}
+                  accessibilityRole="checkbox" accessibilityLabel={item.original_text} accessibilityState={{ checked }} aria-checked={checked}
+                  onPress={() => toggleIngredient(index)}
+                  {...(Platform.OS === "web" ? { onKeyDown: (event: KeyboardEvent) => {
+                    if (event.key === " ") {
+                      event.preventDefault();
+                      if (!event.repeat) toggleIngredient(index);
+                    }
+                  } } : {})}>
+                  <View style={[styles.check, checked && styles.checked]}>
+                    {checked ? <Ionicons name="checkmark" size={16} color="#fff" /> : null}
+                  </View>
+                  <View style={{ flex: 1, gap: 4 }}><Text style={[styles.rowText, { flex: 0 }, checked && styles.checkedText]}>{item.original_text}</Text>
                     {equivalent ? <Text style={styles.ingredientEquivalent}>{equivalent}</Text> : null}</View>
-                </View>
+                </Pressable>
                 );
               })}
             </RecipeSection>
@@ -326,8 +349,10 @@ const styles = StyleSheet.create({
   voteActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   section: { borderTopColor: Colors.border, borderTopWidth: 1, paddingTop: 16, gap: 8 },
   sectionTitle: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
-  ingredientRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
-  check: { width: 22, height: 22, borderRadius: 6, borderColor: Colors.border, borderWidth: 2, marginTop: 1 },
+  ingredientRow: { flexDirection: "row", gap: 10, alignItems: "center", minHeight: 44, paddingVertical: 6 },
+  check: { width: 22, height: 22, flexShrink: 0, borderRadius: 6, borderColor: Colors.border, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  checked: { backgroundColor: Colors.basil, borderColor: Colors.basil },
+  checkedText: { textDecorationLine: "line-through", color: Colors.muted },
   stepRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
   stepBadge: { minWidth: 32, minHeight: 32, borderRadius: 8, backgroundColor: Colors.softRed, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, paddingVertical: 4, flexShrink: 0 },
   stepNumber: { color: Colors.tomato, fontWeight: "900", fontSize: 14, textAlign: "center", includeFontPadding: false },

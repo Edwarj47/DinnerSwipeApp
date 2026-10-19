@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import time
 from datetime import date
 from uuid import uuid4
 
@@ -10,6 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.rate_limit import auth_rate_limiter
 from app.core.security import create_access_token
 from app.models.entities import (
     Household,
@@ -22,7 +24,7 @@ from app.models.entities import (
     UserProfile,
     UserSubscription,
 )
-from app.models.nutrition import NutritionCalculation, NutritionUsage
+from app.models.nutrition import NutritionCalculation, NutritionCall, NutritionUsage
 from app.services import calculator
 from app.services.billing import PREMIUM_PLAN_KEY
 from app.services.fatsecret import FatSecretClient
@@ -97,6 +99,55 @@ def test_manual_stack_recipe_entry_and_idempotency(
     result = client.post("/api/v1/nutrition/calculations", json=body, headers=premium)
     entry = db_session.get(MealMacroConfirmation, result.json()["entry_id"])
     assert entry and entry.calories == 200
+
+
+def test_manual_preview_and_calculation_read_do_not_spend_lookup_allowance(
+    client: TestClient,
+    db_session: Session,
+    premium: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(time, "time", lambda: 120.1)
+    body = payload()
+    saved = client.post("/api/v1/nutrition/calculations", headers=premium, json=body)
+    assert saved.status_code == 200, saved.text
+    user = db_session.scalar(select(User))
+    assert user
+    for _ in range(20):
+        auth_rate_limiter.check(f"nutrition:lookup:{user.id}", 20, 60)
+    assert client.get("/api/v1/nutrition/foods/42", headers=premium).status_code == 429
+    preview = client.post(
+        "/api/v1/nutrition/calculations/preview", headers=premium, json={"items": body["items"]}
+    )
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["resolved_items"][0]["calories"] == 100
+    read = client.get(f"/api/v1/nutrition/calculations/{saved.json()['id']}", headers=premium)
+    assert read.status_code == 200 and read.json()["totals"]["calories"] == 200
+    assert db_session.scalar(select(NutritionCall)) is None
+
+
+def test_preview_and_calculation_reads_have_a_separate_bounded_bucket(
+    client: TestClient,
+    db_session: Session,
+    premium: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(time, "time", lambda: 120.1)
+    body = payload()
+    saved = client.post("/api/v1/nutrition/calculations", headers=premium, json=body)
+    assert saved.status_code == 200, saved.text
+    for _ in range(20):
+        preview = client.post(
+            "/api/v1/nutrition/calculations/preview",
+            headers=premium,
+            json={"items": body["items"]},
+        )
+        assert preview.status_code == 200, preview.text
+    read = client.get(f"/api/v1/nutrition/calculations/{saved.json()['id']}", headers=premium)
+    assert read.status_code == 429 and read.json()["detail"]["code"] == "rate_limit"
+    assert read.headers["retry-after"] == "60"
+    assert db_session.scalar(select(NutritionCall)) is None
+    assert client.get("/api/v1/nutrition/foods/42", headers=premium).status_code == 200
 
 
 def test_database_values_never_persist_and_logging_scales(

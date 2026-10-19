@@ -29,6 +29,7 @@ from app.models.workouts import (
 from app.schemas.workouts import LogInput, PlanningSettingsInput, SlotUpdateInput, TemplateInput
 from app.services import group_planning, planning
 from app.services.billing import is_basic_access_active
+from app.services.photo_credit import photo_credit_for
 from app.services.workout_media import canonical_photo, render_snapshot
 
 MAX_WEEKLY_SLOTS = 100
@@ -127,7 +128,11 @@ def brand_photo() -> str:
 
 
 def serialize_template(
-    template: WorkoutTemplate, *, shared: bool = False, discover_enabled: bool = True
+    template: WorkoutTemplate,
+    *,
+    shared: bool = False,
+    discover_enabled: bool = True,
+    db: Session | None = None,
 ) -> dict[str, Any]:
     result = {
         "id": template.id,
@@ -135,6 +140,13 @@ def serialize_template(
         "category": template.category,
         "photo_url": template.photo_url or brand_photo(),
         "photo_reference": template.photo_url,
+        "photo_credit": photo_credit_for(
+            db,
+            owner_id=template.owner_id,
+            kind="workout",
+            target_id=template.id,
+            photo_url=template.photo_url,
+        ),
         "description": template.description,
         "exercises": deepcopy(template.exercises),
         "owner_id": template.owner_id,
@@ -156,7 +168,7 @@ def routine_revision(snapshot: dict[str, Any]) -> str:
 
 
 def render_template(db: Session, user: User, template: WorkoutTemplate) -> dict[str, Any]:
-    return render_snapshot(db, user, serialize_template(template))
+    return render_snapshot(db, user, serialize_template(template, db=db))
 
 
 def shared_snapshot(share: WorkoutTemplateShare) -> dict[str, Any]:
@@ -167,7 +179,7 @@ def routine_snapshot(
     db: Session, template: WorkoutTemplate, household_id: str | None
 ) -> dict[str, Any]:
     if not household_id:
-        return serialize_template(template)
+        return serialize_template(template, db=db)
     share = db.scalar(
         select(WorkoutTemplateShare).where(
             WorkoutTemplateShare.household_id == household_id,
@@ -221,7 +233,7 @@ def templates(
             render_snapshot(
                 db,
                 user,
-                shared_snapshot(shares[row.id]) if household_id else serialize_template(row),
+                shared_snapshot(shares[row.id]) if household_id else serialize_template(row, db=db),
             )
             for row in rows
         ],
@@ -282,7 +294,9 @@ def share_templates(db: Session, user: User, household_id: str, template_ids: li
         )
     }
     for template_id in sorted(ids):
-        snapshot = serialize_template(owned[template_id], shared=True, discover_enabled=False)
+        snapshot = serialize_template(
+            owned[template_id], shared=True, discover_enabled=False, db=db
+        )
         if template_id not in existing:
             db.add(
                 WorkoutTemplateShare(
@@ -855,7 +869,7 @@ def log_template(
         return routine_snapshot(db, template, household_id)
     owner_id = db.scalar(select(WorkoutTemplate.owner_id).where(WorkoutTemplate.id == template_id))
     if owner_id == user.id:
-        return serialize_template(require_template(db, user, template_id, None))
+        return serialize_template(require_template(db, user, template_id, None), db=db)
     if owner_id:
         household_id = db.scalar(
             select(WorkoutTemplateShare.household_id)

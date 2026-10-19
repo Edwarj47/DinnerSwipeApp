@@ -14,6 +14,7 @@ import Animated, {
 } from "react-native-reanimated";
 
 import { Colors, shadow } from "@/components/theme";
+import { PhotoCredit } from "@/components/PhotoCredit";
 import { formatDifficulty, formatMealType, formatSourceType } from "@/features/recipes/recipeDisplay";
 import { Recipe } from "@/services/types";
 import { MealAction, swipeActionForOffset } from "./mealSwipe";
@@ -129,6 +130,7 @@ export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ re
             </Text>
           </View>
         </Pressable>
+        {recipe.photo_credit ? <View style={styles.photoCredit}><PhotoCredit credit={recipe.photo_credit} onDetails={onOpen} /></View> : null}
         <Animated.View pointerEvents="none" style={[styles.swipeBadge, styles.planBadge, planIndicator]}>
           <Text style={[styles.swipeBadgeText, styles.planBadgeText]}>{proposing ? "PROPOSE" : "PLAN"}</Text>
           <Text style={styles.swipeHint}>{proposing ? "Ask the group" : "Add to week"}</Text>
@@ -153,6 +155,7 @@ export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ re
 const styles = StyleSheet.create({
   card: { backgroundColor: Colors.surface, borderRadius: 8, overflow: "hidden", ...shadow },
   image: { width: "100%", backgroundColor: Colors.border },
+  photoCredit: { position: "absolute", top: 8, right: 8 },
   body: { padding: 14, gap: 8 },
   header: { flexDirection: "row", justifyContent: "space-between", gap: 10, alignItems: "flex-start" },
   title: { color: Colors.ink, fontSize: 24, lineHeight: 29, fontWeight: "800", flex: 1, minWidth: 0 },

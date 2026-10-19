@@ -9,7 +9,7 @@ jest.mock("@expo/vector-icons", () => ({ Ionicons: jest.requireActual("react-nat
 jest.mock("@/features/workouts/api", () => ({ ...jest.requireActual("@/features/workouts/api"), getWorkoutTemplates: jest.fn(), getWorkoutPlan: jest.fn(), getWorkoutProposals: jest.fn(), workoutWrite: jest.fn() }));
 jest.mock("@/features/workouts/ui", () => ({ ...jest.requireActual("@/features/workouts/ui"), WorkoutPhoto: () => null }));
 const template = { id: "mine", title: "My Squat", category: "lower" as const, owner_id: "a", exercises: [{ name: "Squat" }], discover_enabled: true };
-function mount(role = "owner") { const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } }); const screen = render(<QueryClientProvider client={client}><WorkoutGroupPanel groupId="team" role={role} /></QueryClientProvider>); return { ...screen, close: () => { screen.unmount(); client.clear(); } }; }
+function mount(role = "owner") { const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } }); const screen = render(<QueryClientProvider client={client}><WorkoutGroupPanel groupId="team" role={role} /></QueryClientProvider>); return { ...screen, close: () => { screen.unmount(); client.clear(); } }; }
 beforeEach(() => {
   jest.clearAllMocks(); setOfflineOwner("a"); resetWorkoutMode("a"); useWorkoutMode.setState({ enabled: true, mode: "workouts" });
   jest.mocked(getWorkoutTemplates).mockResolvedValue({ items: [template], total: 1 }); jest.mocked(getWorkoutProposals).mockResolvedValue({ items: [{ id: "proposal", template_id: "mine", snapshot: template, status: "pending" }] });

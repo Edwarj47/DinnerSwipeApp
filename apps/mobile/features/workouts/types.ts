@@ -1,7 +1,10 @@
+import type { PhotoCredit } from "@/services/photoCredit";
+
 export type WorkoutCategory = "upper" | "lower" | "cardio" | "full_body";
 export type WorkoutExercise = { name: string; sets?: number; reps?: string; duration_seconds?: number };
 export type WorkoutTemplate = {
   id: string; title: string; category: WorkoutCategory; photo_url?: string | null; photo_reference?: string | null; description?: string;
+  photo_credit?: PhotoCredit | null;
   exercises: WorkoutExercise[]; owner_id: string; shared?: boolean; discover_enabled?: boolean;
   revision?: string;
 };

@@ -1,3 +1,5 @@
+import type { PhotoCredit } from "./photoCredit";
+
 export type Ingredient = {
   original_text: string;
   normalized_name: string;
@@ -32,6 +34,7 @@ export type Recipe = {
   name: string;
   description?: string | null;
   photo_url?: string | null;
+  photo_credit?: PhotoCredit | null;
   servings: number;
   prep_minutes?: number | null;
   cook_minutes?: number | null;

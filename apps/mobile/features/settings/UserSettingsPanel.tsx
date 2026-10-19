@@ -23,8 +23,9 @@ import { SettingsSection } from "./SettingsSection";
 import { DiscoverSettings } from "@/features/discover/DiscoverSettings";
 import { WorkoutSettings } from "@/features/workouts/WorkoutSettings";
 import { useWorkoutMode } from "@/services/workoutMode";
+import { DailyAdditionsSection } from "@/features/contentAutomation/DailyAdditionsSection";
 
-type UserSection = "account" | "meals" | "macros" | "discover" | "workouts";
+type UserSection = "account" | "meals" | "macros" | "discover" | "workouts" | "daily-additions";
 type AccountAction = "overview" | "reset" | "data" | "delete";
 type GroceryRetailer = UserProfile["preferred_grocery_retailer"];
 
@@ -407,6 +408,7 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
         </View></TourTarget>
       </SettingsSection>
       <SettingsSection title="Discover" icon="options-outline" expanded={section === "discover"} onToggle={() => setSection(section === "discover" ? null : "discover")}><DiscoverSettings /></SettingsSection>
+      <DailyAdditionsSection expanded={section === "daily-additions"} onToggle={() => setSection(section === "daily-additions" ? null : "daily-additions")} />
       {workoutsEnabled ? <SettingsSection title="Workout settings" icon="barbell-outline" expanded={section === "workouts"} onToggle={() => setSection(section === "workouts" ? null : "workouts")}><WorkoutSettings /></SettingsSection> : null}
       {premiumActive ? <SettingsSection title="Macro settings" icon="speedometer-outline" expanded={section === "macros"} onToggle={() => setSection(section === "macros" ? null : "macros")}>
         <SettingsSection title="Macro targets" icon="flag-outline"><MacroTargetSettings /></SettingsSection>

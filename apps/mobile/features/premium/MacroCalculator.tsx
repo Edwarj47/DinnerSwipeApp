@@ -10,7 +10,7 @@ import { NutritionFields } from "@/features/recipes/NutritionFields";
 import { EMPTY_NUTRITION, NUTRIENTS, nutritionInputs, parseNutrition } from "@/features/recipes/recipeNutrition";
 import { apiFetch } from "@/services/api";
 import { useOfflineStatus } from "@/services/offlineStore";
-import { MEAL_LABEL_OPTIONS, MealLabel } from "@/services/mealCategories";
+import { mealLabelOptions, normalizeMealLabel } from "@/services/mealCategories";
 import { useMeasurementUnits } from "@/services/measurementPreferences";
 import { convertWeight, formatWeight } from "@/services/weightUnits";
 import { RecipeNutrition } from "@/services/types";
@@ -19,12 +19,14 @@ import { todayISO } from "./macroDates";
 import { Calculation, CalculatorRow, calculationItems, calculationTotal, objects, PROVIDER_VIEW_MS, servingNutrition } from "./calculator";
 import { NutritionAttribution } from "./NutritionAttribution";
 import { NutritionConsent, NutritionConsentStatus } from "./NutritionConsent";
+import { formatPortions } from "./portions";
+import { useLookupCooldown } from "./useLookupCooldown";
 
 type Lookup = { data: Record<string, unknown> };
 
 export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, initialName, initialMealLabel }: {
   calculationId?: string; onClose: () => void; onSaved?: (result: Calculation) => void;
-  initialRows?: CalculatorRow[]; initialName?: string; initialMealLabel?: MealLabel;
+  initialRows?: CalculatorRow[]; initialName?: string; initialMealLabel?: string;
 }) {
   const client = useQueryClient();
   const offline = useOfflineStatus(state => state.offline);
@@ -33,6 +35,7 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
   const [itemOpen, setItemOpen] = useState(!initialRows?.length);
   const [itemName, setItemName] = useState("");
   const [portions, setPortions] = useState("1");
+  const [precisePortions, setPrecisePortions] = useState<number | null>(null);
   const [fields, setFields] = useState(EMPTY_NUTRITION);
   const [providerItem, setProviderItem] = useState<CalculatorRow | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
@@ -45,10 +48,11 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
   const [lookupExpires, setLookupExpires] = useState(0);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const cooldown = useLookupCooldown();
   const [destination, setDestination] = useState<"entry" | "recipe" | null>(null);
   const [existing, setExisting] = useState<Pick<Calculation, "recipe_id" | "meal_date"> | null>(null);
   const [name, setName] = useState(initialName ?? "");
-  const [mealLabel, setMealLabel] = useState<MealLabel>(initialMealLabel ?? "dinner");
+  const [mealLabel, setMealLabel] = useState(() => normalizeMealLabel(initialMealLabel));
   const [recipeServings, setRecipeServings] = useState("1");
   const request = useRef<{ payload: string; id: string } | null>(null);
   const previewRow = currentItemPreview();
@@ -75,7 +79,7 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
     setBusy("Loading calculation...");
     const abort = new AbortController();
     void apiFetch<Calculation>(`/api/v1/nutrition/calculations/${calculationId}`, { signal: abort.signal }).then(result => {
-      setExisting({ recipe_id: result.recipe_id, meal_date: result.meal_date }); setName(result.name); setMealLabel(result.meal_label);
+      setExisting({ recipe_id: result.recipe_id, meal_date: result.meal_date }); setName(result.name); setMealLabel(normalizeMealLabel(result.meal_label));
       setRecipeServings(String(result.servings));
       setRows(result.items.map((item, index) => ({ ...item, key: Crypto.randomUUID(), values: result.resolved_items[index], servingLabel: result.serving_labels?.[index] ?? undefined,
         ...(item.source === "fatsecret" ? { expires: Date.now() + PROVIDER_VIEW_MS } : {}) })));
@@ -100,11 +104,19 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
   }, [providerItem, lookupExpires]);
 
   function clearItem(open = true) {
-    setEditing(null); setItemName(""); setPortions("1"); setFields(EMPTY_NUTRITION);
+    setEditing(null); setItemName(""); setPortions("1"); setPrecisePortions(null); setFields(EMPTY_NUTRITION);
     setProviderItem(null); setError(""); setItemOpen(open);
   }
+  function changePortions(value: string) { setPortions(value); setPrecisePortions(null); }
+  function currentPortions() {
+    return precisePortions != null && formatPortions(precisePortions) === portions ? precisePortions : Number(portions);
+  }
+  function stepPortions(delta: number) {
+    const value = Math.min(100, Math.max(0.5, currentPortions() + delta));
+    setPortions(formatPortions(value)); setPrecisePortions(value);
+  }
   function currentItemPreview(): CalculatorRow | null {
-    const amount = Number(portions);
+    const amount = currentPortions();
     if (!itemOpen || !itemName.trim() || !portions.trim() || !Number.isFinite(amount) || amount <= 0 || amount > 100) return null;
     try {
       return { ...(providerItem ?? { source: "manual" as const }), key: editing ?? "pending", name: itemName.trim(),
@@ -113,7 +125,7 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
   }
   function addItem() {
     try {
-      const amount = Number(portions);
+      const amount = currentPortions();
       if (!itemName.trim()) throw new Error("Enter an item name.");
       if (!portions.trim() || !Number.isFinite(amount) || amount <= 0 || amount > 100) throw new Error("Use more than 0 and up to 100 servings.");
       if (rows.length >= 30 && !editing) throw new Error("Use up to 30 items per calculation.");
@@ -134,17 +146,19 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
   function changeSearch(value: string) {
     setQuery(value); setResults(null); setServings([]); setFoodId(""); setFoodName(""); setSearchedLabel(""); setLookupExpires(0); setError("");
   }
+  function failed(reason: unknown) { cooldown.recordFailure(reason); setError(message(reason)); }
   async function search() {
-    if (busy || offline || !accepted || query.trim().length < 2) return;
+    if (busy || offline || cooldown.waiting || !accepted || query.trim().length < 2) return;
     setBusy("Searching..."); setError(""); setResults(null); setServings([]);
     try {
       const result = await apiFetch<Lookup>(`/api/v1/nutrition/foods/search?query=${encodeURIComponent(query.trim())}`);
       const foods = result.data.foods as Record<string, unknown> | undefined;
       setResults(objects(foods?.food)); setSearchedLabel(query.trim()); setLookupExpires(Date.now() + PROVIDER_VIEW_MS);
-    } catch (reason) { setError(message(reason)); }
+    } catch (reason) { failed(reason); }
     finally { setBusy(null); }
   }
   async function chooseFood(id: string, selectedName: string) {
+    if (busy || offline || cooldown.waiting) return;
     setBusy("Loading servings..."); setError("");
     try {
       const result = await apiFetch<Lookup>(`/api/v1/nutrition/foods/${id}`);
@@ -153,7 +167,7 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
       const options = objects(container?.serving);
       if (!options.length) throw new Error("No servings found for this food. Try another result.");
       setServings(options); setFoodId(id); setFoodName(String(food?.food_name ?? selectedName)); setLookupExpires(Date.now() + PROVIDER_VIEW_MS);
-    } catch (reason) { setError(message(reason)); }
+    } catch (reason) { failed(reason); }
     finally { setBusy(null); }
   }
   function chooseServing(serving: Record<string, unknown>) {
@@ -161,11 +175,12 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
     const row: CalculatorRow = { key: editing ?? Crypto.randomUUID(), source: "fatsecret", name: searchedLabel,
       portions: 1, food_id: foodId, serving_id: String(serving.serving_id), foodLabel: foodName,
       servingLabel: String(serving.serving_description ?? "Serving"), values, expires: lookupExpires };
-    setProviderItem(row); setItemName(searchedLabel); setPortions("1"); setSearchOpen(false);
+    setProviderItem(row); setItemName(searchedLabel); setPortions("1"); setPrecisePortions(null); setSearchOpen(false);
     setItemOpen(true);
     setFields(nutritionInputs(values)); setResults(null); setServings([]);
   }
   async function refreshValues() {
+    if (busy || offline || cooldown.waiting) return;
     setBusy("Refreshing nutrition..."); setError("");
     try {
       const result = await apiFetch<Pick<Calculation, "resolved_items" | "serving_labels" | "nutrition_unavailable">>("/api/v1/nutrition/calculations/preview", {
@@ -175,7 +190,7 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
         values: result.resolved_items[index], servingLabel: result.serving_labels?.[index] ?? undefined,
         expires: Date.now() + PROVIDER_VIEW_MS } : row));
       if (result.nutrition_unavailable) setError("Some database nutrition is unavailable. Try again later.");
-    } catch (reason) { setError(message(reason)); }
+    } catch (reason) { failed(reason); }
     finally { setBusy(null); }
   }
   async function save() {
@@ -209,16 +224,16 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
             <View style={styles.header}><Text style={styles.subheading}>Search Database</Text><Button label="" icon="arrow-back" accessibilityLabel="Back to calculator" disabled={!!busy} onPress={() => setSearchOpen(false)} /></View>
             <SearchField accessibilityLabel="Search food database" value={query} onChangeText={changeSearch} placeholder="Food or brand" maxLength={100}
               editable={!busy} returnKeyType="search" onSubmitEditing={() => { void search(); }} />
-            <Button label="Search" icon="search" variant="primary" disabled={!!busy || offline || !accepted || query.trim().length < 2} onPress={() => { void search(); }} />
+            <Button label={cooldown.waiting ? "Please wait" : "Search"} icon="search" variant="primary" disabled={!!busy || offline || cooldown.waiting || !accepted || query.trim().length < 2} onPress={() => { void search(); }} />
             {servings.length ? <><Text style={styles.name}>{foodName}</Text><Text style={styles.subheading}>Choose a serving</Text>{servings.map(serving => <Pressable key={String(serving.serving_id)} accessibilityRole="button" style={styles.result} onPress={() => chooseServing(serving)}>
               <Text style={styles.name}>{String(serving.serving_description ?? "Serving")}</Text><Text style={styles.meta}>{serving.calories == null ? "Calories unavailable" : `${serving.calories} cal`}</Text>
-            </Pressable>)}</> : results?.map(food => <Pressable key={String(food.food_id)} accessibilityRole="button" disabled={!!busy} style={styles.result} onPress={() => { void chooseFood(String(food.food_id), String(food.food_name ?? "Food")); }}>
+            </Pressable>)}</> : results?.map(food => <Pressable key={String(food.food_id)} accessibilityRole="button" disabled={!!busy || cooldown.waiting} style={styles.result} onPress={() => { void chooseFood(String(food.food_id), String(food.food_name ?? "Food")); }}>
               <Text style={styles.name}>{String(food.food_name ?? "Food")}</Text><Text style={styles.meta}>{String(food.food_description ?? "")}</Text></Pressable>)}
             {results?.length === 0 ? <Text style={styles.meta}>No foods found. Try a different name.</Text> : null}
           </> : destination ? <>
             <Text style={styles.subheading}>{calculationId && !copyingEntry ? "Update calculation" : destination === "recipe" ? "Save as recipe" : "Add to today"}</Text>
             <TextInput accessibilityLabel="Calculation name" placeholder="Meal or recipe name" value={name} onChangeText={setName} maxLength={160} style={styles.input} />
-            <MacroChoice label="Meal type" value={mealLabel} onChange={setMealLabel} options={MEAL_LABEL_OPTIONS} disabled={!!busy} />
+            <MacroChoice label="Meal type" value={mealLabel} onChange={setMealLabel} options={mealLabelOptions(mealLabel)} disabled={!!busy} />
             {destination === "recipe" ? <><Text style={styles.name}>Recipe servings</Text><TextInput accessibilityLabel="Calculation recipe servings" value={recipeServings} onChangeText={setRecipeServings} keyboardType="number-pad" style={styles.input} /></> : <Text style={styles.meta}>{existing?.meal_date ?? todayISO()}</Text>}
             <Totals value={total} />
             {rows.some(row => row.source === "fatsecret") ? <Text style={styles.meta}>Database nutrition refreshes when viewed. Ingredients and portions stay saved.</Text> : null}
@@ -232,9 +247,9 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
             <TextInput accessibilityLabel="Calculator item name" placeholder="Item name" value={itemName} maxLength={160} onChangeText={setItemName} style={styles.input} />
             {providerItem?.foodLabel ? <Text style={styles.meta}>{providerItem.foodLabel}</Text> : null}
             <Text style={styles.name}>Servings</Text><View style={styles.header}>
-              <Button label="" icon="remove" accessibilityLabel="Half serving less" disabled={!!busy || !Number.isFinite(Number(portions)) || Number(portions) <= 0.5} onPress={() => setPortions(String(Math.max(0.5, Number(portions) - 0.5)))} />
-              <TextInput accessibilityLabel="Calculator item servings" value={portions} onChangeText={setPortions} keyboardType="decimal-pad" style={[styles.input, styles.portions]} />
-              <Button label="" icon="add" accessibilityLabel="Half serving more" disabled={!!busy || !Number.isFinite(Number(portions)) || Number(portions) >= 100} onPress={() => setPortions(String(Math.min(100, Number(portions) + 0.5)))} />
+              <Button label="" icon="remove" accessibilityLabel="Half serving less" disabled={!!busy || !Number.isFinite(Number(portions)) || Number(portions) <= 0.5} onPress={() => stepPortions(-0.5)} />
+              <TextInput accessibilityLabel="Calculator item servings" value={portions} onChangeText={changePortions} keyboardType="decimal-pad" style={[styles.input, styles.portions]} />
+              <Button label="" icon="add" accessibilityLabel="Half serving more" disabled={!!busy || !Number.isFinite(Number(portions)) || Number(portions) >= 100} onPress={() => stepPortions(0.5)} />
             </View>
             {providerItem?.servingLabel ? <Text style={styles.meta}>1 serving: {providerItem.servingLabel}</Text> : null}
             <Text style={styles.name}>Nutrition per serving</Text>
@@ -243,11 +258,11 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
               {rows.length ? <Button label="" icon="close" accessibilityLabel="Cancel item" disabled={!!busy} onPress={() => clearItem(false)} /> : null}</View>
             </> : null}
             <View style={styles.divider}><Text style={styles.subheading}>Items ({rows.length})</Text></View>
-            {rows.map(row => <View key={row.key} style={styles.item}><View style={styles.itemInfo}><Text style={styles.name}>{row.name}</Text>{row.foodLabel ? <Text style={styles.meta}>{row.foodLabel}</Text> : null}<Text style={styles.meta}>{row.portions} {row.portions === 1 ? "serving" : "servings"} · {row.values.calories == null || (row.expires != null && row.expires <= Date.now()) ? "Nutrition pending" : `${Math.round(row.values.calories * row.portions * 100) / 100} cal`}</Text>{row.servingLabel ? <Text style={styles.meta}>1 serving: {row.servingLabel}</Text> : null}</View>
-              <Button label="" icon="create-outline" accessibilityLabel={`Edit ${row.name}`} disabled={!!busy} onPress={() => { setItemOpen(true); setEditing(row.key); setItemName(row.name); setPortions(String(row.portions)); setFields(nutritionInputs(row.values)); setProviderItem(row.source === "fatsecret" ? row : null); setError(""); }} />
+            {rows.map(row => <View key={row.key} style={styles.item}><View style={styles.itemInfo}><Text style={styles.name}>{row.name}</Text>{row.foodLabel ? <Text style={styles.meta}>{row.foodLabel}</Text> : null}<Text style={styles.meta}>{formatPortions(row.portions)} {row.portions === 1 ? "serving" : "servings"} · {row.values.calories == null || (row.expires != null && row.expires <= Date.now()) ? "Nutrition pending" : `${Math.round(row.values.calories * row.portions * 100) / 100} cal`}</Text>{row.servingLabel ? <Text style={styles.meta}>1 serving: {row.servingLabel}</Text> : null}</View>
+              <Button label="" icon="create-outline" accessibilityLabel={`Edit ${row.name}`} disabled={!!busy} onPress={() => { setItemOpen(true); setEditing(row.key); setItemName(row.name); setPortions(formatPortions(row.portions)); setPrecisePortions(row.portions); setFields(nutritionInputs(row.values)); setProviderItem(row.source === "fatsecret" ? row : null); setError(""); }} />
               <Button label="" icon="trash-outline" accessibilityLabel={`Remove ${row.name}`} variant="quiet-danger" disabled={!!busy} onPress={() => { setRows(current => current.filter(item => item.key !== row.key)); if (editing === row.key) clearItem(); }} /></View>)}
             <View style={styles.divider}><View style={styles.header}><Text style={styles.subheading}>{previewRow ? "Total with this item" : "Total"}</Text><Text style={styles.meta}>{previewRows.length} {previewRows.length === 1 ? "item" : "items"}</Text>
-              {rows.some(row => row.source === "fatsecret") ? <Button label="" icon="refresh" accessibilityLabel="Refresh database nutrition" disabled={!!busy || offline} onPress={() => { void refreshValues(); }} /> : null}</View><Totals value={total} /></View>
+              {rows.some(row => row.source === "fatsecret") ? <Button label="" icon="refresh" accessibilityLabel="Refresh database nutrition" disabled={!!busy || offline || cooldown.waiting} onPress={() => { void refreshValues(); }} /> : null}</View><Totals value={total} /></View>
             <View style={styles.actions}>{existing ? <>
               <Button label="Update calculation" icon="save-outline" variant="primary" disabled={(!rows.length && !itemName.trim()) || !!busy || offline} onPress={() => finish(existing.recipe_id ? "recipe" : "entry")} />
               {!existing.recipe_id ? <Button label="Save as recipe" icon="book-outline" disabled={(!rows.length && !itemName.trim()) || !!busy || offline} onPress={() => finish("recipe")} /> : null}

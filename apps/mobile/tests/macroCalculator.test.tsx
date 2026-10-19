@@ -24,7 +24,7 @@ beforeEach(() => {
   });
 });
 async function mount(ready = true, calculationId?: string) {
-  const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false } } });
+  const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false }, mutations: { gcTime: 0, retry: false } } });
   const saved = jest.fn(), close = jest.fn();
   const screen = render(<QueryClientProvider client={client}><MacroCalculator calculationId={calculationId} onClose={close} onSaved={saved} /></QueryClientProvider>);
   if (ready) await screen.findByLabelText(calculationId ? "Update calculation" : "Calculator item name");
@@ -60,6 +60,27 @@ test("portion math preserves zeros, unknown nutrients and expired provider views
   expect(calculationTotal([row, { ...row, values: { ...values, protein_g: null } }]).protein_g).toBeNull();
   expect(calculationTotal([{ ...row, expires: 10 }], 10).calories).toBeNull();
   expect(servingNutrition({ calories: "0", protein: "not readable" })).toMatchObject({ calories: 0, protein_g: null, fiber_g: null });
+});
+
+test("editing a rounded portion display leaves its saved calculation precision intact", async () => {
+  const precise = 0.5669904625;
+  const screen = await mount();
+  try {
+    fireEvent.changeText(screen.getByLabelText("Calculator item name"), "Measured food");
+    fireEvent.changeText(screen.getByLabelText("Calories"), "100");
+    fireEvent.changeText(screen.getByLabelText("Calculator item servings"), String(precise));
+    fireEvent.press(screen.getByLabelText("Add item"));
+    expect(screen.getByText(/0.567 servings/)).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Edit Measured food"));
+    expect(screen.getByLabelText("Calculator item servings").props.value).toBe("0.567");
+    fireEvent.press(screen.getByLabelText("Update item"));
+    fireEvent.press(screen.getByLabelText("Log meal"));
+    fireEvent.changeText(screen.getByLabelText("Calculation name"), "Measured meal");
+    fireEvent.press(screen.getByLabelText("Add to today"));
+    await waitFor(() => expect(screen.saved).toHaveBeenCalled());
+    const call = request.mock.calls.find(([path, init]) => path.endsWith("/calculations") && init?.method === "POST");
+    expect(JSON.parse(String(call?.[1]?.body)).items[0].portions).toBe(precise);
+  } finally { screen.cleanup(); }
 });
 test("database save payload strips all temporary nutrition and UI-only fields", () => {
   expect(calculationItems([{ ...row, source: "fatsecret", food_id: "3092", serving_id: "11206", expires: 1000, foodLabel: "Provider food name", servingLabel: "Provider description" }])).toEqual([
@@ -204,6 +225,36 @@ test("clearing database search clears results without a provider call", async ()
     expect(request.mock.calls).toHaveLength(calls);
   } finally { screen.cleanup(); }
 });
+
+test("a throttled database search keeps its text and waits before a manual retry", async () => {
+  let searches = 0;
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init) => {
+    if (path.includes("foods/search") && searches++ === 0) {
+      throw Object.assign(new Error("Nutrition database lookup limit reached. Please wait and retry."), {
+        status: 429, code: "rate_limit", retryAfterSeconds: 1
+      });
+    }
+    return original(path, init);
+  });
+  const screen = await mount();
+  try {
+    fireEvent.press(screen.getByLabelText("Search Database"));
+    fireEvent.changeText(screen.getByLabelText("Search food database"), "eggs");
+    fireEvent.press(screen.getByLabelText("Search"));
+    await screen.findByText("Nutrition database lookup limit reached. Please wait and retry.");
+    expect(screen.getByLabelText("Search food database").props.value).toBe("eggs");
+    const waiting = screen.getByLabelText("Please wait");
+    expect(waiting.props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(waiting);
+    expect(searches).toBe(1);
+    const retry = await screen.findByLabelText("Search", {}, { timeout: 3000 });
+    expect(searches).toBe(1);
+    fireEvent.press(retry);
+    await screen.findByText("Egg", { exact: true });
+    expect(searches).toBe(2);
+  } finally { screen.cleanup(); }
+}, 15000);
 
 test("a logged calculation saves a separate recipe using references, without changing the diary", async () => {
   const original = request.getMockImplementation()!;

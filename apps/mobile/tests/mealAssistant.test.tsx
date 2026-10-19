@@ -9,6 +9,7 @@ import {
   MealDraft,
   MealDraftItem,
   ReviewedFood,
+  portionInput,
   prefillServing,
   reviewedRows,
   suggestedPortions,
@@ -76,6 +77,21 @@ beforeEach(() => {
 afterEach(() => jest.restoreAllMocks());
 
 describe("suggestedPortions", () => {
+  test.each([
+    [2, "oz", "oz", "28.35"],
+    [1.2, "ounces", "oz cooked", "28"],
+    [12.2, "oz", "oz, boneless, cooked", "28.35"],
+  ])("keeps exact %s %s portions instead of converting through rounded metric weights", (quantity, unit, measure, grams) => {
+    const selected = { ...serving, measurement_description: measure, metric_serving_amount: grams };
+    expect(suggestedPortions({ ...mention, quantity, unit }, selected)).toBe(quantity);
+    expect(prefillServing({ ...mention, quantity, unit, servings: [selected] }).amount).toBe(String(quantity));
+  });
+
+  test("does not confuse fluid ounces with ounces of mass", () => {
+    expect(suggestedPortions({ ...mention, quantity: 2, unit: "oz" }, {
+      ...serving, measurement_description: "fl oz", metric_serving_unit: "ml", metric_serving_amount: "30",
+    })).toBeNull();
+  });
   test.each([
     { quantity: null, unit: null },
     { quantity: null, unit: "g" },
@@ -173,6 +189,14 @@ describe("prefillServing", () => {
 });
 
 describe("reviewedRows", () => {
+  test("rounds only the suggested input display, retaining precise converted portions for calculation", () => {
+    const amount = 2 * 28.349523125 / 100;
+    const input = portionInput(amount);
+    expect(input.amount).toBe("0.567");
+    expect(reviewedRows([reviewed(input)])[0].portions).toBe(amount);
+    expect(reviewedRows([reviewed({ ...input, amount: "0.6" })])[0].portions).toBe(0.6);
+    expect(reviewedRows([reviewed({ ...input, precise_amount: undefined })])[0].portions).toBe(0.567);
+  });
   test.each(["", " ", "0", "-1", "NaN", "Infinity", "101", "2 cups"])(
     "blocks missing or invalid reviewed amount %j", amount => {
       expect(() => reviewedRows([reviewed({ amount })])).toThrow(/Enter servings eaten/);
@@ -227,7 +251,7 @@ describe("reviewedRows", () => {
 });
 
 async function mount(voiceEnabled = false) {
-  const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false } } });
+  const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false }, mutations: { gcTime: 0, retry: false } } });
   const close = jest.fn(), saved = jest.fn();
   function Harness() {
     const [visible, setVisible] = useState(true);
@@ -253,6 +277,35 @@ function expectNoAutosave(saved: jest.Mock) {
 }
 
 describe("MealAssistant review flow", () => {
+  test("a throttled database search keeps the meal and pauses retry until Retry-After", async () => {
+    const original = request.getMockImplementation()!;
+    let searches = 0;
+    request.mockImplementation(async (path, init) => {
+      if (path.includes("/foods/search")) {
+        searches++;
+        if (searches === 1) throw Object.assign(new Error("Please wait before searching again."), { status: 429, retryAfterSeconds: 1 });
+        return { data: { foods: { food: [] } } };
+      }
+      return original(path, init);
+    });
+    const screen = await mount();
+    try {
+      await preview(screen);
+      fireEvent.press(screen.getByLabelText("Change match"));
+      fireEvent.press(screen.getByLabelText("Search Database"));
+      await screen.findByText("Please wait before searching again.");
+      expect(screen.getByLabelText("Please wait").props.accessibilityState.disabled).toBe(true);
+      expect(screen.getByLabelText("Food search").props.value).toBe("eggs");
+      expect(screen.getByText("Reported: 2 each")).toBeTruthy();
+      fireEvent(screen.getByLabelText("Food search"), "submitEditing");
+      expect(searches).toBe(1);
+      await screen.findByLabelText("Search Database", {}, { timeout: 2500 });
+      fireEvent.press(screen.getByLabelText("Search Database"));
+      await screen.findByText("No matching foods.");
+      expect(searches).toBe(2);
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  }, 15000);
   test("the description starts empty with no example or repeated provider disclosures", async () => {
     const screen = await mount();
     try {

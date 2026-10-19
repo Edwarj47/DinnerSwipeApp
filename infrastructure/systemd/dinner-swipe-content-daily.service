@@ -1,0 +1,22 @@
+[Unit]
+Description=Dinner Swipe private daily content review batches
+After=docker.service
+Requires=docker.service
+StartLimitIntervalSec=1h
+StartLimitBurst=4
+
+[Service]
+Type=oneshot
+User=codexvps
+Group=codexvps
+WorkingDirectory=/home/codexvps/Desktop/projects/dinner-swipe
+ExecStart=/usr/bin/bash infrastructure/scripts/run-content-job.sh
+TimeoutStartSec=17min
+Restart=on-failure
+RestartSec=5min
+UMask=0077
+LimitCORE=0
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=read-only

@@ -3,6 +3,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-na
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
 import { Colors, shadow } from "@/components/theme";
+import { PhotoCredit } from "@/components/PhotoCredit";
 import { swipeActionForOffset } from "@/features/discover/mealSwipe";
 import { WorkoutTemplate } from "./types";
 import { WorkoutPhoto, categoryLabel, styles } from "./ui";
@@ -38,9 +39,11 @@ export const WorkoutCard = forwardRef<WorkoutCardHandle, { template: WorkoutTemp
         <Text numberOfLines={3} style={styles.muted}>{template.exercises.map(item => item.name).join(", ")}</Text>
       </View>
     </Pressable>
+    {template.photo_credit ? <View style={local.photoCredit}><PhotoCredit credit={template.photo_credit} onDetails={onOpen} /></View> : null}
     <Animated.View pointerEvents="none" style={[local.badge, { left: 16, borderColor: Colors.basil }, plan]}><Text style={[styles.title, { color: Colors.basil }]}>{proposing ? "PROPOSE" : "PLAN"}</Text></Animated.View>
     <Animated.View pointerEvents="none" style={[local.badge, { right: 16, borderColor: Colors.danger }, skip]}><Text style={[styles.title, { color: Colors.danger }]}>SKIP</Text></Animated.View>
   </Animated.View></GestureDetector>;
 });
 const local = StyleSheet.create({ card: { borderRadius: 8, overflow: "hidden", backgroundColor: Colors.surface, marginVertical: 12, ...shadow },
+  photoCredit: { position: "absolute", top: 8, right: 8 },
   badge: { position: "absolute", top: 20, borderWidth: 2, borderRadius: 8, padding: 10, backgroundColor: Colors.surface } });
