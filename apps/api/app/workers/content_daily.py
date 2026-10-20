@@ -371,7 +371,9 @@ def main() -> None:
         ids = [
             campaign.id
             for campaign in campaigns
-            if campaign.status != "completed" or args.discover_sources
+            if campaign.status != "completed"
+            or args.discover_sources
+            or campaign.end_date == utcnow().astimezone(ZoneInfo(campaign.time_zone)).date()
         ]
         if args.status:
             print(

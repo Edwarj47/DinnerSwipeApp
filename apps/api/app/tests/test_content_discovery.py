@@ -353,3 +353,35 @@ def test_worker_preserves_earlier_sources_after_later_timeout(
 def test_publisher_identity_ignores_workout_fragment() -> None:
     base = "https://www.nhs.uk/live-well/exercise/strength-exercises/"
     assert sources.source_id("workout", base) == sources.source_id("workout", base + "#routine")
+
+
+def test_final_date_retry_still_runs_discovery_after_compilation_completed(
+    db_session: Session,
+    batch: ContentDailyBatch,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    campaign = db_session.get(ContentCampaign, batch.campaign_id)
+    assert campaign
+    campaign.status = "completed"
+    db_session.commit()
+    final_day = NOW + timedelta(days=34)
+    calls: list[str] = []
+
+    async def prepare(identifier: str) -> dict[str, str]:
+        return {"status": "not_due"}
+
+    async def discover(identifier: str) -> dict[str, str]:
+        calls.append(identifier)
+        return {"discovery": "checked"}
+
+    monkeypatch.setattr(worker, "SessionLocal", sessionmaker(bind=db_session.get_bind()))
+    monkeypatch.setattr(worker, "utcnow", lambda: final_day)
+    monkeypatch.setattr(worker, "prepare_campaign", prepare)
+    monkeypatch.setattr(worker, "discover_campaign", discover)
+    monkeypatch.setattr("sys.argv", ["content_daily"])
+    worker.main()
+    assert calls == [campaign.id]
+    calls.clear()
+    monkeypatch.setattr(worker, "utcnow", lambda: final_day + timedelta(days=1))
+    worker.main()
+    assert calls == []

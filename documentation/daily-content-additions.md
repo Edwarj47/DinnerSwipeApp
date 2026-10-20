@@ -82,6 +82,8 @@ earlier validated links survive a later catalog timeout. No new database tables 
 Pausing does not extend the campaign. Missed/paused dates do not accumulate extra
 items. A restarted worker can resume the same date under a fresh lease, but never
 refill a previous date or exceed that date's five-per-type cap.
+On the final campaign date, a retry still checks source discovery even if compilation
+already marked the campaign completed. The following date remains out of bounds.
 
 ## Operator Commands
 
