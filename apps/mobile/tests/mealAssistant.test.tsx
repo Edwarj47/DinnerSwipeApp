@@ -54,16 +54,18 @@ function reviewed(changes: Partial<ReviewedFood> = {}): ReviewedFood {
     expires: NOW + PROVIDER_VIEW_MS, ...changes };
 }
 
-let onAppState: (state: AppStateStatus) => void;
+const appListeners = new Set<(state: AppStateStatus) => void>();
+function onAppState(state: AppStateStatus) { appListeners.forEach(callback => callback(state)); }
 beforeEach(() => {
+  appListeners.clear();
   jest.spyOn(Date, "now").mockReturnValue(NOW);
   useOfflineStatus.setState({ offline: false });
   calculator.mockClear();
   voiceHook.mockReset().mockReturnValue({ supported: false, recording: false, audio: null, error: "",
     start: jest.fn(), stop: jest.fn(), clear: jest.fn() });
   jest.spyOn(AppState, "addEventListener").mockImplementation((_, callback) => {
-    onAppState = callback;
-    return { remove: jest.fn() };
+    appListeners.add(callback);
+    return { remove: jest.fn(() => appListeners.delete(callback)) };
   });
   request.mockReset().mockImplementation(async (path, init) => {
     if (path.endsWith("/consent")) return { accepted: true, terms_version: "fatsecret-terms-v1" };
@@ -569,21 +571,25 @@ describe("MealAssistant review flow", () => {
     } finally { screen.cleanup(); }
   });
 
-  test.each(["inactive", "background"] as const)("%s clears provider results and reviewed rows", async state => {
+  test.each(["inactive", "background"] as const)("%s preserves the review, edited portions and calculator handoff", async state => {
     const screen = await mount();
     try {
       await preview(screen);
+      fireEvent.changeText(screen.getByLabelText("Servings eaten for My eggs"), "3.5");
+      act(() => { onAppState(state); onAppState("active"); });
+      expect(screen.getByText("Review meal")).toBeTruthy();
+      expect(screen.getByText("Provider egg name (Recommended)")).toBeTruthy();
+      expect(screen.getByLabelText("Servings eaten for My eggs").props.value).toBe("3.5");
       fireEvent.press(screen.getByLabelText("Continue to calculator"));
       await screen.findByTestId("meal-calculator-handoff");
-      act(() => onAppState(state));
-      expect(screen.queryByTestId("meal-calculator-handoff")).toBeNull();
-      expect(screen.queryByText("Provider egg name (Recommended)")).toBeNull();
-      expect(screen.getByLabelText("Meal description")).toBeTruthy();
+      act(() => { onAppState(state); onAppState("active"); });
+      expect(screen.getByTestId("meal-calculator-handoff")).toBeTruthy();
+      expect(calculator.mock.calls.at(-1)![0].initialRows![0]).toMatchObject({ portions: 3.5, food_id: "42", serving_id: "7" });
       expectNoAutosave(screen.saved);
     } finally { screen.cleanup(); }
   });
 
-  test("background aborts an in-flight preview and late results cannot restore provider data", async () => {
+  test.each([true, false])("a pending preview survives app switching (finishes in background: %s)", async finishesInBackground => {
     let resolve!: (value: MealDraft) => void;
     const original = request.getMockImplementation()!;
     request.mockImplementation(async (path, init) => {
@@ -598,10 +604,93 @@ describe("MealAssistant review flow", () => {
       fireEvent.press(screen.getByLabelText("Preview meal"));
       const call = request.mock.calls.find(([path]) => path.endsWith("/drafts"))!;
       act(() => onAppState("background"));
+      expect(call[1]?.signal?.aborted).toBe(false);
+      if (!finishesInBackground) act(() => onAppState("active"));
+      await act(async () => resolve(draft));
+      if (finishesInBackground) act(() => onAppState("active"));
+      expect(screen.getByText("Review meal")).toBeTruthy();
+      expect(screen.getByText("Provider egg name (Recommended)")).toBeTruthy();
+      expect(calculator).not.toHaveBeenCalled();
+      expect(request.mock.calls.filter(([path, init]) => path.endsWith("/drafts") && init?.method === "POST")).toHaveLength(1);
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+
+  test("an open match search keeps its query and pending results across app switching", async () => {
+    let resolve!: (value: unknown) => void;
+    const original = request.getMockImplementation()!;
+    request.mockImplementation(async (path, init) => path.includes("/foods/search")
+      ? new Promise(done => { resolve = done; }) : original(path, init));
+    const screen = await mount();
+    try {
+      await preview(screen);
+      fireEvent.press(screen.getByLabelText("Change match"));
+      fireEvent.changeText(screen.getByLabelText("Food search"), "scrambled eggs");
+      fireEvent.press(screen.getByLabelText("Search Database"));
+      const call = request.mock.calls.find(([path]) => path.includes("/foods/search"))!;
+      act(() => onAppState("background"));
+      expect(call[1]?.signal?.aborted).toBe(false);
+      await act(async () => resolve({ data: { foods: { food: [{ food_id: "99", food_name: "Scrambled eggs" }] } } }));
+      act(() => onAppState("active"));
+      expect(screen.getByLabelText("Food search").props.value).toBe("scrambled eggs");
+      expect(screen.getByLabelText("Scrambled eggs")).toBeTruthy();
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+
+  test("resuming expires provider data immediately without dropping user portions or resetting the review", async () => {
+    const screen = await mount();
+    try {
+      await preview(screen);
+      fireEvent.changeText(screen.getByLabelText("Servings eaten for My eggs"), "3.5");
+      act(() => onAppState("background"));
+      jest.mocked(Date.now).mockReturnValue(NOW + PROVIDER_VIEW_MS);
+      act(() => onAppState("active"));
+      expect(screen.getByText("Review meal")).toBeTruthy();
+      expect(screen.queryByText("Provider egg name (Recommended)")).toBeNull();
+      expect(screen.getByLabelText("Servings eaten for My eggs").props.value).toBe("3.5");
+      expect(screen.getByText("Database results expired. Start over to refresh them.")).toBeTruthy();
+      fireEvent.press(screen.getByLabelText("Continue to calculator"));
+      expect(calculator).not.toHaveBeenCalled();
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+
+  test("resuming after calculator handoff also expires the parent's provider copy without closing approval", async () => {
+    const screen = await mount();
+    try {
+      await preview(screen);
+      fireEvent.changeText(screen.getByLabelText("Servings eaten for My eggs"), "3.5");
+      fireEvent.press(screen.getByLabelText("Continue to calculator"));
+      await screen.findByTestId("meal-calculator-handoff");
+      act(() => onAppState("background"));
+      jest.mocked(Date.now).mockReturnValue(NOW + PROVIDER_VIEW_MS);
+      act(() => onAppState("active"));
+      expect(screen.getByTestId("meal-calculator-handoff")).toBeTruthy();
+      const row = calculator.mock.calls.at(-1)![0].initialRows![0];
+      expect(row).toMatchObject({ food_id: "42", serving_id: "7", portions: 3.5, expires: NOW + PROVIDER_VIEW_MS,
+        values: { calories: null, protein_g: null, carbs_g: null, fat_g: null, fiber_g: null } });
+      expect(row.foodLabel).toBeUndefined();
+      expect(row.servingLabel).toBeUndefined();
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
+
+  test("explicitly closing a pending preview still aborts it and ignores its late response", async () => {
+    let resolve!: (value: MealDraft) => void;
+    const original = request.getMockImplementation()!;
+    request.mockImplementation(async (path, init) => path.endsWith("/drafts") && init?.method === "POST"
+      ? new Promise<MealDraft>(done => { resolve = done; }) : original(path, init));
+    const screen = await mount();
+    try {
+      fireEvent.changeText(screen.getByLabelText("Meal description"), "I ate two eggs");
+      fireEvent.press(screen.getByLabelText("Preview meal"));
+      const call = request.mock.calls.find(([path]) => path.endsWith("/drafts"))!;
+      fireEvent.press(screen.getByLabelText("Close meal assistant"));
       expect(call[1]?.signal?.aborted).toBe(true);
       await act(async () => resolve(draft));
+      act(() => onAppState("active"));
       expect(screen.queryByText("Review meal")).toBeNull();
-      expect(screen.queryByText("Provider egg name")).toBeNull();
       expect(calculator).not.toHaveBeenCalled();
       expectNoAutosave(screen.saved);
     } finally { screen.cleanup(); }

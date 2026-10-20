@@ -58,9 +58,12 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
     alive.current = true;
     const background = () => {
       if (Platform.OS === "web" && !document.hidden) return;
-      abort.current?.abort(); inFlight.current = false; transcription.current = null; voiceRef.current.clear();
-      setBusy(false); setTranscribing(false); setVoiceFailure(false); setRows(null); setItems([]); setDraft(null);
-      setSearching(null); setQuery(""); setResults(null); setResultsExpire(0); setError("");
+      // Release microphone/audio data without discarding a pending preview or meal review.
+      if (transcription.current) {
+        abort.current?.abort(); abort.current = null; inFlight.current = false;
+        setBusy(false); setTranscribing(false);
+      }
+      transcription.current = null; voiceRef.current.clear(); setVoiceFailure(false);
     };
     const subscription = AppState.addEventListener("change", state => { if (state !== "active") background(); });
     if (Platform.OS === "web") document.addEventListener("visibilitychange", background);
@@ -77,17 +80,33 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
     autoTranscribe.current();
   }, [accepted, voiceEnabled, voice.supported, voice.audio, voice.recording, draft, busy, offline]);
   useEffect(() => {
-    const timer = setInterval(() => {
-      if (resultsExpire && resultsExpire <= Date.now()) { setResults(null); setResultsExpire(0); }
-      if (!items.some(item => item.expires <= Date.now() && (item.servings || item.food_name))) return;
-      setItems(current => current.map(item => item.expires > Date.now() ? item : {
+    function expire() {
+      const now = Date.now();
+      setRows(current => {
+        if (!current?.some(row => row.expires != null && row.expires <= now)) return current;
+        return current.map(row => row.expires != null && row.expires <= now ? { ...row,
+          foodLabel: undefined, servingLabel: undefined,
+          values: { calories: null, protein_g: null, carbs_g: null, fat_g: null, fiber_g: null }
+        } : row);
+      });
+      if (resultsExpire && resultsExpire <= now) { setResults(null); setResultsExpire(0); }
+      if (!items.some(item => item.expires <= now && (item.servings || item.food_name))) return;
+      setItems(current => current.map(item => item.expires > now ? item : {
         key: item.key, name: item.name, search_term: item.search_term, quantity: item.quantity, unit: item.unit,
-        food_id: item.food_id, serving_id: "", amount: "", expires: item.expires
+        food_id: item.food_id, serving_id: item.serving_id, amount: item.amount, precise_amount: item.precise_amount,
+        expires: item.expires
       }));
       setDraft(current => current ? { ...current, items: [] } : null); setResults(null);
       setError("Database results expired. Start over to refresh them.");
-    }, 30000);
-    return () => clearInterval(timer);
+    }
+    const timer = setInterval(expire, 30000);
+    const subscription = AppState.addEventListener("change", state => { if (state === "active") expire(); });
+    const resume = () => { if (!document.hidden) expire(); };
+    if (Platform.OS === "web") document.addEventListener("visibilitychange", resume);
+    return () => {
+      clearInterval(timer); subscription.remove();
+      if (Platform.OS === "web") document.removeEventListener("visibilitychange", resume);
+    };
   }, [items, resultsExpire]);
   function changeDescription(value: string) { setDescription(value); request.current = null; setError(""); }
   async function run(action: (signal: AbortSignal) => Promise<void>) {
