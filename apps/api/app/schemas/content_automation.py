@@ -157,3 +157,39 @@ class CampaignSummary(StrictInput):
 class AutomationOverview(StrictInput):
     campaign: CampaignSummary | None
     batches: list[BatchSummary]
+
+
+class DiscoveredSource(StrictInput):
+    id: str = Field(pattern=r"^[a-f0-9]{64}$")
+    kind: Kind
+    title: str = Field(min_length=3, max_length=240)
+    source_url: str = Field(min_length=1, max_length=2048)
+    source_name: str = Field(min_length=1, max_length=240)
+    status: Literal["pending", "dismissed"]
+
+
+class DiscoveryRun(StrictInput):
+    id: UUID
+    scheduled_date: date
+    status: Literal["running", "complete", "partial"]
+    sources: list[DiscoveredSource]
+    reasons: list[str]
+
+
+class SourcesOverview(StrictInput):
+    runs: list[DiscoveryRun]
+
+
+class DismissSourcesInput(StrictInput):
+    source_ids: list[str] = Field(min_length=1, max_length=10)
+
+    @field_validator("source_ids")
+    @classmethod
+    def distinct_source_ids(cls, values: list[str]) -> list[str]:
+        import re
+
+        if len(set(values)) != len(values) or any(
+            re.fullmatch(r"[a-f0-9]{64}", value) is None for value in values
+        ):
+            raise ValueError("Choose distinct source identifiers.")
+        return values

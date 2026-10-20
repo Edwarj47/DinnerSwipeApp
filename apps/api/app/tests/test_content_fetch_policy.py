@@ -67,3 +67,34 @@ def test_provider_redirect_policy_allows_same_host_https(monkeypatch: pytest.Mon
             "https://allowed.example/start", allowed_hosts={"allowed.example"}, https_only=True
         )
     ) == ("recipe", "https://allowed.example/recipe")
+
+
+def test_catalog_redirect_is_rejected_before_following(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[httpx.Request] = []
+    monkeypatch.setattr(url_fetcher, "validate_public_url", lambda _: "93.184.216.34")
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        requests.append(request)
+        return httpx.Response(302, headers={"Location": "/robots-disallowed"})
+
+    original = httpx.AsyncClient
+    monkeypatch.setattr(
+        httpx,
+        "AsyncClient",
+        lambda **kw: original(
+            transport=httpx.MockTransport(handler),
+            **kw,
+        ),
+    )
+    with pytest.raises(HTTPException):
+        asyncio.run(
+            url_fetcher.fetch_public_bytes(
+                "https://allowed.example/catalog",
+                maximum=1000,
+                kind="html",
+                allowed_hosts={"allowed.example"},
+                https_only=True,
+                follow_redirects=False,
+            )
+        )
+    assert len(requests) == 1 and requests[0].url.path == "/catalog"

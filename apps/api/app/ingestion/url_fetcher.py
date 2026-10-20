@@ -72,6 +72,7 @@ async def fetch_public_bytes(
     kind: str,
     allowed_hosts: Collection[str] | None = None,
     https_only: bool = False,
+    follow_redirects: bool = True,
 ) -> tuple[bytes, str, str | None]:
     limits = httpx.Limits(max_connections=4, max_keepalive_connections=0)
     async with httpx.AsyncClient(
@@ -102,6 +103,8 @@ async def fetch_public_bytes(
                 extensions={"sni_hostname": original.host},
             ) as response:
                 if response.status_code in {301, 302, 303, 307, 308}:
+                    if not follow_redirects:
+                        raise HTTPException(400, "Redirects are not permitted for this source")
                     location = response.headers.get("location")
                     if not location:
                         raise HTTPException(status_code=400, detail="Redirect missing location")
@@ -109,11 +112,12 @@ async def fetch_public_bytes(
                     continue
                 response.raise_for_status()
                 content_type = response.headers.get("content-type", "").lower()
-                supported = (
-                    ("text/html" in content_type or "application/xhtml" in content_type)
-                    if kind == "html"
-                    else content_type.split(";")[0] in {"image/jpeg", "image/png", "image/webp"}
-                )
+                supported_types = {
+                    "html": {"text/html", "application/xhtml+xml"},
+                    "image": {"image/jpeg", "image/png", "image/webp"},
+                    "robots": {"text/plain"},
+                }
+                supported = content_type.split(";")[0].strip() in supported_types.get(kind, set())
                 encoding = response.headers.get("content-encoding", "identity").lower().strip()
                 if not supported or encoding not in {"identity", "gzip", "deflate"}:
                     raise HTTPException(

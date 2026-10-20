@@ -273,6 +273,34 @@ async def preflight() -> dict[str, Any]:
     return result
 
 
+async def discover_campaign(campaign_id: str) -> dict[str, Any]:
+    from app.services import content_discovery
+    from app.services.content_discovery_sources import discover
+
+    with SessionLocal() as db:
+        reservation = content_discovery.begin(db, campaign_id, utcnow())
+        db.commit()
+    if not reservation:
+        return {"discovery": "not_due"}
+    batch_id, token, day_index, seen = reservation
+    sources: list[dict[str, str]] = []
+    try:
+        _, reasons = await asyncio.wait_for(
+            discover(day_index, seen, collected=sources), timeout=60
+        )
+    except Exception:
+        reasons = ["Source discovery could not finish. Earlier checked source links were kept."]
+    with SessionLocal() as db:
+        content_discovery.finish(db, batch_id, token, sources, reasons, utcnow())
+        db.commit()
+    return {
+        "discovery": "checked",
+        "batch_id": batch_id,
+        "recipe_sources": sum(item["kind"] == "recipe" for item in sources),
+        "workout_sources": sum(item["kind"] == "workout" for item in sources),
+    }
+
+
 def timer_text(campaign: ContentCampaign) -> str:
     lines = [
         "[Unit]",
@@ -295,6 +323,11 @@ def main() -> None:
     parser.add_argument("--enroll", metavar="ACCOUNT_EMAIL")
     parser.add_argument("--start-date", type=date.fromisoformat)
     parser.add_argument("--status", action="store_true")
+    parser.add_argument(
+        "--discover-sources",
+        action="store_true",
+        help="Check new source links for today's existing batch without staging entries",
+    )
     parser.add_argument("--timer", metavar="ACCOUNT_EMAIL")
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO)
@@ -335,7 +368,11 @@ def main() -> None:
         return
     with SessionLocal() as db:
         campaigns = list(db.scalars(select(ContentCampaign)))
-        ids = [campaign.id for campaign in campaigns if campaign.status != "completed"]
+        ids = [
+            campaign.id
+            for campaign in campaigns
+            if campaign.status != "completed" or args.discover_sources
+        ]
         if args.status:
             print(
                 json.dumps(
@@ -354,7 +391,9 @@ def main() -> None:
             return
     for campaign_id in ids:
         try:
-            print(json.dumps(asyncio.run(prepare_campaign(campaign_id))))
+            if not args.discover_sources:
+                print(json.dumps(asyncio.run(prepare_campaign(campaign_id))))
+            print(json.dumps(asyncio.run(discover_campaign(campaign_id))))
         except HTTPException as exc:
             logger.error("Content batch rejected: HTTP %s", exc.status_code)
             raise SystemExit(75) from None

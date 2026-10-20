@@ -10,8 +10,10 @@ import { SettingsSection } from "@/features/settings/SettingsSection";
 import { offlineOwner, useOfflineStatus } from "@/services/offlineStore";
 import { automationKey, getAutomation, setCampaignPaused } from "./api";
 import { BatchReview } from "./BatchReview";
+import { SourcesReview } from "./SourcesReview";
 import { ContentAutomation, dateLabel, isPreparing, reportReason, statusLabel } from "./types";
 import { styles } from "./styles";
+import { useSourcesReview } from "./useSourcesReview";
 
 type SectionControls = { expanded?: boolean; onToggle?: () => void };
 
@@ -25,7 +27,7 @@ function CampaignSection({ owner, expanded: sectionOpen, onToggle }: { owner: st
   const offline = useOfflineStatus(state => state.offline);
   const [localOpen, setOpen] = useState(false);
   const open = sectionOpen ?? localOpen;
-  const [view, setView] = useState<"pending" | "history">("pending");
+  const [view, setView] = useState<"pending" | "history" | "sources">("pending");
   const [expanded, setExpanded] = useState<string | null>(null);
   const [reviewBusy, setReviewBusy] = useState(false);
   const [message, setMessage] = useTransientMessage();
@@ -52,14 +54,16 @@ function CampaignSection({ owner, expanded: sectionOpen, onToggle }: { owner: st
   });
   const data: ContentAutomation | undefined = query.data;
   const campaign = data?.campaign;
+  const sourcesReview = useSourcesReview(owner, open && view === "sources" && !!campaign);
   if (!campaign) return null;
-  const busy = pause.isPending || reviewBusy;
+  const busy = pause.isPending || reviewBusy || sourcesReview.decision.isPending;
   const disabled = busy || query.isFetching || query.isError || offline;
   const terminal = ["completed", "cancelled", "canceled", "expired", "failed"].includes(campaign.status);
   const batches = data?.batches ?? [];
   const pending = batches.filter(batch => batch.pending_count > 0 || isPreparing(batch.status));
   const history = batches.filter(batch => !pending.includes(batch));
   const visible = [...(view === "pending" ? pending : history)].sort((a, b) => b.scheduled_date.localeCompare(a.scheduled_date));
+  const sourceCount = sourcesReview.data?.runs.reduce((count, run) => count + run.sources.filter(source => source.status === "pending").length, 0);
   return <SettingsSection title="Daily additions" icon="calendar-outline" expanded={open} onToggle={() => { if (!busy) { if (onToggle) onToggle(); else setOpen(value => !value); } }}>
     <View style={styles.content}>
       <View style={styles.row}>
@@ -87,8 +91,9 @@ function CampaignSection({ owner, expanded: sectionOpen, onToggle }: { owner: st
       {pause.isError ? <Text accessibilityRole="alert" style={styles.error}>Couldn't update the campaign. Refresh and try again.</Text> : null}
       {message ? <Text accessibilityLiveRegion="polite" style={styles.success}>{message}</Text> : null}
       <SegmentedControl value={view} adaptive accessibilityLabel="Daily addition views" disabled={busy}
-        options={[{ value: "pending", label: `Pending (${pending.length})`, icon: "time-outline" }, { value: "history", label: `History (${history.length})`, icon: "archive-outline" }]}
+        options={[{ value: "pending", label: `Pending (${pending.length})`, icon: "time-outline" }, { value: "history", label: `History (${history.length})`, icon: "archive-outline" }, { value: "sources", label: sourceCount == null ? "Sources" : `Sources (${sourceCount})`, icon: "link-outline" }]}
         onChange={value => { setView(value); setExpanded(null); }} />
+      {view === "sources" ? <SourcesReview owner={owner} review={sourcesReview} blocked={disabled} /> : <>
       {!visible.length ? <Text style={styles.meta}>{view === "pending" ? "No pending batches." : "No batch history yet."}</Text> : null}
       {visible.map(batch => <View key={batch.id} style={styles.batch}>
         <Pressable accessibilityRole="button" accessibilityLabel={`${expanded === batch.id ? "Collapse" : "Expand"} batch ${dateLabel(batch.scheduled_date)}`}
@@ -106,6 +111,7 @@ function CampaignSection({ owner, expanded: sectionOpen, onToggle }: { owner: st
         {(batch.report?.reasons ?? []).map((reason, index) => <Text key={index} style={styles.error}>{reportReason(reason)}</Text>)}
         {expanded === batch.id ? <BatchReview key={batch.id} owner={owner} id={batch.id} blocked={disabled} onBusyChange={setReviewBusy} /> : null}
       </View>)}
+      </>}
     </View>
   </SettingsSection>;
 }

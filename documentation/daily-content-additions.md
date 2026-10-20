@@ -35,11 +35,26 @@ source queues are finite, not a guarantee of 175 qualifying entries
 of each type. Duplicates, inaccessible sources, changed nutrition, unverified photos
 and missing details produce a smaller batch and an explanation. An exhausted queue
 does not justify fabricated entries, duplicate variants or increasing a daily cap.
-New sources require code/registry review and testing before becoming eligible.
-The compilation worker rechecks reviewed sources; it does not independently
-research or approve new source URLs. Keeping five-per-type batches full as the
-campaign proceeds requires ongoing expansion of those reviewed queues. Exhaustion
-is reported as a shortfall while existing compiled candidates remain pending.
+Daily source discovery also checks rotating MedlinePlus recipe categories and NHS
+exercise indexes for new links. It stores at most five new links of each type per
+date, deduplicated across the campaign, in the existing private batch report.
+These are **source leads, not complete recipes/workouts**. Discovery copies only
+titles, publisher names and HTTPS source links, not photographs, instructions or
+nutrition. Catalog robots policies are checked first; failures, blocked catalogs,
+redirects and changed layouts fail closed. No recursive crawler, model calls,
+paid search API or FatSecret requests are involved.
+
+Review path: **profile icon > User settings > Daily additions**:
+
+- **Pending**: compiled entries; preview and approve batches/selected entries or dismiss.
+- **Sources**: discovered links marked Needs source checks; open the publisher page
+  for research or dismiss a lead. This screen cannot approve or publish a link.
+- **History**: completed batch reviews.
+
+New source content still requires code/registry review, exact photo rights,
+complete nutrition and parser tests before it becomes eligible for compilation.
+Finding a link does not certify reuse permission or keep future batches full.
+Exhaustion is reported as a shortfall while existing compiled candidates remain pending.
 
 ## State And Recovery
 
@@ -56,6 +71,14 @@ per-hop host allowlists, byte/decompression/image bounds and metadata stripping.
 Photos use the existing private media store and account quota. Pending previews
 remain live references for media cleanup.
 
+Discovery runs after preparation with its own three-minute lease and a one-minute
+wall-clock budget. It fetches at most four catalog indexes plus two robots files,
+with 12-second request bounds, 1 MB index/64 KB robots limits and a one-second delay
+between catalog checks. There is at most one finished discovery per dated batch,
+with two attempts allowed only to recover from a crashed lease. Dismissing a lead
+does not allow it to be rediscovered. Redirects are rejected before following;
+earlier validated links survive a later catalog timeout. No new database tables are needed.
+
 Pausing does not extend the campaign. Missed/paused dates do not accumulate extra
 items. A restarted worker can resume the same date under a fresh lease, but never
 refill a previous date or exceed that date's five-per-type cap.
@@ -70,6 +93,7 @@ the Dinner Swipe media volume in a bounded disposable non-root container.
 bash infrastructure/scripts/run-content-job.sh --preflight
 bash infrastructure/scripts/run-content-job.sh --enroll ACCOUNT_EMAIL
 bash infrastructure/scripts/run-content-job.sh --status
+bash infrastructure/scripts/run-content-job.sh --discover-sources
 bash infrastructure/scripts/run-content-job.sh --timer ACCOUNT_EMAIL
 sudo systemctl status dinner-swipe-content-daily.timer
 sudo journalctl -u dinner-swipe-content-daily.service
@@ -121,3 +145,26 @@ of these files; record and verify the actual campaign dates and timer state at r
   empty states, offline controls and server errors were exercised.
 - No production migration, campaign enrollment or daily timer activation has been
   performed as part of these checks. Existing production records remain untouched.
+
+## Live Status: 2026-10-20
+
+The collect-only campaign is now active for October 20 through November 23, with
+35 dated runs at 06:00 America/New_York. The first batch contains five complete
+recipes and five complete workouts, all pending, with zero publication links.
+Discovery is also deployed: its first live run saved five new recipe source links
+and five new exercise source links. A repeated same-day invocation returned not_due
+without further outbound catalog requests. Existing libraries and nutrition logs
+had identical counts and full-table fingerprints before and after discovery.
+
+The new **Sources** tab is separate from **Pending** batch approval. Source leads
+are not a completed content supply: the reviewed 12-recipe/52-workout pool still
+needs nutrition/photo/licensing checks and source-parser expansion before new
+finds can fill future publishable batches. Smaller batches are still possible.
+No entry is automatically published at the end of the campaign.
+
+Release checks: 257 focused backend tests, 595 mobile tests, backend/mobile lint
+and types, API/web images, and 15 browser states across desktop/390 px/320 px.
+The independent discovery review's redirect, partial-timeout and publisher-identity
+findings were fixed and regression-tested before deployment. Fresh private database
+and media backups and previous-image rollback tags were retained; no schema change,
+new paid provider, APK build or unrelated VPS service change was required.

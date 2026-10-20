@@ -18,8 +18,11 @@ from app.schemas.content_automation import (
     BatchDetail,
     CampaignPatch,
     DecisionsInput,
+    DismissSourcesInput,
+    SourcesOverview,
 )
 from app.services import content_automation as service
+from app.services import content_discovery
 
 
 class PrivateRoute(APIRoute):
@@ -59,6 +62,25 @@ AutomationUser = Annotated[User, Depends(get_automation_user)]
 @router.get("", response_model=AutomationOverview)
 def overview(db: DbDep, current_user: AutomationUser) -> dict[str, Any]:
     return service.overview(db, current_user)
+
+
+@router.get("/sources", response_model=SourcesOverview)
+def sources(db: DbDep, current_user: AutomationUser) -> dict[str, Any]:
+    return content_discovery.overview(db, current_user)
+
+
+@router.post("/sources/{run_id}/dismiss", response_model=SourcesOverview)
+def dismiss_sources(
+    run_id: UUID, payload: DismissSourcesInput, db: DbDep, current_user: AutomationUser
+) -> dict[str, Any]:
+    auth_rate_limiter.check(f"content-automation:decisions:{current_user.id}", 30, 60)
+    try:
+        result = content_discovery.dismiss(db, current_user, str(run_id), payload.source_ids)
+        db.commit()
+        return result
+    except Exception:
+        db.rollback()
+        raise
 
 
 @router.get("/batches/{batch_id}", response_model=BatchDetail)

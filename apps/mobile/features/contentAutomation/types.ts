@@ -62,6 +62,23 @@ export type Candidate = CandidateBase & ({ kind: "recipe"; payload: RecipePayloa
 export type Batch = BatchSummary & { recipes: Candidate[]; workouts: Candidate[] };
 export type ContentAutomation = { campaign: Campaign | null; batches: BatchSummary[] };
 
+export type DiscoveredSource = {
+  id: string;
+  kind: "recipe" | "workout";
+  title: string;
+  source_url: string;
+  source_name: string;
+  status: "pending" | "dismissed";
+};
+export type SourceRun = {
+  id: string;
+  scheduled_date: string;
+  status: "running" | "complete" | "partial";
+  sources: DiscoveredSource[];
+  reasons: string[];
+};
+export type SourceOverview = { runs: SourceRun[] };
+
 export const isPreparing = (status: string) => ["scheduled", "queued", "running", "generating", "processing"].includes(status);
 export const statusLabel = (status: string) => status.replace(/_/g, " ").replace(/^./, value => value.toUpperCase());
 

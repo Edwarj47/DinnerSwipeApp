@@ -339,7 +339,9 @@ def _audit_event_for_account_export(event: AuditEvent) -> dict[str, object]:
 
 @router.get("/account/export")
 def export_account(db: DbDep, current_user: CurrentUser, response: Response) -> dict[str, object]:
+    from app.schemas.content_automation import SourcesOverview
     from app.services.content_automation import account_export as export_content_automation
+    from app.services.content_discovery import overview as source_discovery_overview
     from app.services.workouts import account_export as export_workouts
 
     response.headers["Cache-Control"] = "no-store"
@@ -551,6 +553,9 @@ def export_account(db: DbDep, current_user: CurrentUser, response: Response) -> 
         "account_activity": [_audit_event_for_account_export(event) for event in audit_events],
         "workouts": export_workouts(db, current_user),
         "content_automation": export_content_automation(db, current_user),
+        "source_discovery": SourcesOverview.model_validate(
+            source_discovery_overview(db, current_user)
+        ).model_dump(mode="json"),
     }
 
 

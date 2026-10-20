@@ -3,8 +3,8 @@ import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { Linking, Pressable } from "react-native";
 import { DailyAdditionsSection } from "@/features/contentAutomation/DailyAdditionsSection";
 import { CandidatePreview } from "@/features/contentAutomation/CandidatePreview";
-import { automationKey, batchKey } from "@/features/contentAutomation/api";
-import { Batch, Candidate, ContentAutomation, dateLabel, reportReason, sourceLink } from "@/features/contentAutomation/types";
+import { automationKey, batchKey, sourcesKey } from "@/features/contentAutomation/api";
+import { Batch, Candidate, ContentAutomation, dateLabel, reportReason, sourceLink, SourceOverview } from "@/features/contentAutomation/types";
 import { UserSettingsPanel } from "@/features/settings/UserSettingsPanel";
 import { apiFetch } from "@/services/api";
 import { setDeviceOffline, setOfflineOwner } from "@/services/offlineStore";
@@ -41,6 +41,10 @@ const workout: Candidate = {
 };
 let batch: Batch;
 let state: ContentAutomation;
+let sources: SourceOverview;
+const SOURCE_ID = "a".repeat(64);
+const SOURCE_TITLE = "Lemon bowl source lead";
+const WORKOUT_SOURCE_TITLE = "Strength source lead";
 
 beforeEach(() => {
   jest.clearAllMocks();
@@ -56,8 +60,22 @@ beforeEach(() => {
     campaign: { id: "campaign-1", status: "active", time_zone: "America/New_York", start_date: "2026-10-16", end_date: "2026-10-22", days_total: 7, completed_days: 1, pending_count: 2 },
     batches: [summary(batch)]
   };
+  sources = { runs: [{
+    id: "run/one", scheduled_date: "2026-10-20", status: "complete", reasons: [],
+    sources: [
+      { id: SOURCE_ID, kind: "recipe", title: SOURCE_TITLE, source_url: "https://recipes.example/lemon", source_name: "Example Kitchen", status: "pending" },
+      { id: "b".repeat(64), kind: "workout", title: WORKOUT_SOURCE_TITLE, source_url: "javascript:alert(1)", source_name: "Example Fitness", status: "pending" },
+      { id: "c".repeat(64), kind: "recipe", title: "Dismissed source lead", source_url: "https://recipes.example/soup", source_name: "Example Kitchen", status: "dismissed" }
+    ]
+  }] };
   request.mockImplementation(async (path, init) => {
     if (path === ROOT) return structuredClone(state);
+    if (path === `${ROOT}/sources`) return structuredClone(sources);
+    if (path === `${ROOT}/sources/${encodeURIComponent(sources.runs[0]?.id)}/dismiss`) {
+      const { source_ids: ids } = JSON.parse(String(init?.body)) as { source_ids: string[] };
+      sources.runs[0].sources = sources.runs[0].sources.map(source => ids.includes(source.id) ? { ...source, status: "dismissed" } : source);
+      return structuredClone(sources);
+    }
     if (path === `${ROOT}/batches/${batch.id}`) return structuredClone(batch);
     if (path === `${ROOT}/campaign`) {
       state.campaign!.status = JSON.parse(String(init?.body)).paused ? "paused" : "active";
@@ -98,6 +116,12 @@ async function expand(screen: ReturnType<typeof mount>) {
   await screen.findByText("Lemon chickpea bowls");
   await waitFor(() => expect(screen.getByLabelText("Approve batch").props.accessibilityState.disabled).toBe(false));
 }
+async function showSources(screen: ReturnType<typeof mount>) {
+  fireEvent.press(await screen.findByLabelText("Expand Daily additions"));
+  fireEvent.press(screen.getByLabelText(/^Sources(?: \(\d+\))?$/));
+  await screen.findByText("Needs source checks");
+}
+function sourceRequests() { return request.mock.calls.filter(([path]) => path === `${ROOT}/sources`); }
 function writes() { return request.mock.calls.filter(([, init]) => init?.method === "POST" || init?.method === "PATCH"); }
 // Native host views translate ARIA props; inspect Pressable for the web contract.
 function webControl(screen: ReturnType<typeof mount>, label: string) {
@@ -474,6 +498,361 @@ test("a late approval from another account cannot update current-account queries
     expect(invalidate).not.toHaveBeenCalled();
     expect(screen.client.getQueryData<Batch>(batchKey(OWNER, "batch-1"))?.pending_count).not.toBe(0);
     expect(screen.queryByText("Approved additions saved.")).toBeNull();
+  } finally { screen.close(); }
+});
+
+test("sources load only in the visible Sources view, separately from complete candidates", async () => {
+  expect(sourcesKey(OWNER)).toEqual(["content-automation", OWNER, "sources"]);
+  const screen = mount();
+  try {
+    fireEvent.press(await screen.findByLabelText("Expand Daily additions"));
+    expect(sourceRequests()).toHaveLength(0);
+    fireEvent.press(screen.getByLabelText("History (0)"));
+    expect(sourceRequests()).toHaveLength(0);
+    fireEvent.press(screen.getByLabelText("Sources"));
+    await screen.findByText(SOURCE_TITLE);
+    expect(sourceRequests()).toHaveLength(1);
+    expect(screen.getByText("Needs source checks")).toBeTruthy();
+    expect(screen.getByText("2 pending sources | 1 dismissed")).toBeTruthy();
+    expect(screen.getByLabelText("Sources (2)").props.accessibilityState.selected).toBe(true);
+    expect(screen.getByText(`${dateLabel("2026-10-20")} - Complete`)).toBeTruthy();
+    expect(screen.getByText("Recipe | Example Kitchen")).toBeTruthy();
+    expect(screen.getByText("Workout | Example Fitness")).toBeTruthy();
+    expect(screen.queryByText("Dismissed source lead")).toBeNull();
+    expect(screen.queryByText(sources.runs[0].sources[0].source_url)).toBeNull();
+    expect(screen.queryByText(recipe.title)).toBeNull();
+    expect(screen.queryByLabelText("Approve batch")).toBeNull();
+    expect(screen.queryByLabelText("Approve selected")).toBeNull();
+    expect(screen.queryByLabelText(`Preview ${SOURCE_TITLE}`)).toBeNull();
+    expect(screen.queryByLabelText("Select all pending additions")).toBeNull();
+    fireEvent.press(screen.getByLabelText("Pending (1)"));
+    await act(async () => { await screen.client.invalidateQueries({ queryKey: sourcesKey(OWNER), exact: true }); });
+    expect(sourceRequests()).toHaveLength(1);
+    expect(screen.queryByText("Needs source checks")).toBeNull();
+    fireEvent.press(screen.getByLabelText(`Expand batch ${dateLabel(batch.scheduled_date)}`));
+    await screen.findByText(recipe.title);
+    expect(screen.getByLabelText("Approve batch")).toBeTruthy();
+    expect(writes()).toHaveLength(0);
+  } finally { screen.close(); }
+});
+
+test.each(["tab", "collapse"])("leaving Sources via %s aborts an in-flight discovery read", async leave => {
+  const loading = deferred<SourceOverview>();
+  const original = request.getMockImplementation()!;
+  request.mockImplementation((path, init) => path === `${ROOT}/sources` ? loading.promise : original(path, init));
+  const screen = mount();
+  try {
+    await showSources(screen);
+    await screen.findByLabelText("Loading discovered sources");
+    expect(screen.queryByText("No discovered sources yet.")).toBeNull();
+    const signal = sourceRequests()[0][1]?.signal;
+    expect(signal?.aborted).toBe(false);
+    fireEvent.press(screen.getByLabelText(leave === "tab" ? "History (0)" : "Collapse Daily additions"));
+    await waitFor(() => expect(signal?.aborted).toBe(true));
+    await act(async () => { loading.resolve(structuredClone(sources)); });
+    expect(screen.client.getQueryData(sourcesKey(OWNER))).toBeUndefined();
+    expect(screen.queryByText(SOURCE_TITLE)).toBeNull();
+    expect(writes()).toHaveLength(0);
+  } finally { screen.close(); }
+});
+
+test.each(["tab", "collapse", "offline"])("running discovery polls only while visible and online, stopping on %s", async leave => {
+  jest.useFakeTimers();
+  sources.runs[0].status = "running";
+  const screen = mount();
+  try {
+    await showSources(screen);
+    await screen.findByText(SOURCE_TITLE);
+    expect(sourceRequests()).toHaveLength(1);
+    await act(async () => { await jest.advanceTimersByTimeAsync(5000); });
+    expect(sourceRequests()).toHaveLength(2);
+    if (leave === "offline") act(() => setDeviceOffline(true));
+    else fireEvent.press(screen.getByLabelText(leave === "tab" ? "History (0)" : "Collapse Daily additions"));
+    const count = sourceRequests().length;
+    await act(async () => { await jest.advanceTimersByTimeAsync(60000); });
+    expect(sourceRequests()).toHaveLength(count);
+    expect(writes()).toHaveLength(0);
+  } finally { screen.close(); jest.useRealTimers(); }
+});
+
+test("empty and running or partial discovery runs preserve status, dates and reasons", async () => {
+  sources = { runs: [] };
+  const screen = mount();
+  try {
+    await showSources(screen);
+    await screen.findByText("No discovered sources yet.");
+    expect(screen.getByLabelText("Sources (0)")).toBeTruthy();
+    sources.runs = [
+      { id: "running", scheduled_date: "2026-10-21", status: "running", sources: [], reasons: [] },
+      { id: "partial", scheduled_date: "2026-10-20", status: "partial", sources: [], reasons: ["recipe_shortfall:0/5", "Publisher checks are still outstanding."] }
+    ];
+    fireEvent.press(screen.getByLabelText("Refresh discovered sources"));
+    await screen.findByText("Discovery in progress...");
+    expect(screen.getByText(`${dateLabel("2026-10-21")} - Running`)).toBeTruthy();
+    expect(screen.getByText(`${dateLabel("2026-10-20")} - Partial`)).toBeTruthy();
+    expect(screen.getByText("No pending sources.")).toBeTruthy();
+    expect(screen.getByText("Recipe shortfall: 0/5")).toBeTruthy();
+    expect(screen.getByText("Publisher checks are still outstanding.")).toBeTruthy();
+    expect(screen.queryByLabelText("Approve batch")).toBeNull();
+    expect(writes()).toHaveLength(0);
+  } finally { screen.close(); }
+});
+
+test("fully dismissed discovery runs retain counts but no actionable source rows", async () => {
+  sources.runs[0].sources.forEach(source => { source.status = "dismissed"; });
+  const screen = mount();
+  try {
+    await showSources(screen);
+    await screen.findByText("No pending sources.");
+    expect(screen.getByLabelText("Sources (0)")).toBeTruthy();
+    expect(screen.getByText("0 pending sources | 3 dismissed")).toBeTruthy();
+    expect(screen.queryAllByLabelText(/^Dismiss source /)).toHaveLength(0);
+    expect(screen.queryAllByLabelText(/^Open source /)).toHaveLength(0);
+    expect(writes()).toHaveLength(0);
+  } finally { screen.close(); }
+});
+
+test("source errors allow manual refresh and stale reads cannot dismiss leads", async () => {
+  const original = request.getMockImplementation()!;
+  let fail = true;
+  request.mockImplementation((path, init) => path === `${ROOT}/sources` && fail ? Promise.reject(new Error("Unavailable")) : original(path, init));
+  const screen = mount();
+  try {
+    await showSources(screen);
+    await screen.findByText("Couldn't load discovered sources. Refresh and try again.");
+    expect(screen.queryByText("No discovered sources yet.")).toBeNull();
+    expect(sourceRequests()).toHaveLength(1);
+    fail = false;
+    fireEvent.press(screen.getByLabelText("Refresh discovered sources"));
+    await screen.findByText(SOURCE_TITLE);
+    await waitFor(() => expect(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`).props.accessibilityState.disabled).toBe(false));
+    fail = true;
+    fireEvent.press(screen.getByLabelText("Refresh discovered sources"));
+    await screen.findByText("Couldn't load discovered sources. Refresh and try again.");
+    expect(screen.getByText(SOURCE_TITLE)).toBeTruthy();
+    expect(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`).props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`));
+    expect(writes()).toHaveLength(0);
+  } finally { screen.close(); }
+});
+
+test("source links use the safe URL helper and handle opening, duplicate taps and failures", async () => {
+  const opening = deferred<void>();
+  const open = jest.spyOn(Linking, "openURL").mockReturnValueOnce(opening.promise).mockResolvedValue(undefined);
+  const screen = mount();
+  try {
+    await showSources(screen);
+    await screen.findByText(SOURCE_TITLE);
+    expect(screen.getByLabelText(`Open source ${WORKOUT_SOURCE_TITLE}`).props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByText("Source link unavailable.")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText(`Open source ${WORKOUT_SOURCE_TITLE}`));
+    expect(open).not.toHaveBeenCalled();
+    fireEvent.press(screen.getByLabelText(`Open source ${SOURCE_TITLE}`));
+    expect(open).toHaveBeenCalledWith(sourceLink(sources.runs[0].sources[0].source_url));
+    await screen.findByText("Opening source...");
+    expect(screen.getByLabelText(`Open source ${SOURCE_TITLE}`).props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(screen.getByLabelText(`Open source ${SOURCE_TITLE}`));
+    expect(open).toHaveBeenCalledTimes(1);
+    await act(async () => { opening.reject(new Error("No browser")); });
+    await screen.findByText("Couldn't open the source.");
+    fireEvent.press(screen.getByLabelText(`Open source ${SOURCE_TITLE}`));
+    await waitFor(() => expect(screen.queryByText("Couldn't open the source.")).toBeNull());
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(writes()).toHaveLength(0);
+  } finally { screen.close(); }
+});
+
+test("dismiss uses exact SHA256 ids, encoded run ids and the returned overview only", async () => {
+  const saving = deferred<SourceOverview>();
+  const original = request.getMockImplementation()!;
+  request.mockImplementation((path, init) => path.endsWith("/dismiss") ? saving.promise : original(path, init));
+  const screen = mount();
+  const invalidate = jest.spyOn(screen.client, "invalidateQueries");
+  const update = jest.spyOn(screen.client, "setQueryData");
+  try {
+    await showSources(screen);
+    await screen.findByText(SOURCE_TITLE);
+    fireEvent.press(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`));
+    await screen.findByText("Dismissing source...");
+    expect(request).toHaveBeenCalledWith(`${ROOT}/sources/run%2Fone/dismiss`, { method: "POST", body: JSON.stringify({ source_ids: [SOURCE_ID] }) });
+    for (const label of [`Dismiss source ${SOURCE_TITLE}`, `Dismiss source ${WORKOUT_SOURCE_TITLE}`, "Refresh discovered sources", "Pending (1)", "History (0)", "Sources (2)"]) {
+      expect(screen.getByLabelText(label).props.accessibilityState.disabled).toBe(true);
+    }
+    expect(screen.getByLabelText("Pause daily additions").props.disabled).toBe(true);
+    fireEvent.press(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`));
+    expect(writes()).toHaveLength(1);
+    const response = structuredClone(sources);
+    response.runs[0].sources[0].status = "dismissed";
+    await act(async () => { saving.resolve(response); });
+    await screen.findByText("Source dismissed.");
+    expect(screen.queryByText(SOURCE_TITLE)).toBeNull();
+    expect(screen.getByText("1 pending sources | 2 dismissed")).toBeTruthy();
+    expect(screen.getByLabelText("Sources (1)")).toBeTruthy();
+    expect(update).toHaveBeenCalledTimes(1);
+    expect(update).toHaveBeenCalledWith(sourcesKey(OWNER), response);
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(screen.getByText("2 pending")).toBeTruthy();
+    expect(batch.pending_count).toBe(2);
+    expect(writes()).toHaveLength(1);
+  } finally { screen.close(); }
+});
+
+test("dismiss failure does not retry a write and reconciles sources without touching batch or library keys", async () => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation((path, init) => path.endsWith("/dismiss") ? Promise.reject(new Error("Network failure")) : original(path, init));
+  const screen = mount();
+  const invalidate = jest.spyOn(screen.client, "invalidateQueries");
+  try {
+    await showSources(screen);
+    await screen.findByText(SOURCE_TITLE);
+    fireEvent.press(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`));
+    await screen.findByText("Couldn't confirm dismissal. Check the refreshed sources and try again.");
+    await waitFor(() => expect(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`).props.accessibilityState.disabled).toBe(false));
+    expect(writes()).toHaveLength(1);
+    expect(invalidate).toHaveBeenCalledTimes(1);
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: sourcesKey(OWNER), exact: true });
+    expect(sourceRequests()).toHaveLength(2);
+    request.mockImplementation(original);
+    fireEvent.press(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`));
+    await screen.findByText("Source dismissed.");
+    expect(screen.queryByText(SOURCE_TITLE)).toBeNull();
+  } finally { screen.close(); }
+});
+
+test("offline source visits do not fetch or queue dismissals and cached controls are disabled", async () => {
+  setDeviceOffline(true);
+  const screen = mount();
+  const open = jest.spyOn(Linking, "openURL").mockResolvedValue(undefined);
+  try {
+    await showSources(screen);
+    expect(screen.getByText("Reconnect to check or dismiss sources.")).toBeTruthy();
+    expect(sourceRequests()).toHaveLength(0);
+    expect(screen.getByLabelText("Refresh discovered sources").props.accessibilityState.disabled).toBe(true);
+    act(() => setDeviceOffline(false));
+    await screen.findByText(SOURCE_TITLE);
+    await waitFor(() => expect(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`).props.accessibilityState.disabled).toBe(false));
+    const dismiss = webControl(screen, `Dismiss source ${SOURCE_TITLE}`).onPress;
+    const openSource = webControl(screen, `Open source ${SOURCE_TITLE}`).onPress;
+    act(() => setDeviceOffline(true));
+    expect(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`).props.accessibilityState.disabled).toBe(true);
+    expect(screen.getByLabelText(`Open source ${SOURCE_TITLE}`).props.accessibilityState.disabled).toBe(true);
+    await act(async () => { dismiss(); openSource(); });
+    expect(writes()).toHaveLength(0);
+    expect(open).not.toHaveBeenCalled();
+    expect(sourceRequests()).toHaveLength(1);
+  } finally { screen.close(); }
+});
+
+test("malformed non-SHA256 source ids never enable dismissal", async () => {
+  sources.runs[0].sources[0].id = "not-a-sha256";
+  const screen = mount();
+  try {
+    await showSources(screen);
+    await screen.findByText(SOURCE_TITLE);
+    expect(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`).props.accessibilityState.disabled).toBe(true);
+    await act(async () => { webControl(screen, `Dismiss source ${SOURCE_TITLE}`).onPress(); });
+    expect(writes()).toHaveLength(0);
+  } finally { screen.close(); }
+});
+
+test("source lists are bounded to ten entries per page, newest dates first, and clamp after refresh", async () => {
+  const template = sources.runs[0].sources[0];
+  sources.runs = [
+    { ...sources.runs[0], id: "older", sources: [{ ...template, title: "Older source" }] },
+    { ...sources.runs[0], scheduled_date: "2026-10-21", sources: Array.from({ length: 10 }, (_, index) => ({ ...template, id: index.toString(16).padStart(64, "0"), title: `New source ${index + 1}` })) }
+  ];
+  const screen = mount();
+  try {
+    await showSources(screen);
+    await screen.findByText("New source 1");
+    expect(screen.getByText("11 pending sources | 0 dismissed")).toBeTruthy();
+    expect(screen.getByText("Page 1 of 2")).toBeTruthy();
+    expect(screen.getAllByLabelText(/^Dismiss source /)).toHaveLength(10);
+    expect(screen.queryByText("Older source")).toBeNull();
+    expect(screen.getByLabelText("Previous sources page").props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(screen.getByLabelText("Next sources page"));
+    expect(screen.getByText("Older source")).toBeTruthy();
+    expect(screen.queryByText("New source 1")).toBeNull();
+    expect(screen.getByText("Page 2 of 2")).toBeTruthy();
+    expect(screen.getByLabelText("Next sources page").props.accessibilityState.disabled).toBe(true);
+    // Another reviewer can finish a run between refreshes.
+    sources.runs = [sources.runs[1]];
+    fireEvent.press(screen.getByLabelText("Refresh discovered sources"));
+    await screen.findByText("New source 1");
+    expect(screen.queryByLabelText("Next sources page")).toBeNull();
+    expect(screen.getAllByLabelText(/^Dismiss source /)).toHaveLength(10);
+    expect(writes()).toHaveLength(0);
+  } finally { screen.close(); }
+});
+
+test("owner switches abort discovery reads and never show previous-owner leads in the new view", async () => {
+  const loading = deferred<SourceOverview>();
+  const previous = structuredClone(sources);
+  const original = request.getMockImplementation()!;
+  request.mockImplementation((path, init) => path === `${ROOT}/sources` && sourceRequests().length === 1 ? loading.promise : original(path, init));
+  const screen = mount();
+  try {
+    await showSources(screen);
+    await screen.findByLabelText("Loading discovered sources");
+    const signal = sourceRequests()[0][1]?.signal;
+    sources = { runs: [] };
+    act(() => setOfflineOwner("different-account"));
+    expect(screen.queryByText("Needs source checks")).toBeNull();
+    await showSources(screen);
+    await screen.findByText("No discovered sources yet.");
+    expect(signal?.aborted).toBe(true);
+    await act(async () => { loading.resolve(previous); });
+    expect(screen.queryByText(SOURCE_TITLE)).toBeNull();
+    expect(screen.client.getQueryData(sourcesKey("different-account"))).toEqual({ runs: [] });
+    expect(writes()).toHaveLength(0);
+  } finally { screen.close(); }
+});
+
+test.each(["success", "error", "returning-owner"])("late dismiss %s cannot write caches or invalidate queries after account changes", async result => {
+  const saving = deferred<SourceOverview>();
+  const response = structuredClone(sources);
+  response.runs[0].sources[0].status = "dismissed";
+  const original = request.getMockImplementation()!;
+  request.mockImplementation((path, init) => path.endsWith("/dismiss") ? saving.promise : original(path, init));
+  const screen = mount();
+  const update = jest.spyOn(screen.client, "setQueryData");
+  const invalidate = jest.spyOn(screen.client, "invalidateQueries");
+  try {
+    await showSources(screen);
+    await screen.findByText(SOURCE_TITLE);
+    fireEvent.press(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`));
+    await screen.findByText("Dismissing source...");
+    act(() => setOfflineOwner("different-account"));
+    if (result === "returning-owner") act(() => setOfflineOwner(OWNER));
+    sources = { runs: [] };
+    await showSources(screen);
+    await screen.findByText("No discovered sources yet.");
+    await act(async () => { if (result === "error") saving.reject(new Error("Unavailable")); else saving.resolve(response); });
+    expect(update).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
+    expect(screen.client.getQueryData(sourcesKey(result === "returning-owner" ? OWNER : "different-account"))).toEqual({ runs: [] });
+    expect(screen.queryByText("Source dismissed.")).toBeNull();
+    expect(screen.queryByText(/Couldn't confirm dismissal/)).toBeNull();
+    expect(writes()).toHaveLength(1);
+  } finally { screen.close(); }
+});
+
+test.each(["owner", "offline"])("a change to %s during pre-dismiss cancellation prevents the POST", async change => {
+  const gate = deferred<void>();
+  const screen = mount();
+  try {
+    await showSources(screen);
+    await screen.findByText(SOURCE_TITLE);
+    const staleDismiss = webControl(screen, `Dismiss source ${SOURCE_TITLE}`).onPress;
+    jest.spyOn(screen.client, "cancelQueries").mockReturnValueOnce(gate.promise);
+    fireEvent.press(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`));
+    await screen.findByText("Dismissing source...");
+    if (change === "owner") {
+      state.campaign = null;
+      act(() => setOfflineOwner("different-account"));
+    } else act(() => setDeviceOffline(true));
+    await act(async () => { gate.resolve(); staleDismiss(); });
+    expect(writes()).toHaveLength(0);
   } finally { screen.close(); }
 });
 
