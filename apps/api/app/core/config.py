@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from functools import lru_cache
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -31,6 +32,7 @@ class Settings(BaseSettings):
     nutrition_transcription_model: str = "gpt-transcribe"
     nutrition_ai_daily_drafts: int = Field(default=20, ge=1, le=100)
     workouts_enabled: bool = False
+    content_automation_owner_user_id: UUID | None = None
     ai_basic_daily_attempts: int = Field(default=10, ge=1, le=1000)
     ai_premium_daily_attempts: int = Field(default=100, ge=1, le=10000)
     ai_daily_dispatch_budget: int = Field(default=500, ge=1, le=10000)

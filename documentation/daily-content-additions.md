@@ -2,6 +2,18 @@
 
 ## Scope
 
+Daily additions is a private pilot, disabled by default. Only the existing account
+UUID configured server-side as `CONTENT_AUTOMATION_OWNER_USER_ID` can access review
+endpoints, enroll through the operator CLI, or be collected for by the worker.
+The authenticated status response exposes only a capability boolean; no account
+allowlist, email or UUID is embedded in the mobile/web bundle. Ordinary accounts
+do not see the section or fetch its data, and direct API requests return 404.
+Account data export remains available independently of pilot eligibility.
+
+The owner UUID must be set in the private mode-0600 environment before deployment
+or invoking the current collector. Leaving it unset disables collection and review;
+it must never be placed in an `EXPO_PUBLIC_` variable or a user-editable profile.
+
 A finite campaign prepares at most five recipe and five workout candidates per
 calendar date, for 35 dates at 06:00 America/New_York. Preparation is not publication.
 The campaign runs in collect-only mode: daily compilation is independent of later

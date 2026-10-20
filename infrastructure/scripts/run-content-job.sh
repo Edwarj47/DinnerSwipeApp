@@ -21,6 +21,7 @@ docker run --rm --name "dinner-swipe-content-job-$$" --network "$network" \
   --pids-limit 64 --memory 384m --memory-swap 384m --cpus 0.5 \
   --tmpfs /tmp:size=32m,mode=1777 -v "$volume:/app/media" \
   -e DATABASE_URL -e APP_ENV -e JWT_SECRET -e PUBLIC_API_URL -e MEDIA_PUBLIC_BASE_URL \
+  -e CONTENT_AUTOMATION_OWNER_USER_ID \
   -e MEDIA_ACCOUNT_QUOTA_BYTES -e MAX_IMAGE_UPLOAD_SIZE_BYTES \
   -e IMAGE_STORAGE_PATH=/app/media -e MEDIA_STORAGE_BACKEND=local \
   -e FATSECRET_ENABLED=false -e AI_INGESTION_ENABLED=false -e AI_RECIPE_ENABLED=false \

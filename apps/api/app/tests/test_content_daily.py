@@ -4,13 +4,14 @@ import asyncio
 from datetime import UTC, date, datetime, timedelta
 from typing import Any
 from unittest.mock import Mock
-from uuid import uuid4
+from uuid import UUID, uuid4
 from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.config import settings
 from app.models.content_automation import ContentCampaign, ContentCandidate, ContentDailyBatch
 from app.models.entities import Recipe, User
 from app.models.security import MediaObject
@@ -92,6 +93,7 @@ def campaign(
     del auth_headers
     user = db_session.scalar(select(User).where(User.email == "owner@example.com"))
     assert user
+    monkeypatch.setattr(settings, "content_automation_owner_user_id", UUID(user.id))
     campaign = service.create_campaign(db_session, user.id, date(2026, 10, 16))
     db_session.commit()
     sessions = sessionmaker(bind=db_session.get_bind(), expire_on_commit=False)

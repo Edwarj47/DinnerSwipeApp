@@ -7,7 +7,7 @@ from datetime import UTC, date, datetime, timedelta
 from io import BytesIO
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from alembic.migration import MigrationContext
@@ -60,8 +60,12 @@ NOW = datetime(2026, 10, 16, 12, tzinfo=UTC)
 
 
 @pytest.fixture
-def owner(auth_headers: dict[str, str], db_session: Session) -> User:
-    return db_session.scalars(select(User).where(User.email == "owner@example.com")).one()
+def owner(
+    auth_headers: dict[str, str], db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> User:
+    user = db_session.scalars(select(User).where(User.email == "owner@example.com")).one()
+    monkeypatch.setattr(settings, "content_automation_owner_user_id", UUID(user.id))
+    return user
 
 
 @pytest.fixture
@@ -185,7 +189,7 @@ def saved_candidate(db: Session, candidate_id: str) -> ContentCandidate:
 
 
 def test_empty_contract_and_no_public_enrollment(
-    client: TestClient, auth_headers: dict[str, str], db_session: Session
+    client: TestClient, auth_headers: dict[str, str], db_session: Session, owner: User
 ) -> None:
     response = client.get(ROOT, headers=auth_headers)
     assert response.status_code == 200

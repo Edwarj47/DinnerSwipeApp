@@ -73,7 +73,7 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
   }, [refreshBiometricSettings, setStatus]);
   const authStatus = useQuery({
     queryKey: ["auth-status"],
-    queryFn: () => apiFetch<{ email: string; email_verified: boolean; smtp_configured: boolean }>("/api/v1/auth/status"),
+    queryFn: () => apiFetch<{ email: string; email_verified: boolean; smtp_configured: boolean; content_automation_enabled?: boolean }>("/api/v1/auth/status"),
     retry: false
   });
   const profile = useQuery({
@@ -408,10 +408,10 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
         </View></TourTarget>
       </SettingsSection>
       <SettingsSection title="Discover" icon="options-outline" expanded={section === "discover"} onToggle={() => setSection(section === "discover" ? null : "discover")}><DiscoverSettings /></SettingsSection>
-      <DailyAdditionsSection expanded={section === "daily-additions"} onToggle={() => setSection(section === "daily-additions" ? null : "daily-additions")} />
+      {authStatus.data?.content_automation_enabled === true ? <DailyAdditionsSection expanded={section === "daily-additions"} onToggle={() => setSection(section === "daily-additions" ? null : "daily-additions")} /> : null}
       {workoutsEnabled ? <SettingsSection title="Workout settings" icon="barbell-outline" expanded={section === "workouts"} onToggle={() => setSection(section === "workouts" ? null : "workouts")}><WorkoutSettings /></SettingsSection> : null}
       {premiumActive ? <SettingsSection title="Macro settings" icon="speedometer-outline" expanded={section === "macros"} onToggle={() => setSection(section === "macros" ? null : "macros")}>
-        <SettingsSection title="Macro targets" icon="flag-outline"><MacroTargetSettings /></SettingsSection>
+        <MacroTargetSettings />
       </SettingsSection> : null}
     </View>
   );

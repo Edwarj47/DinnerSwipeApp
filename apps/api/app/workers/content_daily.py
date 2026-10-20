@@ -21,6 +21,7 @@ from app.models.content_automation import ContentCampaign, ContentCandidate
 from app.models.entities import User
 from app.schemas.content_automation import RecipeCandidateInput, WorkoutCandidateInput
 from app.services import content_automation as service
+from app.services.content_automation_access import enabled_for
 from app.services.content_media import ResolvedPhoto, commons_photo, photo_bytes
 from app.services.private_media import local_object, object_url, store_image
 
@@ -168,6 +169,8 @@ async def prepare_campaign(campaign_id: str) -> dict[str, Any]:
         campaign = db.get(ContentCampaign, campaign_id)
         if not campaign:
             return {"status": "not_found"}
+        if not enabled_for(campaign.user_id):
+            return {"status": "not_enabled"}
         today = utcnow().astimezone(ZoneInfo(campaign.time_zone)).date()
         batch = service.begin_batch(db, campaign_id, today, utcnow())
         db.commit()
@@ -342,6 +345,8 @@ def main() -> None:
             user = db.scalar(select(User).where(User.email == (args.enroll or args.timer)))
             if not user:
                 raise SystemExit("Account not found")
+            if not enabled_for(user.id):
+                raise SystemExit("Daily additions is private to the configured account.")
             if args.enroll:
                 start = args.start_date or utcnow().astimezone(
                     ZoneInfo(service.TIME_ZONE)
@@ -367,7 +372,7 @@ def main() -> None:
                 print(timer_text(configured), end="")
         return
     with SessionLocal() as db:
-        campaigns = list(db.scalars(select(ContentCampaign)))
+        campaigns = [row for row in db.scalars(select(ContentCampaign)) if enabled_for(row.user_id)]
         ids = [
             campaign.id
             for campaign in campaigns

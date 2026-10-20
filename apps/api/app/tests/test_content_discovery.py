@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
+from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
@@ -10,6 +11,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.config import settings
 from app.models.content_automation import ContentCampaign, ContentCandidate, ContentDailyBatch
 from app.models.entities import Recipe, User
 from app.models.workouts import WorkoutTemplate
@@ -39,10 +41,13 @@ def lead(kind: str = "recipe", index: int = 0) -> dict[str, str]:
 
 
 @pytest.fixture()
-def batch(db_session: Session, auth_headers: dict[str, str]) -> ContentDailyBatch:
+def batch(
+    db_session: Session, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+) -> ContentDailyBatch:
     del auth_headers
     user = db_session.scalar(select(User).where(User.email == "owner@example.com"))
     assert user
+    monkeypatch.setattr(settings, "content_automation_owner_user_id", UUID(user.id))
     campaign = automation.create_campaign(db_session, user.id, NOW.date())
     row = automation.begin_batch(db_session, campaign.id, NOW.date(), NOW)
     assert row and row.lease_token

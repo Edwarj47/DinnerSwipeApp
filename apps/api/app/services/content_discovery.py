@@ -19,6 +19,7 @@ from app.models.content_automation import ContentCandidate, ContentDailyBatch
 from app.models.entities import User
 from app.schemas.content_automation import DiscoveredSource
 from app.services import content_automation as service
+from app.services.content_automation_access import enabled_for, require_owner
 from app.services.content_discovery_sources import allowed_source, source_id
 
 KEY = "source_discovery"
@@ -37,6 +38,8 @@ def _locked_batch(db: Session, batch_id: str) -> ContentDailyBatch:
 def begin(db: Session, campaign_id: str, now: datetime) -> tuple[str, str, int, set[str]] | None:
     now = service._now(now)
     user, campaign = service._lock_campaign(db, campaign_id)
+    if not enabled_for(user.id):
+        return None
     local = now.astimezone(ZoneInfo(campaign.time_zone))
     day = local.date()
     if (
@@ -122,6 +125,7 @@ def finish(
     if not campaign_id:
         raise HTTPException(404, "Batch not found")
     user, _ = service._lock_campaign(db, campaign_id)
+    require_owner(user.id)
     if not user.email_verified:
         raise HTTPException(403, "Verify the account before source collection.")
     batch = _locked_batch(db, batch_id)

@@ -23,6 +23,7 @@ from app.schemas.content_automation import (
 )
 from app.services import content_automation as service
 from app.services import content_discovery
+from app.services.content_automation_access import require_owner
 
 
 class PrivateRoute(APIRoute):
@@ -50,6 +51,7 @@ router = APIRouter(
 
 
 def get_automation_user(current_user: BasicUser) -> User:
+    require_owner(current_user.id)
     if not current_user.email_verified:
         raise HTTPException(403, "Verify your email before reviewing automated content.")
     auth_rate_limiter.check(f"content-automation:access:{current_user.id}", 120, 60)

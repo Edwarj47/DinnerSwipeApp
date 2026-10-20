@@ -93,7 +93,7 @@ beforeEach(() => {
       state.batches = [summary(batch)];
       return structuredClone(batch);
     }
-    if (path.endsWith("/auth/status")) return { user_id: OWNER, email: "daily@example.test", email_verified: true };
+    if (path.endsWith("/auth/status")) return { user_id: OWNER, email: "daily@example.test", email_verified: true, content_automation_enabled: true };
     if (path.endsWith("/profile")) return { household_size: 2, allergens: [], disliked_ingredients: [], notification_preferences: {} };
     if (path.endsWith("/subscription/status")) return { active: false, premium_active: false };
     throw new Error(`Unexpected request: ${path}`);
@@ -136,7 +136,7 @@ function deferred<T>() {
   return { promise, resolve, reject };
 }
 
-test("settings show a collapsed Daily additions section for a campaign even without Premium", async () => {
+test("enabled owner settings show a collapsed Daily additions section even without Premium", async () => {
   const screen = mount(<UserSettingsPanel />);
   try {
     await screen.findByLabelText("Expand Daily additions");
@@ -150,6 +150,47 @@ test("settings show a collapsed Daily additions section for a campaign even with
     fireEvent.press(screen.getByLabelText("Expand Meals"));
     expect(screen.queryByText("2 pending")).toBeNull();
     expect(screen.getByLabelText("Expand Daily additions")).toBeTruthy();
+  } finally { screen.close(); }
+});
+
+test.each([false, undefined])("settings with automation flag %s hide Daily additions and do not fetch automation", async enabled => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation((path, init) => path.endsWith("/auth/status") ? Promise.resolve({
+    user_id: OWNER, email: "daily@example.test", email_verified: true,
+    ...(enabled === undefined ? {} : { content_automation_enabled: enabled })
+  }) : original(path, init));
+  const screen = mount(<UserSettingsPanel initialSection="daily-additions" />);
+  try {
+    await waitFor(() => expect(screen.client.getQueryState(["auth-status"])?.status).toBe("success"));
+    expect(screen.queryByText("Daily additions")).toBeNull();
+    expect(screen.queryByLabelText("Expand Daily additions")).toBeNull();
+    expect(screen.queryByLabelText("Collapse Daily additions")).toBeNull();
+    fireEvent.press(screen.getByLabelText("Expand Account"));
+    await screen.findByText("daily@example.test");
+    expect(screen.getByLabelText("Save name")).toBeTruthy();
+    expect(screen.getByLabelText("Expand Subscription")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Expand Meals"));
+    expect(screen.getByLabelText("Default servings").props.value).toBe("2");
+    expect(screen.getByLabelText("Save preferences")).toBeTruthy();
+    expect(screen.getByLabelText("Expand Discover")).toBeTruthy();
+    expect(screen.queryByLabelText("Expand Macro settings")).toBeNull();
+    expect(request.mock.calls.some(([path]) => path.startsWith(ROOT))).toBe(false);
+  } finally { screen.close(); }
+});
+
+test.each(["loading", "error"])("settings with %s auth status do not expose or fetch automation", async mode => {
+  const loading = deferred<unknown>();
+  const original = request.getMockImplementation()!;
+  request.mockImplementation((path, init) => path.endsWith("/auth/status") ? loading.promise : original(path, init));
+  const screen = mount(<UserSettingsPanel initialSection="daily-additions" />);
+  try {
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/auth/status"));
+    if (mode === "error") {
+      await act(async () => { loading.reject(new Error("Unavailable")); });
+      await waitFor(() => expect(screen.client.getQueryState(["auth-status"])?.status).toBe("error"));
+    }
+    expect(screen.queryByText("Daily additions")).toBeNull();
+    expect(request.mock.calls.some(([path]) => path.startsWith(ROOT))).toBe(false);
   } finally { screen.close(); }
 });
 
@@ -176,20 +217,49 @@ test("signed-out accounts do not request campaign data", () => {
 
 test("pending and history list dates, counts, and shortfall reasons", async () => {
   state.batches.push({ ...summary(batch), id: "history", scheduled_date: "2026-10-15", status: "reviewed", pending_count: 0 });
-  state.batches.push({ ...summary(batch), id: "next", scheduled_date: "2026-10-17", status: "scheduled", pending_count: 0 });
+  state.batches.push({ ...summary(batch), id: "older-history", scheduled_date: "2026-10-14", status: "reviewed", pending_count: 0, recipe_count: 3, workout_count: 2, approved_count: 2, dismissed_count: 3 });
+  state.batches.push({ ...summary(batch), id: "next", scheduled_date: "2026-10-17", status: "scheduled", recipe_count: 0, workout_count: 0, pending_count: 0, approved_count: 0, dismissed_count: 0 });
   const screen = mount();
   try {
     fireEvent.press(await screen.findByLabelText("Expand Daily additions"));
     expect(screen.getByLabelText("Pending (2)")).toBeTruthy();
-    expect(screen.getByLabelText("History (1)")).toBeTruthy();
+    expect(screen.getByLabelText("History (7)")).toBeTruthy();
     expect(screen.getByLabelText(`Expand batch ${dateLabel("2026-10-17")}`)).toBeTruthy();
     expect(webControl(screen, `Expand batch ${dateLabel("2026-10-17")}`)["aria-expanded"]).toBe(false);
-    expect(screen.getAllByText("2 recipes | 2 workouts")).toHaveLength(2);
+    expect(screen.getAllByText("2 recipes | 2 workouts")).toHaveLength(1);
+    expect(screen.getByText("0 recipes | 0 workouts")).toBeTruthy();
     expect(screen.getByText("2 pending | 1 approved | 1 dismissed")).toBeTruthy();
     expect(screen.getAllByText("One recipe did not meet nutrition requirements.").length).toBeGreaterThan(0);
-    fireEvent.press(screen.getByLabelText("History (1)"));
+    fireEvent.press(screen.getByLabelText("History (7)"));
     expect(screen.getByLabelText(`Expand batch ${dateLabel("2026-10-15")}`)).toBeTruthy();
+    expect(screen.getByLabelText(`Expand batch ${dateLabel("2026-10-14")}`)).toBeTruthy();
+    expect(screen.getByText("0 pending | 1 approved | 1 dismissed")).toBeTruthy();
+    expect(screen.getByText("0 pending | 2 approved | 3 dismissed")).toBeTruthy();
     expect(screen.queryByLabelText(`Expand batch ${dateLabel("2026-10-16")}`)).toBeNull();
+  } finally { screen.close(); }
+});
+
+test("Pending counts ten entries in one batch and matches the campaign total", async () => {
+  batch = {
+    ...batch, recipe_count: 5, workout_count: 5, pending_count: 10, approved_count: 0, dismissed_count: 0,
+    recipes: Array.from({ length: 5 }, (_, index) => ({ ...recipe, id: `recipe-${index}`, title: `Recipe ${index}` })),
+    workouts: Array.from({ length: 5 }, (_, index) => ({ ...workout, id: `workout-${index}`, title: `Workout ${index}` }))
+  };
+  state.campaign!.pending_count = 10;
+  state.batches = [summary(batch)];
+  const screen = mount(<UserSettingsPanel />);
+  try {
+    fireEvent.press(await screen.findByLabelText("Expand Daily additions"));
+    expect(screen.getByText("10 pending")).toBeTruthy();
+    expect(screen.getByLabelText("Pending (10)")).toBeTruthy();
+    expect(screen.queryByLabelText("Pending (1)")).toBeNull();
+    expect(screen.getByLabelText("History (0)")).toBeTruthy();
+    expect(screen.getAllByLabelText(/^Expand batch /)).toHaveLength(1);
+    expect(screen.getByText("5 recipes | 5 workouts")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText(`Expand batch ${dateLabel(batch.scheduled_date)}`));
+    await screen.findByText("0/10 selected");
+    expect(screen.getByLabelText("Approve batch")).toBeTruthy();
+    expect(writes()).toHaveLength(0);
   } finally { screen.close(); }
 });
 
@@ -236,7 +306,7 @@ test.each(["selected", "batch"])("approve %s submits only the explicit pending i
     expect(invalidate).toHaveBeenCalledWith({ queryKey: automationKey(OWNER), exact: true });
     expect(request.mock.calls.some(([path]) => path === "/api/v1/recipes" || path === "/api/v1/workouts/templates")).toBe(false);
     expect(batch.approved_count).toBe(action === "selected" ? 2 : 3);
-    await waitFor(() => expect(screen.getByLabelText(action === "selected" ? "Pending (1)" : "History (1)")).toBeTruthy());
+    await waitFor(() => expect(screen.getByLabelText(action === "selected" ? "Pending (1)" : "History (4)")).toBeTruthy());
   } finally { screen.close(); }
 });
 
@@ -365,7 +435,7 @@ test.each(["completed", "cancelled", "expired", "failed"])("%s campaign keeps hi
     fireEvent.press(await screen.findByLabelText("Expand Daily additions"));
     expect(screen.getByText(`${status[0].toUpperCase()}${status.slice(1)} - 1/7 days`)).toBeTruthy();
     expect(screen.queryByLabelText("Pause daily additions")).toBeNull();
-    expect(screen.getByLabelText("Pending (1)")).toBeTruthy();
+    expect(screen.getByLabelText("Pending (2)")).toBeTruthy();
   } finally { screen.close(); }
 });
 
@@ -383,13 +453,14 @@ test("preparing batches cannot submit partial pending candidates", async () => {
 });
 
 test("empty failed batches live in history, show reasons, and have no decision controls", async () => {
-  batch = { ...batch, status: "failed", recipe_count: 0, workout_count: 0, pending_count: 0, recipes: [], workouts: [], report: { reasons: ["No qualifying candidates were found."] } };
+  batch = { ...batch, status: "failed", recipe_count: 0, workout_count: 0, pending_count: 0, approved_count: 0, dismissed_count: 0, recipes: [], workouts: [], report: { reasons: ["No qualifying candidates were found."] } };
+  state.campaign!.pending_count = 0;
   state.batches = [summary(batch)];
   const screen = mount();
   try {
     fireEvent.press(await screen.findByLabelText("Expand Daily additions"));
     expect(screen.getByText("No pending batches.")).toBeTruthy();
-    fireEvent.press(screen.getByLabelText("History (1)"));
+    fireEvent.press(screen.getByLabelText("History (0)"));
     expect(screen.getByText("No qualifying candidates were found.")).toBeTruthy();
     fireEvent.press(screen.getByLabelText(`Expand batch ${dateLabel(batch.scheduled_date)}`));
     await screen.findByText("No additions in this batch.");
@@ -411,12 +482,13 @@ test.each(["complete", "partial"])("%s batches permit review after generation en
 });
 
 test("skipped batches show campaign pause reasons in history", async () => {
-  batch = { ...batch, status: "skipped", recipe_count: 0, workout_count: 0, pending_count: 0, recipes: [], workouts: [], report: { reasons: ["campaign_paused"] } };
+  batch = { ...batch, status: "skipped", recipe_count: 0, workout_count: 0, pending_count: 0, approved_count: 0, dismissed_count: 0, recipes: [], workouts: [], report: { reasons: ["campaign_paused"] } };
+  state.campaign!.pending_count = 0;
   state.batches = [summary(batch)];
   const screen = mount();
   try {
     fireEvent.press(await screen.findByLabelText("Expand Daily additions"));
-    fireEvent.press(screen.getByLabelText("History (1)"));
+    fireEvent.press(screen.getByLabelText("History (0)"));
     expect(screen.getByText("Campaign paused")).toBeTruthy();
     fireEvent.press(screen.getByLabelText(`Expand batch ${dateLabel(batch.scheduled_date)}`));
     await screen.findByText("No additions in this batch.");
@@ -525,7 +597,7 @@ test("sources load only in the visible Sources view, separately from complete ca
     expect(screen.queryByLabelText("Approve selected")).toBeNull();
     expect(screen.queryByLabelText(`Preview ${SOURCE_TITLE}`)).toBeNull();
     expect(screen.queryByLabelText("Select all pending additions")).toBeNull();
-    fireEvent.press(screen.getByLabelText("Pending (1)"));
+    fireEvent.press(screen.getByLabelText("Pending (2)"));
     await act(async () => { await screen.client.invalidateQueries({ queryKey: sourcesKey(OWNER), exact: true }); });
     expect(sourceRequests()).toHaveLength(1);
     expect(screen.queryByText("Needs source checks")).toBeNull();
@@ -675,7 +747,7 @@ test("dismiss uses exact SHA256 ids, encoded run ids and the returned overview o
     fireEvent.press(screen.getByLabelText(`Dismiss source ${SOURCE_TITLE}`));
     await screen.findByText("Dismissing source...");
     expect(request).toHaveBeenCalledWith(`${ROOT}/sources/run%2Fone/dismiss`, { method: "POST", body: JSON.stringify({ source_ids: [SOURCE_ID] }) });
-    for (const label of [`Dismiss source ${SOURCE_TITLE}`, `Dismiss source ${WORKOUT_SOURCE_TITLE}`, "Refresh discovered sources", "Pending (1)", "History (0)", "Sources (2)"]) {
+    for (const label of [`Dismiss source ${SOURCE_TITLE}`, `Dismiss source ${WORKOUT_SOURCE_TITLE}`, "Refresh discovered sources", "Pending (2)", "History (0)", "Sources (2)"]) {
       expect(screen.getByLabelText(label).props.accessibilityState.disabled).toBe(true);
     }
     expect(screen.getByLabelText("Pause daily additions").props.disabled).toBe(true);

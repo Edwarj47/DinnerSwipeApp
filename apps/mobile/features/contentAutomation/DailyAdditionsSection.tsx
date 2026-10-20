@@ -62,6 +62,7 @@ function CampaignSection({ owner, expanded: sectionOpen, onToggle }: { owner: st
   const batches = data?.batches ?? [];
   const pending = batches.filter(batch => batch.pending_count > 0 || isPreparing(batch.status));
   const history = batches.filter(batch => !pending.includes(batch));
+  const historyCount = history.reduce((count, batch) => count + batch.approved_count + batch.dismissed_count, 0);
   const visible = [...(view === "pending" ? pending : history)].sort((a, b) => b.scheduled_date.localeCompare(a.scheduled_date));
   const sourceCount = sourcesReview.data?.runs.reduce((count, run) => count + run.sources.filter(source => source.status === "pending").length, 0);
   return <SettingsSection title="Daily additions" icon="calendar-outline" expanded={open} onToggle={() => { if (!busy) { if (onToggle) onToggle(); else setOpen(value => !value); } }}>
@@ -91,7 +92,7 @@ function CampaignSection({ owner, expanded: sectionOpen, onToggle }: { owner: st
       {pause.isError ? <Text accessibilityRole="alert" style={styles.error}>Couldn't update the campaign. Refresh and try again.</Text> : null}
       {message ? <Text accessibilityLiveRegion="polite" style={styles.success}>{message}</Text> : null}
       <SegmentedControl value={view} adaptive accessibilityLabel="Daily addition views" disabled={busy}
-        options={[{ value: "pending", label: `Pending (${pending.length})`, icon: "time-outline" }, { value: "history", label: `History (${history.length})`, icon: "archive-outline" }, { value: "sources", label: sourceCount == null ? "Sources" : `Sources (${sourceCount})`, icon: "link-outline" }]}
+        options={[{ value: "pending", label: `Pending (${campaign.pending_count})`, icon: "time-outline" }, { value: "history", label: `History (${historyCount})`, icon: "archive-outline" }, { value: "sources", label: sourceCount == null ? "Sources" : `Sources (${sourceCount})`, icon: "link-outline" }]}
         onChange={value => { setView(value); setExpanded(null); }} />
       {view === "sources" ? <SourcesReview owner={owner} review={sourcesReview} blocked={disabled} /> : <>
       {!visible.length ? <Text style={styles.meta}>{view === "pending" ? "No pending batches." : "No batch history yet."}</Text> : null}

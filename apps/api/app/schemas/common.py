@@ -72,6 +72,7 @@ class AuthStatus(ApiModel):
     email: EmailStr
     email_verified: bool
     smtp_configured: bool
+    content_automation_enabled: bool = False
 
 
 class VerifyEmailRequest(ApiModel):

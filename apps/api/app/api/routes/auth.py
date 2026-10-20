@@ -213,12 +213,16 @@ def logout(
 
 
 @router.get("/status", response_model=AuthStatus)
-def status_route(current_user: CurrentUser) -> AuthStatus:
+def status_route(current_user: CurrentUser, response: Response) -> AuthStatus:
+    from app.services.content_automation_access import enabled_for
+
+    response.headers["Cache-Control"] = "no-store"
     return AuthStatus(
         user_id=current_user.id,
         email=current_user.email,
         email_verified=current_user.email_verified,
         smtp_configured=settings.smtp_configured,
+        content_automation_enabled=current_user.email_verified and enabled_for(current_user.id),
     )
 
 
