@@ -8,7 +8,24 @@ test("prescribed exercise metrics do not become actual performance", () => {
   const form = initialPerformance(template);
   expect(form[0].sets).toHaveLength(2);
   expect(form.flatMap(item => item.sets)).toEqual(Array(3).fill({ reps: "", weightKg: "", duration: "" }));
-  expect(() => buildPerformance(template, today, true, "", form, today)).toThrow(/actual set/);
+  expect(buildPerformance(template, today, true, "", form, today).sets).toEqual([]);
+});
+test.each([true, false])("sessions can save completion=%s and notes without inventing set metrics", completed => {
+  const run: WorkoutTemplate = { ...template, title: "Run", category: "cardio", exercises: [{ name: "Run", duration_seconds: 1800 }] };
+  const form = initialPerformance(run);
+  form[0].completed = true; form[0].notes = "  3.15 miles  ";
+  const result = buildPerformance(run, today, completed, "  Easy pace  ", form, today);
+  expect(result).toMatchObject({ completed, notes: "Easy pace", sets: [],
+    exercise_details: [{ exercise_index: 0, completed: true, notes: "3.15 miles" }] });
+  const restored = performanceFromLog(run, { ...result, snapshot: run });
+  expect(restored.notes).toBe("Easy pace");
+  expect(restored.exercises[0]).toEqual({ completed: true, notes: "3.15 miles", sets: [{ reps: "", weightKg: "", duration: "" }] });
+  expect(buildPerformance(run, today, completed, restored.notes, restored.exercises, today)).toEqual(result);
+});
+test("blank sessions and whitespace-only placeholder sets do not require fake measurements", () => {
+  const form = initialPerformance(template);
+  form[0].sets[0] = { reps: " ", weightKg: "\t", duration: "\n" };
+  expect(buildPerformance(template, today, false, "", form, today)).toMatchObject({ completed: false, notes: "", sets: [] });
 });
 test("full actual performance includes canonical kg and exercise completion/notes", () => {
   const form = initialPerformance(template);

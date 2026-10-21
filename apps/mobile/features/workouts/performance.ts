@@ -60,7 +60,6 @@ export function buildPerformance(template: WorkoutTemplate, performedOn: string,
     if (weight !== undefined && reps === undefined) throw new Error("Weighted sets require repetitions.");
     return [{ exercise_index, set_number: index + 1, ...(reps !== undefined ? { reps } : {}), ...(weight !== undefined ? { weight_kg: weight } : {}), ...(duration !== undefined ? { duration_seconds: duration } : {}) }];
   }));
-  if (!sets.length && template.exercises.length) throw new Error("Record at least one actual set before saving.");
   if (sets.length > 200) throw new Error("A session can have at most 200 recorded sets.");
   if (notes.trim().length > 4000 || exercises.some(exercise => exercise.notes.trim().length > 1000)) throw new Error("Keep session notes under 4,000 characters and exercise notes under 1,000.");
   return { template_id: template.id, performed_on: performedOn, completed, notes: notes.trim(), sets,

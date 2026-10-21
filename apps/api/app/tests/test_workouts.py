@@ -492,6 +492,38 @@ def test_snapshots_past_immutability_manual_carryover_without_meal_changes(
     assert grocery_item.quantity == 3 and grocery_item.is_checked
 
 
+@pytest.mark.parametrize("completed", [True, False])
+def test_notes_only_sessions_save_without_sets_and_round_trip(
+    workout_client: TestClient, db_session: Session, completed: bool
+) -> None:
+    _, headers = account(db_session, "runner")
+    routine = template(
+        workout_client, headers, title="Morning run", category="cardio", exercises=[{"name": "Run"}]
+    )
+    request_id = str(uuid4())
+    body = {
+        "template_id": routine["id"],
+        "performed_on": "2026-10-14",
+        "completed": completed,
+        "notes": "Easy pace",
+        "sets": [],
+        "exercise_details": [{"exercise_index": 0, "completed": True, "notes": "3.15 miles"}],
+    }
+    response = workout_client.put(f"{BASE}/logs/{request_id}", headers=headers, json=body)
+    assert response.status_code == 200, response.text
+    saved = response.json()
+    assert saved["sets"] == [] and saved["completed"] is completed
+    assert saved["exercise_details"] == body["exercise_details"]
+    assert workout_client.get(f"{BASE}/logs", headers=headers).json()["items"] == [saved]
+    retry = workout_client.put(f"{BASE}/logs/{request_id}", headers=headers, json=body)
+    assert retry.json() == saved
+    assert db_session.scalar(select(func.count()).select_from(WorkoutLog)) == 1
+    progress = workout_client.get(f"{BASE}/progress", headers=headers).json()
+    assert progress["sessions_completed"] == int(completed)
+    assert progress["total_volume_kg"] == 0 and progress["total_duration_seconds"] == 0
+    assert progress["exercises"] == []
+
+
 def test_private_logs_idempotency_historic_corrections_and_progress(
     workout_client: TestClient, db_session: Session
 ) -> None:
