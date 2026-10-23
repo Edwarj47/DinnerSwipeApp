@@ -1,7 +1,8 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { BottomSheetModal } from "@/components/BottomSheetModal";
 import { SearchField } from "@/components/SearchField";
 import { Colors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
@@ -27,8 +28,7 @@ export function SpaceSelector({ label = "Planning for", purpose = "switch" }: { 
       <View style={styles.copy}><Text style={styles.label}>{label}</Text><Text style={styles.name}>{selectedName}</Text></View>
       <Ionicons name="chevron-down" size={20} color={Colors.muted} />
     </Pressable>
-    <Modal visible={open} transparent animationType="slide" onRequestClose={() => { if (!change.isPending) setOpen(false); }}>
-      <View style={styles.backdrop}><View style={styles.sheet} accessibilityViewIsModal>
+    <BottomSheetModal visible={open} sheetStyle={styles.sheet} onRequestClose={() => { if (!change.isPending) setOpen(false); }}>
         <View style={styles.header}><Text style={styles.title}>Choose a group</Text><Pressable accessibilityRole="button" accessibilityLabel="Close group selection" disabled={change.isPending} onPress={() => setOpen(false)} style={styles.icon}><Ionicons name="close" size={24} color={Colors.ink} /></Pressable></View>
         <SearchField accessibilityLabel="Search groups" placeholder="Search groups" value={search} onChangeText={setSearch} editable={!change.isPending} />
         <ScrollView keyboardShouldPersistTaps="handled" style={styles.list}>
@@ -41,15 +41,13 @@ export function SpaceSelector({ label = "Planning for", purpose = "switch" }: { 
           {!groups.isLoading && !groups.isError && !matches.length ? <Text style={styles.label}>No groups found.</Text> : null}
         </ScrollView>
         {change.error || groups.error ? <Text accessibilityRole="alert" style={styles.error}>{(change.error ?? groups.error)?.message}</Text> : null}
-      </View></View>
-    </Modal>
+    </BottomSheetModal>
   </>;
 }
 
 const styles = StyleSheet.create({
   selector: { borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 8 },
   copy: { flex: 1, minWidth: 0 }, label: { color: Colors.muted, fontSize: 13, lineHeight: 20 }, name: { color: Colors.ink, fontWeight: "700", fontSize: 16 },
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "flex-end", alignItems: "center" },
   sheet: { width: "100%", maxWidth: 600, maxHeight: "80%", backgroundColor: Colors.surface, padding: 20, borderTopLeftRadius: 8, borderTopRightRadius: 8, gap: 12 },
   header: { flexDirection: "row", alignItems: "center", gap: 12 }, title: { flex: 1, fontSize: 22, fontWeight: "800", color: Colors.ink },
   icon: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }, input: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, color: Colors.ink },

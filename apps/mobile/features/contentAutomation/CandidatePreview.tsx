@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Linking, Modal, ScrollView, Text, View } from "react-native";
+import { Linking, ScrollView, Text, View } from "react-native";
 import { Button } from "@/components/Button";
+import { BottomSheetModal } from "@/components/BottomSheetModal";
 import { PhotoCredit } from "@/components/PhotoCredit";
 import { RecipePhoto } from "@/features/recipes/RecipePhoto";
 import { Candidate, RecipePayload, WorkoutPayload, sourceLink, statusLabel } from "./types";
@@ -9,8 +10,7 @@ import { styles } from "./styles";
 export function CandidatePreview({ candidate, onClose }: { candidate: Candidate; onClose: () => void }) {
   const [linkError, setLinkError] = useState(false);
   const link = sourceLink(candidate.source_url);
-  return <Modal visible transparent animationType="slide" onRequestClose={onClose}>
-    <View style={styles.backdrop}><View style={styles.sheet} accessibilityViewIsModal>
+  return <BottomSheetModal sheetStyle={styles.sheet} onRequestClose={onClose}>
       <View style={styles.row}>
         <Text accessibilityRole="header" style={[styles.title, styles.copy]}>{candidate.title}</Text>
         <Button label="" icon="close" accessibilityLabel="Close daily addition preview" onPress={onClose} />
@@ -27,8 +27,7 @@ export function CandidatePreview({ candidate, onClose }: { candidate: Candidate;
         }} /> : null}
         {linkError ? <Text accessibilityRole="alert" style={styles.error}>Couldn't open the source.</Text> : null}
       </ScrollView>
-    </View></View>
-  </Modal>;
+  </BottomSheetModal>;
 }
 
 function RecipePreview({ payload }: { payload: RecipePayload }) {

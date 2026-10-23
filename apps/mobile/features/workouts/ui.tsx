@@ -1,7 +1,8 @@
 import { ReactNode } from "react";
-import { ActivityIndicator, Modal, ScrollView, StyleSheet, Text, TextInput, TextInputProps, View } from "react-native";
+import { ActivityIndicator, ScrollView, StyleSheet, Text, TextInput, TextInputProps, View } from "react-native";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
+import { BottomSheetModal } from "@/components/BottomSheetModal";
 import { Colors } from "@/components/theme";
 import { SpaceSelector } from "@/features/groups/SpaceSelector";
 import { RecipePhoto } from "@/features/recipes/RecipePhoto";
@@ -21,11 +22,10 @@ export function WorkoutField({ label, ...props }: TextInputProps & { label: stri
   return <View style={styles.field}><Text style={styles.label}>{label}</Text><TextInput {...props} accessibilityLabel={props.accessibilityLabel ?? label} style={[styles.input, props.style]} /></View>;
 }
 export function WorkoutSheet({ title, children, onClose, busy = false }: { title: string; children: ReactNode; onClose: () => void; busy?: boolean }) {
-  return <Modal visible transparent animationType="slide" onRequestClose={() => { if (!busy) onClose(); }}>
-    <View style={styles.backdrop}><View style={styles.sheet} accessibilityViewIsModal><View style={styles.header}><Text style={[styles.heading, styles.copy]}>{title}</Text><Button label="" icon="close" accessibilityLabel={`Close ${title}`} disabled={busy} onPress={onClose} /></View>
+  return <BottomSheetModal sheetStyle={styles.sheet} onRequestClose={() => { if (!busy) onClose(); }}>
+    <View style={styles.header}><Text style={[styles.heading, styles.copy]}>{title}</Text><Button label="" icon="close" accessibilityLabel={`Close ${title}`} disabled={busy} onPress={onClose} /></View>
       <ScrollView keyboardShouldPersistTaps="handled" contentContainerStyle={{ gap: 14, paddingBottom: 24 }}>{children}</ScrollView>
-    </View></View>
-  </Modal>;
+  </BottomSheetModal>;
 }
 export function WorkoutQueryState({ loading, error, retry }: { loading?: boolean; error?: Error | null; retry: () => void }) {
   if (loading) return <View style={styles.empty}><ActivityIndicator color={Colors.tomato} /><Text style={styles.muted}>Loading workouts...</Text></View>;
@@ -46,7 +46,6 @@ export const styles = StyleSheet.create({
   photo: { alignItems: "center", justifyContent: "center", backgroundColor: Colors.softRed, width: "100%" },
   field: { gap: 6, minWidth: 0, flexGrow: 1 }, label: { color: Colors.ink, fontWeight: "700", fontSize: 13 },
   input: { minHeight: 44, padding: 10, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, color: Colors.ink, backgroundColor: Colors.surface },
-  backdrop: { flex: 1, justifyContent: "flex-end", alignItems: "center", backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: { width: "100%", maxWidth: 640, maxHeight: "90%", backgroundColor: Colors.surface, borderTopLeftRadius: 8, borderTopRightRadius: 8, padding: 18, gap: 14 },
   row: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
   section: { gap: 12, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },

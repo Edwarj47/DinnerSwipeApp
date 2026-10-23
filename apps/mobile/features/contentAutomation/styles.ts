@@ -20,7 +20,6 @@ export const styles = StyleSheet.create({
   checkIcon: { width: 44, height: 44, alignItems: "center", justifyContent: "center", flexShrink: 0 },
   disabled: { opacity: 0.45 },
   candidate: { flexDirection: "row", gap: 8, alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderColor: Colors.border, paddingVertical: 8 },
-  backdrop: { flex: 1, justifyContent: "flex-end", alignItems: "center", backgroundColor: "rgba(0,0,0,0.4)" },
   sheet: { width: "100%", maxWidth: 640, maxHeight: "90%", backgroundColor: Colors.surface, borderTopLeftRadius: 8, borderTopRightRadius: 8, padding: 16, gap: 12 },
   preview: { gap: 14, paddingBottom: 24 },
   photo: { width: "100%", aspectRatio: 16 / 9, backgroundColor: Colors.softRed },

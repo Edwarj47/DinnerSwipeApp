@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
 import {
   Linking,
-  Modal,
   PanResponder,
   Platform,
   Pressable,
@@ -14,6 +13,7 @@ import {
 } from "react-native";
 
 import { Button } from "@/components/Button";
+import { BottomSheetModal } from "@/components/BottomSheetModal";
 import { PhotoCredit } from "@/components/PhotoCredit";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { Colors, shadow } from "@/components/theme";
@@ -116,9 +116,7 @@ export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, on
   }
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-      <View style={styles.backdrop}>
-        <View style={styles.sheet}>
+    <BottomSheetModal visible={visible} sheetStyle={styles.sheet} backdropColor="rgba(0,0,0,0.32)" onRequestClose={onClose}>
           <View
             {...dragToClose.panHandlers}
             accessibilityRole="button"
@@ -246,9 +244,7 @@ export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, on
             ) : null}
             </>}
           </ScrollView>
-        </View>
-      </View>
-    </Modal>
+    </BottomSheetModal>
   );
 }
 
@@ -318,7 +314,6 @@ function RecipeSection({ title, children }: { title: string; children: ReactNode
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.32)", justifyContent: "flex-end" },
   sheet: { width: "100%", maxWidth: 960, alignSelf: "center", maxHeight: "92%", backgroundColor: Colors.background, borderTopLeftRadius: 18, borderTopRightRadius: 18, overflow: "hidden", ...shadow },
   dragHandle: { minHeight: 28, alignItems: "center", justifyContent: "center" },
   grabber: { width: 42, height: 5, borderRadius: 999, backgroundColor: Colors.border },
