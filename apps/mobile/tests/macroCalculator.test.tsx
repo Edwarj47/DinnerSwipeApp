@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { act, fireEvent, render, waitFor } from "@testing-library/react-native";
 import { MacroCalculator } from "@/features/premium/MacroCalculator";
 import { CalculatorRow, calculationItems, calculationTotal, servingNutrition } from "@/features/premium/calculator";
 import { apiFetch } from "@/services/api";
@@ -8,6 +8,7 @@ import { expireNutrition, hasTemporaryNutrition } from "@/services/temporaryNutr
 import { todayISO } from "@/features/premium/macroDates";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
+jest.mock("react-native-calendars", () => ({ LocaleConfig: { locales: { "": {} }, defaultLocale: "" }, Calendar: jest.requireActual("react-native").View }));
 jest.mock("@/services/api", () => ({ apiFetch: jest.fn() }));
 const request = jest.mocked(apiFetch);
 const values = { calories: 74, protein_g: 6.29, carbs_g: 0.38, fat_g: 4.97, fiber_g: 0 };
@@ -19,14 +20,14 @@ beforeEach(() => {
     if (path.includes("foods/search")) return { data: { foods: { food: { food_id: "3092", food_name: "Egg", food_description: "74 calories per large egg" } } } };
     if (path.includes("foods/3092")) return { data: { food: { servings: { serving: { serving_id: "11206", serving_description: "1 large", calories: "74", protein: "6.29", carbohydrate: ".38", fat: "4.97", fiber: "0" } } } } };
     if (path.endsWith("calculations/preview")) return { resolved_items: [values], serving_labels: ["1 large"], nutrition_unavailable: false };
-    if (path.includes("calculations") && init?.method) return { id: "saved", entry_id: "entry", meal_date: todayISO() };
+    if (path.includes("calculations") && init?.method) return { id: "saved", entry_id: "entry", meal_date: JSON.parse(String(init.body)).meal_date };
     return {};
   });
 });
-async function mount(ready = true, calculationId?: string) {
+async function mount(ready = true, calculationId?: string, initialMealDate?: string) {
   const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false }, mutations: { gcTime: 0, retry: false } } });
   const saved = jest.fn(), close = jest.fn();
-  const screen = render(<QueryClientProvider client={client}><MacroCalculator calculationId={calculationId} onClose={close} onSaved={saved} /></QueryClientProvider>);
+  const screen = render(<QueryClientProvider client={client}><MacroCalculator calculationId={calculationId} initialMealDate={initialMealDate} onClose={close} onSaved={saved} /></QueryClientProvider>);
   if (ready) await screen.findByLabelText(calculationId ? "Update calculation" : "Calculator item name");
   return { ...screen, client, saved, close, cleanup: () => { screen.unmount(); client.clear(); } };
 }
@@ -52,6 +53,159 @@ test("accepting nutrition consent invalidates macro views that may have unresolv
     expect(screen.client.getQueryState(["macro-analytics", "dashboard"])?.isInvalidated).toBe(true);
     expect(screen.client.getQueryState(["recipes"])?.isInvalidated).toBe(false);
     expect(screen.queryByLabelText("Agree and continue")).toBeNull();
+  } finally { screen.cleanup(); }
+});
+
+test("calendar changes the meal date without discarding an unfinished item or saving automatically", async () => {
+  const screen = await mount(true, undefined, "2024-02-28");
+  try {
+    fireEvent.changeText(screen.getByLabelText("Calculator item name"), "Burger and fries");
+    fireEvent.changeText(screen.getByLabelText("Calories"), "850");
+    fireEvent.press(screen.getByLabelText("Change meal date"));
+    expect(screen.getByTestId("macro-calendar").props.initialDate).toBe("2024-02-28");
+    fireEvent(screen.getByTestId("macro-calendar"), "dayPress", { dateString: "2024-02-29" });
+    expect(screen.getByText("Meal date: 2024-02-29")).toBeTruthy();
+    expect(screen.getByLabelText("Calculator item name").props.value).toBe("Burger and fries");
+    expect(screen.getByLabelText("Calories").props.value).toBe("850");
+    expect(request.mock.calls.some(([, init]) => init?.method)).toBe(false);
+    fireEvent.press(screen.getByLabelText("Add item"));
+    fireEvent.press(screen.getByLabelText("Log meal"));
+    fireEvent.changeText(screen.getByLabelText("Calculation name"), "Burger meal");
+    expect(screen.queryByLabelText("Add to today")).toBeNull();
+    fireEvent.press(screen.getByLabelText("Add to day"));
+    await waitFor(() => expect(screen.saved).toHaveBeenCalledTimes(1));
+    const write = request.mock.calls.find(([path, init]) => path.endsWith("/calculations") && init?.method === "POST")!;
+    expect(JSON.parse(String(write[1]?.body))).toMatchObject({ meal_date: "2024-02-29", items: [
+      { name: "Burger and fries", portions: 1, nutrition: { calories: 850 } }
+    ] });
+  } finally { screen.cleanup(); }
+});
+
+test("cancelling the calendar retains the selected tracker day for a new calculation", async () => {
+  const screen = await mount(true, undefined, "2024-02-29");
+  try {
+    fireEvent.press(screen.getByLabelText("Change meal date"));
+    fireEvent.press(screen.getByLabelText("Dismiss calendar"));
+    expect(screen.getByText("Meal date: 2024-02-29")).toBeTruthy();
+    fireEvent.changeText(screen.getByLabelText("Calculator item name"), "Toast");
+    fireEvent.press(screen.getByLabelText("Add item"));
+    fireEvent.press(screen.getByLabelText("Log meal"));
+    fireEvent.changeText(screen.getByLabelText("Calculation name"), "Breakfast");
+    fireEvent.press(screen.getByLabelText("Add to day"));
+    await waitFor(() => expect(screen.saved).toHaveBeenCalled());
+    expect(screen.saved.mock.calls[0][0].meal_date).toBe("2024-02-29");
+  } finally { screen.cleanup(); }
+});
+
+function mockLoggedCalculation(recipe = false) {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init) => path.endsWith("calculations/old") && !init?.method ? {
+    id: "old", entry_id: recipe ? null : "entry", recipe_id: recipe ? "recipe" : null,
+    name: "Burger meal", meal_label: "dinner", meal_date: recipe ? null : "2024-02-28", servings: 1,
+    items: [{ source: "manual", name: "Burger and fries", portions: 1, nutrition: values }], resolved_items: [values]
+  } : original(path, init));
+}
+
+test("an existing calculation opens on its saved day and moves the same entry when confirmed", async () => {
+  mockLoggedCalculation();
+  const screen = await mount(true, "old", todayISO());
+  try {
+    for (const day of ["2024-02-28", "2024-02-29"]) {
+      screen.client.setQueryDefaults(["macro-entries", day], { gcTime: 60000 });
+      screen.client.setQueryData(["macro-entries", day], []);
+    }
+    expect(screen.getByText("Meal date: 2024-02-28")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Change meal date"));
+    fireEvent(screen.getByTestId("macro-calendar"), "dayPress", { dateString: "2024-02-29" });
+    expect(request.mock.calls.some(([, init]) => init?.method)).toBe(false);
+    fireEvent.press(screen.getByLabelText("Update calculation"));
+    expect(screen.getByText("Meal date: 2024-02-29")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Update"));
+    await waitFor(() => expect(screen.saved).toHaveBeenCalled());
+    const writes = request.mock.calls.filter(([, init]) => init?.method);
+    expect(writes).toHaveLength(1);
+    expect(writes[0][0]).toBe("/api/v1/nutrition/calculations/old");
+    expect(writes[0][1]?.method).toBe("PUT");
+    expect(JSON.parse(String(writes[0][1]?.body))).toMatchObject({ meal_date: "2024-02-29", destination: "entry",
+      items: [{ source: "manual", name: "Burger and fries", portions: 1, nutrition: values }] });
+    for (const day of ["2024-02-28", "2024-02-29"]) expect(screen.client.getQueryState(["macro-entries", day])?.isInvalidated).toBe(true);
+  } finally { screen.cleanup(); }
+});
+
+test("date can also be corrected in final confirmation, while saved recipes have no diary date control", async () => {
+  mockLoggedCalculation();
+  const screen = await mount(true, "old");
+  try {
+    fireEvent.press(screen.getByLabelText("Update calculation"));
+    fireEvent.press(screen.getByLabelText("Change meal date"));
+    fireEvent(screen.getByTestId("macro-calendar"), "dayPress", { dateString: "2024-02-29" });
+    fireEvent.press(screen.getByLabelText("Back"));
+    expect(screen.getByText("Meal date: 2024-02-29")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Update calculation"));
+    fireEvent.press(screen.getByLabelText("Update"));
+    await waitFor(() => expect(screen.saved).toHaveBeenCalled());
+    expect(screen.saved.mock.calls[0][0].meal_date).toBe("2024-02-29");
+  } finally { screen.cleanup(); }
+  mockLoggedCalculation(true);
+  const recipe = await mount(true, "old");
+  try { expect(recipe.queryByLabelText("Change meal date")).toBeNull(); }
+  finally { recipe.cleanup(); }
+});
+
+test("an unchanged existing meal keeps its original date rather than defaulting to today", async () => {
+  mockLoggedCalculation();
+  const screen = await mount(true, "old", todayISO());
+  try {
+    fireEvent.press(screen.getByLabelText("Update calculation"));
+    fireEvent.press(screen.getByLabelText("Update"));
+    await waitFor(() => expect(screen.saved).toHaveBeenCalled());
+    expect(screen.saved.mock.calls[0][0].meal_date).toBe("2024-02-28");
+  } finally { screen.cleanup(); }
+});
+
+test("the calendar cannot change a date while its entry is being saved", async () => {
+  let resolve!: (value: { id: string; entry_id: string; meal_date: string }) => void;
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init) => path.endsWith("/calculations") && init?.method === "POST"
+    ? new Promise(done => { resolve = done; }) : original(path, init));
+  const screen = await mount();
+  try {
+    fireEvent.changeText(screen.getByLabelText("Calculator item name"), "Toast");
+    fireEvent.press(screen.getByLabelText("Add item"));
+    fireEvent.press(screen.getByLabelText("Log meal"));
+    fireEvent.changeText(screen.getByLabelText("Calculation name"), "Breakfast");
+    fireEvent.press(screen.getByLabelText("Add to today"));
+    expect(screen.getByLabelText("Change meal date").props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(screen.getByLabelText("Change meal date"));
+    expect(screen.queryByTestId("macro-calendar")).toBeNull();
+    await act(async () => resolve({ id: "saved", entry_id: "entry", meal_date: todayISO() }));
+    await waitFor(() => expect(screen.saved).toHaveBeenCalled());
+  } finally { screen.cleanup(); }
+});
+
+test("changing the date after a failed save uses a new idempotency key", async () => {
+  const original = request.getMockImplementation()!;
+  let attempts = 0;
+  request.mockImplementation(async (path, init) => {
+    if (path.endsWith("/calculations") && init?.method === "POST" && attempts++ === 0) throw new Error("Save interrupted");
+    return original(path, init);
+  });
+  const screen = await mount(true, undefined, "2024-02-28");
+  try {
+    fireEvent.changeText(screen.getByLabelText("Calculator item name"), "Toast");
+    fireEvent.press(screen.getByLabelText("Add item"));
+    fireEvent.press(screen.getByLabelText("Log meal"));
+    fireEvent.changeText(screen.getByLabelText("Calculation name"), "Breakfast");
+    fireEvent.press(screen.getByLabelText("Add to day"));
+    await screen.findByText("Save interrupted");
+    fireEvent.press(screen.getByLabelText("Change meal date"));
+    fireEvent(screen.getByTestId("macro-calendar"), "dayPress", { dateString: "2024-02-29" });
+    fireEvent.press(screen.getByLabelText("Add to day"));
+    await waitFor(() => expect(screen.saved).toHaveBeenCalled());
+    const writes = request.mock.calls.filter(([path, init]) => path.endsWith("/calculations") && init?.method === "POST");
+    const first = JSON.parse(String(writes[0][1]?.body)), second = JSON.parse(String(writes[1][1]?.body));
+    expect(first.meal_date).toBe("2024-02-28"); expect(second.meal_date).toBe("2024-02-29");
+    expect(first.request_id).not.toBe(second.request_id); expect(first.items).toEqual(second.items);
   } finally { screen.cleanup(); }
 });
 
@@ -268,6 +422,8 @@ test("a logged calculation saves a separate recipe using references, without cha
   });
   const screen = await mount(true, "old");
   try {
+    fireEvent.press(screen.getByLabelText("Change meal date"));
+    fireEvent(screen.getByTestId("macro-calendar"), "dayPress", { dateString: "2024-02-29" });
     fireEvent.press(screen.getByLabelText("Save as recipe"));
     fireEvent.changeText(screen.getByLabelText("Calculation name"), "Egg breakfast");
     fireEvent.press(screen.getByLabelText("Save recipe"));

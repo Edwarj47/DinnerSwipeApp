@@ -15,7 +15,8 @@ import { useMeasurementUnits } from "@/services/measurementPreferences";
 import { convertWeight, formatWeight } from "@/services/weightUnits";
 import { RecipeNutrition } from "@/services/types";
 import { MacroChoice } from "./MacroChoice";
-import { todayISO } from "./macroDates";
+import { MacroDatePicker } from "./MacroDatePicker";
+import { isISODate, todayISO } from "./macroDates";
 import { Calculation, CalculatorRow, calculationItems, calculationTotal, objects, PROVIDER_VIEW_MS, servingNutrition } from "./calculator";
 import { NutritionAttribution } from "./NutritionAttribution";
 import { NutritionConsent, NutritionConsentStatus } from "./NutritionConsent";
@@ -24,9 +25,9 @@ import { useLookupCooldown } from "./useLookupCooldown";
 
 type Lookup = { data: Record<string, unknown> };
 
-export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, initialName, initialMealLabel }: {
+export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, initialName, initialMealLabel, initialMealDate }: {
   calculationId?: string; onClose: () => void; onSaved?: (result: Calculation) => void;
-  initialRows?: CalculatorRow[]; initialName?: string; initialMealLabel?: string;
+  initialRows?: CalculatorRow[]; initialName?: string; initialMealLabel?: string; initialMealDate?: string;
 }) {
   const client = useQueryClient();
   const offline = useOfflineStatus(state => state.offline);
@@ -53,6 +54,7 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
   const [existing, setExisting] = useState<Pick<Calculation, "recipe_id" | "meal_date"> | null>(null);
   const [name, setName] = useState(initialName ?? "");
   const [mealLabel, setMealLabel] = useState(() => normalizeMealLabel(initialMealLabel));
+  const [mealDate, setMealDate] = useState(() => initialMealDate && isISODate(initialMealDate) ? initialMealDate : todayISO());
   const [recipeServings, setRecipeServings] = useState("1");
   const request = useRef<{ payload: string; id: string } | null>(null);
   const previewRow = currentItemPreview();
@@ -60,6 +62,7 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
   const total = calculationTotal(previewRows);
   const pendingItem = itemOpen && Boolean(editing || providerItem || itemName.trim() || Object.values(fields).some(value => value.trim()));
   const copyingEntry = Boolean(calculationId && existing && !existing.recipe_id && destination === "recipe");
+  const addLabel = mealDate === todayISO() ? "Add to today" : "Add to day";
   const consent = useQuery({ queryKey: ["nutrition-consent"],
     queryFn: () => apiFetch<NutritionConsentStatus>("/api/v1/nutrition/consent"), retry: false });
   const accepted = consent.data?.accepted === true;
@@ -80,6 +83,7 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
     const abort = new AbortController();
     void apiFetch<Calculation>(`/api/v1/nutrition/calculations/${calculationId}`, { signal: abort.signal }).then(result => {
       setExisting({ recipe_id: result.recipe_id, meal_date: result.meal_date }); setName(result.name); setMealLabel(normalizeMealLabel(result.meal_label));
+      if (result.meal_date) setMealDate(result.meal_date);
       setRecipeServings(String(result.servings));
       setRows(result.items.map((item, index) => ({ ...item, key: Crypto.randomUUID(), values: result.resolved_items[index], servingLabel: result.serving_labels?.[index] ?? undefined,
         ...(item.source === "fatsecret" ? { expires: Date.now() + PROVIDER_VIEW_MS } : {}) })));
@@ -199,8 +203,9 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
     try {
       const count = destination === "recipe" ? Number(recipeServings) : 1;
       if (!Number.isInteger(count) || count < 1 || count > 30) throw new Error("Use 1 to 30 recipe servings.");
+      if (!isISODate(mealDate)) throw new Error("Choose a valid meal date.");
       const payload = { name: name.trim(), destination, meal_label: mealLabel, servings: count,
-        meal_date: existing?.meal_date ?? todayISO(), items: calculationItems(rows) };
+        meal_date: mealDate, items: calculationItems(rows) };
       const fingerprint = JSON.stringify(payload);
       if (request.current?.payload !== fingerprint) request.current = { payload: fingerprint, id: Crypto.randomUUID() };
       const updating = calculationId && !copyingEntry;
@@ -231,17 +236,24 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
               <Text style={styles.name}>{String(food.food_name ?? "Food")}</Text><Text style={styles.meta}>{String(food.food_description ?? "")}</Text></Pressable>)}
             {results?.length === 0 ? <Text style={styles.meta}>No foods found. Try a different name.</Text> : null}
           </> : destination ? <>
-            <Text style={styles.subheading}>{calculationId && !copyingEntry ? "Update calculation" : destination === "recipe" ? "Save as recipe" : "Add to today"}</Text>
+            <Text style={styles.subheading}>{calculationId && !copyingEntry ? "Update calculation" : destination === "recipe" ? "Save as recipe" : addLabel}</Text>
             <TextInput accessibilityLabel="Calculation name" placeholder="Meal or recipe name" value={name} onChangeText={setName} maxLength={160} style={styles.input} />
             <MacroChoice label="Meal type" value={mealLabel} onChange={setMealLabel} options={mealLabelOptions(mealLabel)} disabled={!!busy} />
-            {destination === "recipe" ? <><Text style={styles.name}>Recipe servings</Text><TextInput accessibilityLabel="Calculation recipe servings" value={recipeServings} onChangeText={setRecipeServings} keyboardType="number-pad" style={styles.input} /></> : <Text style={styles.meta}>{existing?.meal_date ?? todayISO()}</Text>}
+            {destination === "recipe" ? <><Text style={styles.name}>Recipe servings</Text><TextInput accessibilityLabel="Calculation recipe servings" value={recipeServings} onChangeText={setRecipeServings} keyboardType="number-pad" style={styles.input} /></> : <View style={styles.header}>
+              <Text style={[styles.meta, styles.dateValue]}>Meal date: {mealDate}</Text>
+              <MacroDatePicker value={mealDate} onChange={setMealDate} label="Change meal date" title="Meal date" disabled={!!busy} />
+            </View>}
             <Totals value={total} />
             {rows.some(row => row.source === "fatsecret") ? <Text style={styles.meta}>Database nutrition refreshes when viewed. Ingredients and portions stay saved.</Text> : null}
             <View style={styles.actions}><Button label="Back" icon="arrow-back" disabled={!!busy} onPress={() => setDestination(null)} />
-              <Button label={calculationId && !copyingEntry ? "Update" : destination === "recipe" ? "Save recipe" : "Add to today"} icon="checkmark" variant="primary" disabled={!!busy || offline || name.trim().length < 2} onPress={() => { void save(); }} /></View>
+              <Button label={calculationId && !copyingEntry ? "Update" : destination === "recipe" ? "Save recipe" : addLabel} icon="checkmark" variant="primary" disabled={!!busy || offline || name.trim().length < 2} onPress={() => { void save(); }} /></View>
           </> : <>
-            <View style={styles.actions}><Button label="Search Database" icon="search" disabled={!!busy || offline} onPress={() => { setError(""); setSearchOpen(true); }} />
-              <Button label="New item" icon="add" disabled={!!busy} onPress={() => { if (pendingItem && !addItem()) return; clearItem(); }} /></View>
+            <View style={styles.toolbar}>
+              <View style={styles.searchAction}><Button compact label="Search Database" icon="search" disabled={!!busy || offline} onPress={() => { setError(""); setSearchOpen(true); }} /></View>
+              <View style={styles.newAction}><Button compact label="New item" icon="add" disabled={!!busy} onPress={() => { if (pendingItem && !addItem()) return; clearItem(); }} /></View>
+              {!existing?.recipe_id ? <MacroDatePicker value={mealDate} onChange={setMealDate} label="Change meal date" title="Meal date" disabled={!!busy} /> : null}
+            </View>
+            {!existing?.recipe_id ? <Text style={styles.meta}>Meal date: {mealDate}</Text> : null}
             {itemOpen ? <>
             <Text style={styles.subheading}>{editing ? "Edit item" : "Add an item"}</Text>
             <TextInput accessibilityLabel="Calculator item name" placeholder="Item name" value={itemName} maxLength={160} onChangeText={setItemName} style={styles.input} />
@@ -297,6 +309,7 @@ const styles = StyleSheet.create({
   name: { fontSize: 14, fontWeight: "700", color: Colors.ink }, meta: { fontSize: 13, color: Colors.muted, flexShrink: 1 },
   input: { minHeight: 48, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, color: Colors.ink },
   portions: { flex: 1, minWidth: 0, width: 0, textAlign: "center" }, actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  toolbar: { flexDirection: "row", alignItems: "center", gap: 8 }, searchAction: { flex: 1.5, minWidth: 0 }, newAction: { flex: 1, minWidth: 0 }, dateValue: { flex: 1 },
   item: { backgroundColor: Colors.softRed, borderRadius: 6, padding: 10, flexDirection: "row", alignItems: "center", gap: 4 },
   itemInfo: { flex: 1, gap: 4, minWidth: 0 }, result: { paddingVertical: 12, borderBottomWidth: 1, borderColor: Colors.border, gap: 4 },
   divider: { borderTopWidth: 1, borderColor: Colors.border, paddingTop: 12, gap: 12 },

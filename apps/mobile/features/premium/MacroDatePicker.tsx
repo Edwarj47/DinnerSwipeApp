@@ -14,13 +14,14 @@ const calendarTheme = {
   "stylesheet.day.basic": { base: { width: "100%", minHeight: 44, paddingVertical: 4, alignItems: "center", justifyContent: "center" } }
 };
 
-export function MacroDatePicker({ value, onChange, maxDate, label = "Choose macro date", title = "Choose date", todayLabel = "Today" }: {
-  value: string; onChange: (value: string) => void; maxDate?: string; label?: string; title?: string; todayLabel?: string;
+export function MacroDatePicker({ value, onChange, maxDate, label = "Choose macro date", title = "Choose date", todayLabel = "Today", disabled = false }: {
+  value: string; onChange: (value: string) => void; maxDate?: string; label?: string; title?: string; todayLabel?: string; disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
-  function choose(day: string) { onChange(day); setOpen(false); }
+  function choose(day: string) { if (!disabled) onChange(day); setOpen(false); }
   return <>
-    <Pressable accessibilityRole="button" accessibilityLabel={label} onPress={() => { Keyboard.dismiss(); setOpen(true); }} style={styles.icon}>
+    <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled}
+      onPress={() => { Keyboard.dismiss(); setOpen(true); }} style={[styles.icon, disabled && styles.disabled]}>
       <Ionicons name="calendar-outline" size={22} color={Colors.tomato} />
     </Pressable>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
@@ -46,6 +47,7 @@ export function MacroDatePicker({ value, onChange, maxDate, label = "Choose macr
 }
 const styles = StyleSheet.create({
   icon: { width: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
+  disabled: { opacity: 0.45 },
   backdrop: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.4)", padding: 12 },
   popup: { width: "100%", maxWidth: 390, maxHeight: "90%", backgroundColor: Colors.surface, padding: 12, borderRadius: 8, gap: 12 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

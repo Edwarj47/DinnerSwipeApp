@@ -16,8 +16,8 @@ import { NutritionConsent, NutritionConsentStatus } from "./NutritionConsent";
 import { useMealVoice } from "./useMealVoice";
 import { useLookupCooldown } from "./useLookupCooldown";
 
-export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
-  voiceEnabled: boolean; onClose: () => void; onSaved: (result: Calculation) => void;
+export function MealAssistant({ voiceEnabled, onClose, onSaved, initialMealDate }: {
+  voiceEnabled: boolean; onClose: () => void; onSaved: (result: Calculation) => void; initialMealDate?: string;
 }) {
   const client = useQueryClient();
   const offline = useOfflineStatus(state => state.offline);
@@ -172,7 +172,7 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved }: {
   }
   function review() { try { setRows(reviewedRows(items)); setError(""); } catch (reason) { setError(message(reason)); } }
   if (rows && draft) return <MacroCalculator initialRows={rows} initialName={draft.name} initialMealLabel={draft.meal_label}
-    onClose={onClose} onSaved={onSaved} />;
+    initialMealDate={initialMealDate} onClose={onClose} onSaved={onSaved} />;
   return <Modal visible transparent animationType="fade" onRequestClose={onClose}>
     <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={styles.backdrop}>
       <View style={styles.sheet} accessibilityViewIsModal>

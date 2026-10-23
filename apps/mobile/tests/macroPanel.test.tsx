@@ -161,6 +161,47 @@ test("date popup loads the exact historic day and calendar filters hide empty da
   } finally { screen.close(); }
 });
 
+test.each([false, true])("manual/AI calculator uses the selected tracker date (AI: %s)", async assistant => {
+  const original = request.getMockImplementation()!;
+  request.mockImplementation(async (path, init) => {
+    if (path.endsWith("/nutrition/consent")) return { accepted: true, terms_version: "test" };
+    if (path.endsWith("/nutrition/ai/status")) return { enabled: true, voice_enabled: false };
+    if (path.endsWith("/nutrition/ai/drafts") && init?.method === "POST") return {
+      request_id: "draft", status: "ready", name: "Egg breakfast", meal_label: "breakfast",
+      items: [{ name: "Egg", search_term: "egg", quantity: 2, unit: "each", food_id: "42", food_name: "Egg",
+        servings: [{ serving_id: "7", serving_description: "1 egg", measurement_description: "each", number_of_units: "1", calories: "74" }] }]
+    };
+    if (path.endsWith("/nutrition/calculations") && init?.method === "POST") return {
+      id: "saved", entry_id: "entry", meal_date: JSON.parse(String(init.body)).meal_date
+    };
+    return original(path, init);
+  });
+  const screen = mount();
+  try {
+    await screen.findByLabelText("Macro date");
+    fireEvent.changeText(screen.getByLabelText("Macro date"), "2024-02-29");
+    if (assistant) {
+      fireEvent.press(await screen.findByLabelText("Describe a meal"));
+      fireEvent.changeText(await screen.findByLabelText("Meal description"), "Two eggs");
+      fireEvent.press(screen.getByLabelText("Preview meal"));
+      fireEvent.press(await screen.findByLabelText("Continue to calculator"));
+    } else {
+      fireEvent.press(screen.getByLabelText("Open macro calculator"));
+      fireEvent.changeText(await screen.findByLabelText("Calculator item name"), "Toast");
+      fireEvent.press(screen.getByLabelText("Add item"));
+    }
+    await screen.findByText("Meal date: 2024-02-29");
+    fireEvent.press(screen.getByLabelText("Log meal"));
+    if (!assistant) fireEvent.changeText(screen.getByLabelText("Calculation name"), "Toast breakfast");
+    fireEvent.press(screen.getByLabelText("Add to day"));
+    await waitFor(() => expect(request.mock.calls.some(([path, init]) => path.endsWith("/nutrition/calculations") && init?.method === "POST")).toBe(true));
+    const write = request.mock.calls.find(([path, init]) => path.endsWith("/nutrition/calculations") && init?.method === "POST")!;
+    expect(JSON.parse(String(write[1]?.body)).meal_date).toBe("2024-02-29");
+    await waitFor(() => expect(screen.queryByLabelText("Close macro calculator")).toBeNull());
+    expect(screen.getByLabelText("Macro date").props.value).toBe("2024-02-29");
+  } finally { screen.close(); }
+});
+
 test("meal dropdown retains all five choices and nutrition labels remain visible with filled values", async () => {
   const screen = mount();
   try {

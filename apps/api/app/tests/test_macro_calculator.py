@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import date
+from datetime import date, timedelta
 from uuid import uuid4
 
 import httpx
@@ -226,6 +226,44 @@ def test_provider_failure_does_not_zero_entry(
     assert summary["nutrition_unavailable_count"] == 1
     row = db_session.get(MealMacroConfirmation, saved["entry_id"])
     assert row and row.calories is None
+
+
+@pytest.mark.parametrize("database", [False, True])
+def test_date_correction_moves_the_existing_entry_without_changing_its_nutrition(
+    client: TestClient, db_session: Session, premium: dict[str, str], database: bool
+) -> None:
+    if database:
+        assert client.get("/api/v1/nutrition/foods/42", headers=premium).status_code == 200
+    original_date = date.today() - timedelta(days=2)
+    corrected_date = original_date - timedelta(days=1)
+    body = payload(database=database) | {"meal_date": original_date.isoformat()}
+    created = client.post("/api/v1/nutrition/calculations", headers=premium, json=body)
+    assert created.status_code == 200, created.text
+    saved = created.json()
+    correction = body | {"meal_date": corrected_date.isoformat(), "request_id": str(uuid4())}
+    response = client.put(
+        f"/api/v1/nutrition/calculations/{saved['id']}", headers=premium, json=correction
+    )
+    assert response.status_code == 200, response.text
+    moved = response.json()
+    assert moved["id"] == saved["id"] and moved["entry_id"] == saved["entry_id"]
+    assert moved["meal_date"] == corrected_date.isoformat()
+    assert moved["items"] == saved["items"] and moved["totals"] == saved["totals"]
+    old_day = f"start_date={original_date}&end_date={original_date}"
+    new_day = f"start_date={corrected_date}&end_date={corrected_date}"
+    assert client.get(f"/api/v1/macros/entries?{old_day}", headers=premium).json() == []
+    entries = client.get(f"/api/v1/macros/entries?{new_day}", headers=premium).json()
+    assert [entry["id"] for entry in entries] == [saved["entry_id"]]
+    old_analytics = client.get(f"/api/v1/macros/analytics?{old_day}", headers=premium).json()
+    new_analytics = client.get(f"/api/v1/macros/analytics?{new_day}", headers=premium).json()
+    assert old_analytics["totals"]["calories"] == 0
+    assert new_analytics["totals"]["calories"] == saved["totals"]["calories"]
+    retried = client.put(
+        f"/api/v1/nutrition/calculations/{saved['id']}", headers=premium, json=correction
+    )
+    assert retried.status_code == 200 and retried.json()["entry_id"] == saved["entry_id"]
+    assert len(list(db_session.scalars(select(NutritionCalculation)))) == 1
+    assert len(list(db_session.scalars(select(MealMacroConfirmation)))) == 1
 
 
 def test_update_and_delete_stack(

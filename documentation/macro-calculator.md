@@ -11,9 +11,16 @@ stack. Totals keep unknown nutrients unknown rather than treating them as zero.
 The refresh icon beside Total refreshes database values without saving a recipe
 or creating a macro entry.
 
-Log meal opens a name/category review; the final Add to today confirmation logs
-one aggregate entry
-on the device's local date. Save as recipe prompts for a name, category, and
+The calendar beside New item selects the meal date. New manual and AI calculations
+start on the day selected in Macro Tracker, defaulting to the device's local date
+when no day is provided. Existing logged calculations open on their saved date;
+changing it and confirming Update moves the same entry instead of making a copy.
+Selecting a calendar date alone never saves or logs anything. Recipes do not have
+a logged date, and copying a calculation to a recipe does not move the original entry.
+
+Log meal opens a name/category/date review; the final Add to today or Add to day
+confirmation logs one aggregate entry on the selected date.
+Save as recipe prompts for a name, category, and
 recipe yield and saves ingredients plus per-serving nutrition. Saved stacks can
 be reopened through Edit nutrition or a linked macro entry. Logging a saved
 recipe and weekly Ate confirmations retain serving scaling.

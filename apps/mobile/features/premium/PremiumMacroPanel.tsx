@@ -321,12 +321,12 @@ export function PremiumMacroPanel() {
           ) : null}
           {recipeLog ? <RecipeMacroLogger entry={recipeLog === "new" ? undefined : recipeLog} date={selectedDate}
             onClose={() => setRecipeLog(null)} /> : null}
-          {calculator ? <MacroCalculator calculationId={calculator === "new" ? undefined : calculator}
+          {calculator ? <MacroCalculator calculationId={calculator === "new" ? undefined : calculator} initialMealDate={selectedDate}
             onClose={() => setCalculator(null)} onSaved={result => {
               if (result.entry_id) { setSelectedDate(result.meal_date ?? todayISO()); setMacroView("day"); }
               setStatus(result.recipe_id ? "Recipe saved with ingredients and nutrition." : "Calculation added to your macro entries.");
             }} /> : null}
-          {mealAssistant ? <MealAssistant voiceEnabled={assistantStatus.data?.voice_enabled === true} onClose={() => setMealAssistant(false)}
+          {mealAssistant ? <MealAssistant initialMealDate={selectedDate} voiceEnabled={assistantStatus.data?.voice_enabled === true} onClose={() => setMealAssistant(false)}
             onSaved={result => {
               if (result.entry_id) { setSelectedDate(result.meal_date ?? todayISO()); setMacroView("day"); }
               setStatus(result.recipe_id ? "Recipe saved." : "Meal added to your macro entries.");
