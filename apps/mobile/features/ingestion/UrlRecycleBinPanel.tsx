@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { StyleSheet, Text, View } from "react-native";
 
 import { Button } from "@/components/Button";
-import { Colors } from "@/components/theme";
+import { useThemedStyles, ThemeColors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 
 type RecycledCandidate = {
@@ -16,6 +16,7 @@ type RecycledCandidate = {
 };
 
 export function UrlRecycleBinPanel() {
+  const styles = useThemedStyles(createStyles);
   const queryClient = useQueryClient();
   const recycled = useQuery<RecycledCandidate[]>({
     queryKey: ["url-ingestion-recycle-bin"],
@@ -74,7 +75,7 @@ function restoreUntil(value: string | null | undefined) {
   return `Restore by ${date.toLocaleDateString(undefined, { month: "short", day: "numeric" })}`;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   panel: {
     backgroundColor: Colors.surface,
     borderRadius: 8,
@@ -91,7 +92,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 10,
     borderRadius: 8,
-    backgroundColor: Colors.softRed,
+    backgroundColor: Colors.accentSoft,
     padding: 10
   },
   name: { color: Colors.ink, fontSize: 16, fontWeight: "900" },

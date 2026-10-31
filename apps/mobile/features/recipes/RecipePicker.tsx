@@ -6,7 +6,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { Button } from "@/components/Button";
 import { SearchField } from "@/components/SearchField";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
@@ -19,6 +19,8 @@ export function RecipePicker({ title, visible, busy, error, ownedOnly = false, w
   householdId?: string;
   onClose: () => void; onSelect: (recipe: Recipe) => void;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const [search, setSearch] = useState("");
   const [tab, setTab] = useState<"weekly" | "all">("weekly");
   const weekStart = usePlannerStore(state => state.weekStart);
@@ -54,7 +56,7 @@ export function RecipePicker({ title, visible, busy, error, ownedOnly = false, w
               <Pressable key={recipe.id} accessibilityRole="button" accessibilityLabel={`Choose ${recipe.name}`} disabled={busy} onPress={() => onSelect(recipe)} style={[styles.row, busy && styles.disabled]}>
                 <RecipePhoto photoUrl={recipe.photo_url} accessibilityLabel={`${recipe.name} photo`} style={styles.photo} />
                 <View style={styles.copy}><Text style={styles.name}>{recipe.name}</Text><Text style={styles.meta}>{recipe.total_minutes ? `${recipe.total_minutes} min` : "Recipe"}</Text></View>
-                <Ionicons name="add-circle-outline" size={24} color={Colors.tomato} />
+                <Ionicons name="add-circle-outline" size={24} color={Colors.accent} />
               </Pressable>
             ))}
             {recipes.hasNextPage ? <Button label={recipes.isFetchingNextPage ? "Loading..." : "More meals"} icon="chevron-down" disabled={recipes.isFetchingNextPage} onPress={() => { void recipes.fetchNextPage(); }} /> : null}
@@ -66,7 +68,7 @@ export function RecipePicker({ title, visible, busy, error, ownedOnly = false, w
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.45)", padding: 20, alignItems: "center", justifyContent: "center" },
   panel: { backgroundColor: Colors.surface, padding: 16, borderRadius: 8, width: "100%", maxWidth: 520, maxHeight: "85%", gap: 12 },
   header: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -82,4 +84,4 @@ const styles = StyleSheet.create({
   meta: { color: Colors.muted, lineHeight: 22 },
   error: { color: Colors.danger },
   disabled: { opacity: 0.5 }
-});
+}));

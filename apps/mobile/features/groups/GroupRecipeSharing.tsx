@@ -6,13 +6,14 @@ import { FlatList, KeyboardAvoidingView, Modal, Platform, Pressable, StyleSheet,
 
 import { Button } from "@/components/Button";
 import { SearchField } from "@/components/SearchField";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { apiFetch, reconnectOffline } from "@/services/api";
 import { deviceOffline } from "@/services/offlineStore";
 import { GroupRecipeOption, GroupRecipeOptions, GroupRecipeShareResult, Household } from "@/services/types";
 
 export function GroupRecipeSharing({ household }: { household: Household }) {
+  const styles = useThemedStyles(createStyles);
   const [open, setOpen] = useState(false);
   const [status, setStatus] = useTransientMessage();
   if (household.is_personal) return null;
@@ -29,6 +30,8 @@ export function GroupRecipeSharing({ household }: { household: Household }) {
 function GroupRecipePicker({ household, onClose, onShared }: {
   household: Household; onClose: () => void; onShared: (result: GroupRecipeShareResult) => void;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const client = useQueryClient();
   const { height } = useWindowDimensions();
   const [search, setSearch] = useState("");
@@ -84,7 +87,7 @@ function GroupRecipePicker({ household, onClose, onShared }: {
       <View style={styles.copy}><Text style={styles.recipeName}>{recipe.name}</Text>
         <Text style={[styles.meta, shared && styles.shared]}>{shared ? "Already shared" : recipe.is_hidden ? "Hidden in your library" : recipe.total_minutes ? `${recipe.total_minutes} min` : "My recipe"}</Text>
       </View>
-      <Ionicons name={checked ? "checkbox" : "square-outline"} size={24} color={shared ? Colors.basil : checked ? Colors.tomato : Colors.muted} />
+      <Ionicons name={checked ? "checkbox" : "square-outline"} size={24} color={shared ? Colors.basil : checked ? Colors.accent : Colors.muted} />
     </Pressable>;
   };
   return <Modal visible transparent animationType="fade" onRequestClose={close}>
@@ -104,7 +107,7 @@ function GroupRecipePicker({ household, onClose, onShared }: {
             disabled={!available || recipes.isFetching || share.isPending} style={styles.selectAll} onPress={() => {
               share.reset(); if (selectAll && !excluded.size) clearSelection(); else { setSelectAll(true); setSelected(new Set()); setExcluded(new Set()); }
             }}>
-            <Ionicons name={selectAll && !excluded.size ? "checkbox" : count ? "remove-circle-outline" : "square-outline"} size={22} color={Colors.tomato} />
+            <Ionicons name={selectAll && !excluded.size ? "checkbox" : count ? "remove-circle-outline" : "square-outline"} size={22} color={Colors.accent} />
             <Text style={styles.selectLabel}>{search.trim() ? "Select all matches" : "Select all"}</Text>
           </Pressable>
           {count ? <Button label="" icon="close-circle-outline" accessibilityLabel="Clear selection" disabled={share.isPending} onPress={clearSelection} /> : <Text style={styles.meta}>{summary ? `${summary.total} ${summary.total === 1 ? "recipe" : "recipes"}` : ""}</Text>}
@@ -131,7 +134,7 @@ function GroupRecipePicker({ household, onClose, onShared }: {
   </Modal>;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   section: { gap: 8 }, success: { color: Colors.basil, fontWeight: "600", lineHeight: 22 },
   backdrop: { flex: 1, padding: 16, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)" },
   panel: { width: "100%", maxWidth: 560, borderRadius: 8, backgroundColor: Colors.surface, overflow: "hidden" },
@@ -142,7 +145,7 @@ const styles = StyleSheet.create({
   toolbar: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginHorizontal: 18, minHeight: 52, gap: 8 },
   selectAll: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44 }, selectLabel: { color: Colors.ink, fontWeight: "600", fontSize: 14 },
   list: { flex: 1 }, row: { flexDirection: "row", gap: 12, alignItems: "center", minHeight: 80, paddingVertical: 14, paddingHorizontal: 18, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  selected: { backgroundColor: Colors.softRed }, recipeName: { color: Colors.ink, fontWeight: "700", fontSize: 15, lineHeight: 21 },
+  selected: { backgroundColor: Colors.accentSoft }, recipeName: { color: Colors.ink, fontWeight: "700", fontSize: 15, lineHeight: 21 },
   photo: { width: 48, height: 48, borderRadius: 6 },
   shared: { color: Colors.basil }, more: { padding: 16, gap: 8 }, empty: { padding: 18, gap: 12 },
   footer: { borderTopWidth: 1, borderColor: Colors.border, padding: 18, gap: 10 },

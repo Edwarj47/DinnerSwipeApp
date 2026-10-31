@@ -2,16 +2,18 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useState } fro
 import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 import Animated, { Extrapolation, interpolate, runOnJS, useAnimatedStyle, useSharedValue, withSpring, withTiming } from "react-native-reanimated";
-import { Colors, shadow } from "@/components/theme";
+import { Colors, shadow, useThemeColors } from "@/components/theme";
 import { PhotoCredit } from "@/components/PhotoCredit";
 import { swipeActionForOffset } from "@/features/discover/mealSwipe";
 import { WorkoutTemplate } from "./types";
-import { WorkoutPhoto, categoryLabel, styles } from "./ui";
+import { WorkoutPhoto, categoryLabel, useStyles } from "./ui";
 
 export type WorkoutAction = "add" | "skip";
 export type WorkoutCardHandle = { choose: (action: WorkoutAction) => void };
 // Keep MealCard's spring, timing, thresholds and directional detection without creating a Recipe.
 export const WorkoutCard = forwardRef<WorkoutCardHandle, { template: WorkoutTemplate; busy: boolean; proposing: boolean; onAction: (action: WorkoutAction) => void; onOpen: () => void }>(function WorkoutCard({ template, busy, proposing, onAction, onOpen }, ref) {
+  const styles = useStyles();
+  const Colors = useThemeColors();
   const x = useSharedValue(0), y = useSharedValue(0);
   const { height } = useWindowDimensions();
   const [leaving, setLeaving] = useState(false);

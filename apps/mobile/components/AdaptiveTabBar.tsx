@@ -2,9 +2,11 @@ import { BottomTabBarHeightCallbackContext, BottomTabBarProps } from "@react-nav
 import { CommonActions, Link, useLinkBuilder } from "@react-navigation/native";
 import { useContext } from "react";
 import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View, ViewStyle } from "react-native";
-import { Colors } from "./theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "./theme";
 
 export function AdaptiveTabBar({ state, descriptors, navigation, insets }: BottomTabBarProps) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const { fontScale } = useWindowDimensions();
   const buildLink = useLinkBuilder();
   const reportHeight = useContext(BottomTabBarHeightCallbackContext);
@@ -15,7 +17,7 @@ export function AdaptiveTabBar({ state, descriptors, navigation, insets }: Botto
       const options = descriptors[route.key].options;
       const focused = state.index === index;
       const label = typeof options.tabBarLabel === "string" ? options.tabBarLabel : options.title ?? route.name;
-      const color = focused ? Colors.tomato : Colors.muted;
+      const color = focused ? Colors.accent : Colors.muted;
       const select = () => {
         const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
         if (!focused && !event.defaultPrevented) navigation.dispatch({ ...CommonActions.navigate({ name: route.name, merge: true }), target: state.key });
@@ -32,7 +34,7 @@ export function AdaptiveTabBar({ state, descriptors, navigation, insets }: Botto
   </View>;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   bar: { flexDirection: "row", flexWrap: "wrap", minHeight: 64, paddingTop: 2, backgroundColor: Colors.surface, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: Colors.border },
   tab: { flexBasis: 0, flexGrow: 1, minHeight: 44, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", paddingHorizontal: 4, paddingVertical: 4 },
   icon: { width: 28, height: 28, alignItems: "center", justifyContent: "center" },

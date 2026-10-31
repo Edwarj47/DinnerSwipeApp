@@ -4,7 +4,7 @@ import { useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Switch, Text, View } from "react-native";
 import { Button } from "@/components/Button";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { Colors } from "@/components/theme";
+import { useThemeColors } from "@/components/theme";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { SettingsSection } from "@/features/settings/SettingsSection";
 import { offlineOwner, useOfflineStatus } from "@/services/offlineStore";
@@ -12,7 +12,7 @@ import { automationKey, getAutomation, setCampaignPaused } from "./api";
 import { BatchReview } from "./BatchReview";
 import { SourcesReview } from "./SourcesReview";
 import { ContentAutomation, dateLabel, isPreparing, reportReason, statusLabel } from "./types";
-import { styles } from "./styles";
+import { useStyles } from "./styles";
 import { useSourcesReview } from "./useSourcesReview";
 
 type SectionControls = { expanded?: boolean; onToggle?: () => void };
@@ -23,6 +23,8 @@ export function DailyAdditionsSection({ expanded, onToggle }: SectionControls = 
 }
 
 function CampaignSection({ owner, expanded: sectionOpen, onToggle }: { owner: string } & SectionControls) {
+  const styles = useStyles();
+  const Colors = useThemeColors();
   const client = useQueryClient();
   const offline = useOfflineStatus(state => state.offline);
   const [localOpen, setOpen] = useState(false);
@@ -72,14 +74,14 @@ function CampaignSection({ owner, expanded: sectionOpen, onToggle }: { owner: st
           <Text style={styles.label}>{statusLabel(campaign.status)} - {campaign.completed_days}/{campaign.days_total} days</Text>
           <Text style={styles.meta}>{campaign.pending_count} pending</Text>
         </View>
-        <ActivityIndicator animating={query.isFetching} hidesWhenStopped accessibilityLabel={query.isFetching ? "Refreshing daily additions" : undefined} color={Colors.tomato} style={styles.loading} />
+        <ActivityIndicator animating={query.isFetching} hidesWhenStopped accessibilityLabel={query.isFetching ? "Refreshing daily additions" : undefined} color={Colors.accent} style={styles.loading} />
         <Button label="" icon="refresh" accessibilityLabel="Refresh daily additions" disabled={busy || query.isFetching || offline} onPress={() => { void query.refetch(); }} />
       </View>
       <Text style={styles.meta}>{dateLabel(campaign.start_date)} - {dateLabel(campaign.end_date)} | {campaign.time_zone}</Text>
       {!terminal ? <View style={styles.row}>
         <Text style={[styles.label, styles.copy]}>Paused</Text>
         <Switch accessibilityLabel="Pause daily additions" value={campaign.status === "paused"} disabled={disabled}
-          thumbColor={campaign.status === "paused" ? Colors.tomato : Colors.surface} trackColor={{ false: Colors.border, true: "#f4aaa8" }}
+          thumbColor={campaign.status === "paused" ? Colors.accent : Colors.surface} trackColor={{ false: Colors.border, true: Colors.accentTrack }}
           onValueChange={paused => {
             if (disabled || pauseLock.current) return;
             pauseLock.current = true;

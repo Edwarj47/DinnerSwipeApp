@@ -1,0 +1,8 @@
+{
+  "red": { "label": "Red", "color": "#d71920" },
+  "blue": { "label": "Blue", "color": "#2d6cdf" },
+  "green": { "label": "Green", "color": "#2f7d59" },
+  "teal": { "label": "Teal", "color": "#0f766e" },
+  "purple": { "label": "Purple", "color": "#7c3aed" },
+  "orange": { "label": "Orange", "color": "#c2410c" }
+}

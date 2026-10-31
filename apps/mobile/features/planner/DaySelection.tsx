@@ -3,10 +3,12 @@ import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 
 import { Button } from "@/components/Button";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { DaySelectionProps, daySelectionOptions } from "./daySelectionOptions";
 
 export function DaySelection({ days, value, onChange, disabled = false }: DaySelectionProps) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const [open, setOpen] = useState(false);
   const options = daySelectionOptions(days);
   const selected = options.find(option => option.value === (value ?? ""));
@@ -36,7 +38,7 @@ export function DaySelection({ days, value, onChange, disabled = false }: DaySel
               }}
               style={[styles.option, option.value === (value ?? "") && styles.selected]}>
               <Text style={styles.value}>{option.label}</Text>
-              <Ionicons name={option.value === (value ?? "") ? "radio-button-on" : "radio-button-off"} size={22} color={option.value === (value ?? "") ? Colors.tomato : Colors.muted} />
+              <Ionicons name={option.value === (value ?? "") ? "radio-button-on" : "radio-button-off"} size={22} color={option.value === (value ?? "") ? Colors.accent : Colors.muted} />
             </Pressable>)}
           </ScrollView>
         </View>
@@ -45,7 +47,7 @@ export function DaySelection({ days, value, onChange, disabled = false }: DaySel
   </View>;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   field: { gap: 6 },
   label: { color: Colors.muted, fontSize: 13, fontWeight: "700" },
   trigger: { minHeight: 48, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 12, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: Colors.surface },
@@ -56,5 +58,5 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 8 },
   heading: { flex: 1, color: Colors.ink, fontSize: 18, fontWeight: "800" },
   option: { minHeight: 48, padding: 12, flexDirection: "row", alignItems: "center", gap: 12, borderRadius: 6 },
-  selected: { backgroundColor: Colors.softRed }
+  selected: { backgroundColor: Colors.accentSoft }
 });

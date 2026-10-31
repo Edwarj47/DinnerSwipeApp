@@ -2,7 +2,7 @@ import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
 import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 
 type Props = {
   label: string;
@@ -15,6 +15,8 @@ type Props = {
 };
 
 export function Button({ label, icon, variant = "secondary", onPress, accessibilityLabel, disabled = false, compact = false }: Props) {
+  const Colors = useThemeColors();
+  const styles = useThemedStyles(createStyles);
   const ref = useRef<View>(null);
   useEffect(() => {
     // RN Web filters title props, so attach the browser tooltip to the DOM node.
@@ -37,7 +39,7 @@ export function Button({ label, icon, variant = "secondary", onPress, accessibil
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   button: {
     minHeight: 44,
     maxWidth: "100%",
@@ -48,7 +50,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 8
   },
-  primary: { backgroundColor: Colors.tomato },
+  primary: { backgroundColor: Colors.accent },
   iconOnly: { width: 44, height: 44, paddingHorizontal: 0, flexShrink: 0 },
   secondary: { backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
   danger: { backgroundColor: Colors.danger },

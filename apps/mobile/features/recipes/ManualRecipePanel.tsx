@@ -5,7 +5,7 @@ import { StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { Colors } from "@/components/theme";
+import { useThemedStyles, ThemeColors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { normalizeRecipeCategory, recipeCategoryOptions } from "@/services/mealCategories";
@@ -29,6 +29,7 @@ export function ManualRecipePanel({ initialDraft, initialRecipe, onSaved, onCanc
   onSaved?: (recipe: Recipe) => void;
   onCancel?: () => void;
 } = {}) {
+  const styles = useThemedStyles(createStyles);
   const draft = initialDraft?.draft;
   const queryClient = useQueryClient();
   const initial = initialRecipe ?? draft;
@@ -207,11 +208,11 @@ function listFromText(value: string) {
   return value.split(",").map((item) => item.trim()).filter(Boolean);
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   panel: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 12, gap: 8, marginBottom: 12 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   title: { fontSize: 19, fontWeight: "900", color: Colors.ink, flexShrink: 1 },
-  badge: { color: Colors.tomato, fontWeight: "900" },
+  badge: { color: Colors.accent, fontWeight: "900" },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, backgroundColor: Colors.surface },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   gridInput: { minWidth: 110, flexBasis: 124, flexGrow: 1, gap: 6 },
@@ -219,8 +220,8 @@ const styles = StyleSheet.create({
   total: { color: Colors.ink, fontWeight: "700", paddingVertical: 6 },
   area: { minHeight: 96, paddingTop: 12, textAlignVertical: "top" },
   preview: { width: "100%", height: 220, borderRadius: 8, backgroundColor: Colors.border },
-  summary: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 10, gap: 4 },
+  summary: { backgroundColor: Colors.accentSoft, borderRadius: 8, padding: 10, gap: 4 },
   meta: { color: Colors.muted, lineHeight: 20 },
   warning: { color: Colors.danger, fontWeight: "700" },
   status: { color: Colors.basil, fontWeight: "800" }
-});
+}));

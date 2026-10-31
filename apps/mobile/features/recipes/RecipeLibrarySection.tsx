@@ -3,7 +3,7 @@ import { useInfiniteQuery, useMutation, useQueryClient } from "@tanstack/react-q
 import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Button } from "@/components/Button";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
@@ -12,6 +12,8 @@ import { RecipePhoto } from "./RecipePhoto";
 export function RecipeLibrarySection({ collection, q, onOpen, onActions }: {
   collection: "library" | "hidden" | "archived"; q: string; onOpen: (recipe: Recipe) => void; onActions: (recipe: Recipe) => void;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const [expanded, setExpanded] = useState(collection === "library");
   const title = { library: "Recipe Library", hidden: "Hidden Recipes", archived: "Archived Recipes" }[collection];
   const client = useQueryClient();
@@ -30,7 +32,7 @@ export function RecipeLibrarySection({ collection, q, onOpen, onActions }: {
   });
   return <View style={styles.section}>
     <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)} style={styles.heading}>
-      <Ionicons name={collection === "hidden" ? "eye-off-outline" : collection === "archived" ? "archive-outline" : "book-outline"} size={22} color={Colors.tomato} />
+      <Ionicons name={collection === "hidden" ? "eye-off-outline" : collection === "archived" ? "archive-outline" : "book-outline"} size={22} color={Colors.accent} />
       <Text style={styles.title}>{title}</Text><Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={22} color={Colors.muted} />
     </Pressable>
     {expanded ? <>
@@ -53,7 +55,7 @@ export function RecipeLibrarySection({ collection, q, onOpen, onActions }: {
     </> : null}
   </View>;
 }
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   section: { borderTopWidth: 1, borderColor: Colors.border, paddingVertical: 8, gap: 8 },
   heading: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44 }, title: { flex: 1, color: Colors.ink, fontSize: 18, fontWeight: "800" },
   row: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", gap: 8, paddingVertical: 8, borderBottomWidth: 1, borderColor: Colors.border },
@@ -61,4 +63,4 @@ const styles = StyleSheet.create({
   photo: { width: 64, height: 64, borderRadius: 6, backgroundColor: Colors.border }, name: { color: Colors.ink, fontSize: 16, fontWeight: "700", lineHeight: 22 },
   meta: { color: Colors.muted, marginTop: 2 }, empty: { color: Colors.muted, paddingVertical: 16 },
   icon: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }, error: { color: Colors.danger }
-});
+}));

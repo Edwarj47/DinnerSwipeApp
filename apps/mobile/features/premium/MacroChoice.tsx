@@ -1,11 +1,13 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 
 export function MacroChoice<T extends string>({ label, value, options, onChange, disabled = false }: {
   label: string; value: T; options: { value: T; label: string }[]; onChange: (value: T) => void; disabled?: boolean;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const [open, setOpen] = useState(false);
   const selected = options.find(option => option.value === value);
   return <>
@@ -27,7 +29,7 @@ export function MacroChoice<T extends string>({ label, value, options, onChange,
               accessibilityState={{ checked: option.value === value }} style={styles.option}
               onPress={() => { onChange(option.value); setOpen(false); }}>
               <Text style={styles.label}>{option.label}</Text>
-              <Ionicons name={option.value === value ? "radio-button-on" : "radio-button-off"} size={22} color={option.value === value ? Colors.tomato : Colors.muted} />
+              <Ionicons name={option.value === value ? "radio-button-on" : "radio-button-off"} size={22} color={option.value === value ? Colors.accent : Colors.muted} />
             </Pressable>)}
           </ScrollView>
         </View>
@@ -36,7 +38,7 @@ export function MacroChoice<T extends string>({ label, value, options, onChange,
   </>;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   trigger: { flexGrow: 1, minHeight: 44, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, paddingHorizontal: 12, flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, backgroundColor: Colors.surface },
   label: { fontWeight: "700", color: Colors.ink, flexShrink: 1 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", padding: 18, alignItems: "center", justifyContent: "center" },

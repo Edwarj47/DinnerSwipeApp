@@ -6,7 +6,7 @@ import { BiometricSettings, authenticateForUnlock, getBiometricSettings, isBiome
 import { clearAuthTokens, getRefreshToken, getToken } from "@/services/api";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 
 type Props = {
   children: ReactNode;
@@ -15,6 +15,8 @@ type Props = {
 type GateState = "checking" | "locked" | "unlocked";
 
 export function BiometricGate({ children }: Props) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const queryClient = useQueryClient();
   const [gateState, setGateState] = useState<GateState>("checking");
   const [settings, setSettings] = useState<BiometricSettings | null>(null);
@@ -123,7 +125,7 @@ export function BiometricGate({ children }: Props) {
   if (gateState === "checking") {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator color={Colors.tomato} />
+        <ActivityIndicator color={Colors.accent} />
       </View>
     );
   }
@@ -148,7 +150,7 @@ export function BiometricGate({ children }: Props) {
   return children;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.background },
   lockScreen: {
     flex: 1,
@@ -162,5 +164,5 @@ const styles = StyleSheet.create({
   title: { color: Colors.ink, fontSize: 32, fontWeight: "900" },
   subtitle: { color: Colors.muted, textAlign: "center", lineHeight: 22 },
   actions: { width: "100%", maxWidth: 320, gap: 10 },
-  message: { color: Colors.tomatoDark, fontWeight: "700", textAlign: "center" }
+  message: { color: Colors.accentStrong, fontWeight: "700", textAlign: "center" }
 });

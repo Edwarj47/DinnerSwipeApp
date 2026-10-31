@@ -9,7 +9,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { apiFetch, clearAuthTokens, reconnectOffline } from "@/services/api";
 import { AppAccessContext, useAuthSession } from "@/services/session";
 import { CouponResult, PremiumStatus, SubscriptionTier } from "@/services/types";
@@ -23,6 +23,8 @@ type Props = {
 const PUBLIC_PATHS = new Set(["/privacy", "/terms"]);
 
 export function SubscriptionGate({ children }: Props) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const session = useAuthSession();
@@ -228,7 +230,7 @@ export function SubscriptionGate({ children }: Props) {
               </View>
               {status ? (
                 <View style={styles.statusRow}>
-                  {startCheckout.isPending || applyCode.isPending ? <ActivityIndicator color={Colors.tomato} /> : null}
+                  {startCheckout.isPending || applyCode.isPending ? <ActivityIndicator color={Colors.accent} /> : null}
                   <Text accessibilityRole={statusIsError ? "alert" : undefined} accessibilityLiveRegion="polite" style={[styles.status, statusIsError && styles.error]}>{status}</Text>
                 </View>
               ) : null}
@@ -249,8 +251,8 @@ async function refreshSubscriptions(queryClient: ReturnType<typeof useQueryClien
   ]);
 }
 
-const styles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: Colors.tomato, zIndex: 15 },
+const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: Colors.accent, zIndex: 15 },
   checking: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 16 },
   accountRow: { gap: 10, alignItems: "flex-start", paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: Colors.border },
   accountIdentity: { width: "100%", gap: 2 },
@@ -276,9 +278,9 @@ const styles = StyleSheet.create({
   footerRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 },
   legalRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", flex: 1 },
   legalText: { color: Colors.muted },
-  legalLink: { color: Colors.tomatoDark, fontWeight: "900" },
+  legalLink: { color: Colors.accentStrong, fontWeight: "900" },
   nativeNote: { color: Colors.muted, lineHeight: 20, fontSize: 13 },
   statusRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   status: { color: Colors.basil, fontWeight: "700", flex: 1 },
   error: { color: Colors.danger }
-});
+}));

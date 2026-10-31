@@ -58,7 +58,8 @@
           "faceIDPermission": "Allow Dinner Swipe to use Face ID to unlock your saved session."
         }
       ],
-      "./plugins/withAndroidMonorepoGradlePaths"
+      "./plugins/withAndroidMonorepoGradlePaths",
+      "./plugins/withAppIcons"
     ],
     "experiments": {
       "typedRoutes": true

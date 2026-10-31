@@ -2,12 +2,14 @@ import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Button } from "@/components/Button";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { RESET_DAYS } from "@/services/planningPreferences";
 
 export type ResetDayProps = { value: number; onChange: (value: number) => void; disabled: boolean };
 
 export function ResetDaySelection({ value, onChange, disabled }: ResetDayProps) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const [open, setOpen] = useState(false);
   return <View style={{ gap: 6 }}>
     <Text style={styles.label}>Reset day</Text>
@@ -28,7 +30,7 @@ export function ResetDaySelection({ value, onChange, disabled }: ResetDayProps) 
             accessibilityLabel={day} accessibilityState={{ checked: index === value }}
             onPress={() => { onChange(index); setOpen(false); }} style={styles.option}>
             <Text style={styles.value}>{day}</Text>
-            <Ionicons name={index === value ? "radio-button-on" : "radio-button-off"} size={22} color={Colors.tomato} />
+            <Ionicons name={index === value ? "radio-button-on" : "radio-button-off"} size={22} color={Colors.accent} />
           </Pressable>)}</ScrollView>
         </View>
       </View>
@@ -36,7 +38,7 @@ export function ResetDaySelection({ value, onChange, disabled }: ResetDayProps) 
   </View>;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   label: { color: Colors.muted, fontSize: 13, fontWeight: "700" },
   trigger: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: Colors.border,
     borderRadius: 8, backgroundColor: Colors.surface, flexDirection: "row", alignItems: "center", gap: 10 },

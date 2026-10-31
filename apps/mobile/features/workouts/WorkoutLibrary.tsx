@@ -13,9 +13,10 @@ import { WorkoutGroupPanel } from "./WorkoutGroupPanel";
 import { useSpace } from "@/features/groups/useSpace";
 import { useWorkoutOwner } from "./WorkoutRuntime";
 import { WorkoutCategory, WorkoutTemplate } from "./types";
-import { WorkoutPhoto, WorkoutQueryState, categories, categoryLabel, styles } from "./ui";
+import { WorkoutPhoto, WorkoutQueryState, categories, categoryLabel, useStyles } from "./ui";
 
 export function WorkoutLibrary() {
+  const styles = useStyles();
   const owner = useWorkoutOwner(), space = useSpace(), client = useQueryClient();
   const [search, setSearch] = useState(""), [selected, setSelected] = useState<WorkoutCategory[]>(categories.map(item => item.value));
   const [editor, setEditor] = useState<WorkoutTemplate | "new" | null>(null), [detail, setDetail] = useState<WorkoutTemplate | null>(null), [performance, setPerformance] = useState<WorkoutTemplate | null>(null), [message, setMessage] = useTransientMessage();

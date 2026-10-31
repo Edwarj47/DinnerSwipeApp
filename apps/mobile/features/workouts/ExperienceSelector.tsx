@@ -2,11 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { ReactNode, useEffect, useRef, useState } from "react";
 import { Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import { Button } from "@/components/Button";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { ExperienceMode, updateWorkoutPreferences, useWorkoutMode } from "@/services/workoutMode";
 
 export function ExperienceSelector({ children }: { children?: ReactNode }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const { enabled, mode } = useWorkoutMode();
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const label = mode === "workouts" ? "Workouts" : "Nutrition";
@@ -23,7 +25,7 @@ export function ExperienceSelector({ children }: { children?: ReactNode }) {
   return <>
     <Pressable ref={trigger} accessibilityRole="button" accessibilityLabel={`Experience: ${label}`} accessibilityState={{ expanded: open }}
       style={styles.trigger} onPress={() => { setError(""); setOpen(true); }}>
-      {children ?? <Ionicons name={mode === "workouts" ? "barbell-outline" : "restaurant-outline"} size={24} color={Colors.tomato} />}
+      {children ?? <Ionicons name={mode === "workouts" ? "barbell-outline" : "restaurant-outline"} size={24} color={Colors.accent} />}
       <View style={styles.badge}><Ionicons name="chevron-down" size={12} color={Colors.basil} /></View>
     </Pressable>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => { if (!busy) setOpen(false); }}>
@@ -35,8 +37,8 @@ export function ExperienceSelector({ children }: { children?: ReactNode }) {
     </Modal>
   </>;
 }
-const styles = StyleSheet.create({ backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", padding: 18 },
+const createStyles = (Colors: ThemeColors) => (StyleSheet.create({ backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", padding: 18 },
   trigger: { minWidth: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
   badge: { position: "absolute", right: -2, bottom: -2, width: 18, height: 18, borderRadius: 9, backgroundColor: Colors.surface, alignItems: "center", justifyContent: "center", borderWidth: 1, borderColor: Colors.border },
   sheet: { width: "100%", maxWidth: 420, padding: 18, gap: 14, borderRadius: 8, backgroundColor: Colors.surface },
-  row: { flexDirection: "row", alignItems: "center", gap: 10 }, title: { flex: 1, minWidth: 0, fontSize: 20, fontWeight: "800", color: Colors.ink }, error: { color: Colors.danger } });
+  row: { flexDirection: "row", alignItems: "center", gap: 10 }, title: { flex: 1, minWidth: 0, fontSize: 20, fontWeight: "800", color: Colors.ink }, error: { color: Colors.danger } }));

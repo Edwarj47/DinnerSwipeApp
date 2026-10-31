@@ -4,7 +4,7 @@ import { StyleSheet, Text, TextInput, View } from "react-native";
 
 import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { MacroChoice } from "@/features/premium/MacroChoice";
 import { formatCandidateStatus } from "@/features/recipes/recipeDisplay";
 import { RecipePhoto } from "@/features/recipes/RecipePhoto";
@@ -27,6 +27,8 @@ type Candidate = {
 };
 
 export function UrlIngestionPanel() {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const queryClient = useQueryClient();
   const [url, setUrl] = useState("");
   const [candidate, setCandidate] = useState<Candidate | null>(null);
@@ -269,6 +271,7 @@ function readableWarning(raw: string) {
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.metric}>
       <Text style={styles.metricValue}>{value}</Text>
@@ -277,26 +280,26 @@ function Metric({ label, value }: { label: string; value: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   panel: { backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, padding: 14, gap: 10, marginBottom: 12 },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
   title: { fontSize: 19, fontWeight: "900", color: Colors.ink },
-  badge: { color: Colors.tomato, fontWeight: "900" },
+  badge: { color: Colors.accent, fontWeight: "900" },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12 },
   inputLabel: { color: Colors.ink, fontWeight: "900", marginTop: 2 },
   area: { minHeight: 132, paddingTop: 12, paddingBottom: 12, textAlignVertical: "top", lineHeight: 21 },
   review: { gap: 10 },
   reviewHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   reviewTitle: { color: Colors.ink, fontSize: 17, fontWeight: "900" },
-  statusPill: { color: Colors.tomatoDark, backgroundColor: Colors.softRed, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, fontWeight: "900", overflow: "hidden", textTransform: "capitalize" },
+  statusPill: { color: Colors.accentStrong, backgroundColor: Colors.accentSoft, borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, fontWeight: "900", overflow: "hidden", textTransform: "capitalize" },
   approvedPill: { color: Colors.basil },
   rejectedPill: { color: Colors.danger },
   photo: { width: "100%", aspectRatio: 1.65, borderRadius: 8, backgroundColor: Colors.border },
-  emptyPhoto: { width: "100%", aspectRatio: 1.65, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.softRed, alignItems: "center", justifyContent: "center" },
+  emptyPhoto: { width: "100%", aspectRatio: 1.65, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.accentSoft, alignItems: "center", justifyContent: "center" },
   emptyPhotoText: { color: Colors.muted, fontWeight: "800" },
   metrics: { flexDirection: "row", gap: 8 },
-  metric: { flex: 1, minHeight: 60, borderRadius: 8, backgroundColor: Colors.softRed, alignItems: "center", justifyContent: "center" },
-  metricValue: { color: Colors.tomatoDark, fontSize: 18, fontWeight: "900" },
+  metric: { flex: 1, minHeight: 60, borderRadius: 8, backgroundColor: Colors.accentSoft, alignItems: "center", justifyContent: "center" },
+  metricValue: { color: Colors.accentStrong, fontSize: 18, fontWeight: "900" },
   metricLabel: { color: Colors.muted, fontSize: 11, fontWeight: "800" },
   noticeBox: { borderRadius: 8, borderWidth: 1, borderColor: "#f2c7bd", backgroundColor: "#fff8f4", padding: 10, gap: 4 },
   noticeTitle: { color: Colors.ink, fontWeight: "900" },
@@ -304,7 +307,7 @@ const styles = StyleSheet.create({
   reviewActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   history: { gap: 8, borderTopColor: Colors.border, borderTopWidth: 1, paddingTop: 10 },
   historyTitle: { color: Colors.ink, fontWeight: "900" },
-  historyRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.softRed, borderRadius: 8, padding: 9 },
+  historyRow: { flexDirection: "row", alignItems: "center", gap: 8, backgroundColor: Colors.accentSoft, borderRadius: 8, padding: 9 },
   historyName: { color: Colors.ink, fontWeight: "900" },
   name: { color: Colors.ink, fontSize: 17, fontWeight: "900" },
   meta: { color: Colors.muted, lineHeight: 20 },

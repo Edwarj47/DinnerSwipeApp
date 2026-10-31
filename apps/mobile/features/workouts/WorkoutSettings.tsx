@@ -8,9 +8,10 @@ import { requestPlanningNotificationPermission } from "@/services/planningRemind
 import { WeeklyPlanningSettings } from "@/services/types";
 import { useWorkoutOwner } from "./WorkoutRuntime";
 import { workoutKey, workoutPath, workoutWrite } from "./api";
-import { WorkoutQueryState, styles } from "./ui";
+import { WorkoutQueryState, useStyles } from "./ui";
 
 export function WorkoutSettings({ groupId }: { groupId?: string }) {
+  const styles = useStyles();
   const owner = useWorkoutOwner(), client = useQueryClient();
   const key = workoutKey(owner, "reset-settings", groupId ?? "personal");
   const settings = useQuery<WeeklyPlanningSettings>({ queryKey: key,

@@ -1,15 +1,17 @@
 import { useRef, useState } from "react";
 import { ActivityIndicator, Linking, Text, View } from "react-native";
 import { Button } from "@/components/Button";
-import { Colors } from "@/components/theme";
+import { useThemeColors } from "@/components/theme";
 import { deviceOffline, offlineOwner, useOfflineStatus } from "@/services/offlineStore";
 import { dateLabel, DiscoveredSource, reportReason, sourceLink, statusLabel } from "./types";
-import { styles } from "./styles";
+import { useStyles } from "./styles";
 import { useSourcesReview } from "./useSourcesReview";
 
 const PAGE_SIZE = 10;
 
 export function SourcesReview({ owner, review, blocked }: { owner: string; review: ReturnType<typeof useSourcesReview>; blocked: boolean }) {
+  const styles = useStyles();
+  const Colors = useThemeColors();
   const offline = useOfflineStatus(state => state.offline);
   const [page, setPage] = useState(0);
   const { data, query, decision, dismiss, message } = review;
@@ -28,7 +30,7 @@ export function SourcesReview({ owner, review, blocked }: { owner: string; revie
   return <View style={styles.content}>
     <View style={styles.row}>
       <Text accessibilityRole="header" style={[styles.label, styles.copy]}>Needs source checks</Text>
-      <ActivityIndicator animating={query.isFetching} hidesWhenStopped accessibilityLabel={query.isFetching ? "Loading discovered sources" : undefined} color={Colors.tomato} style={styles.loading} />
+      <ActivityIndicator animating={query.isFetching} hidesWhenStopped accessibilityLabel={query.isFetching ? "Loading discovered sources" : undefined} color={Colors.accent} style={styles.loading} />
       <Button label="" icon="refresh" accessibilityLabel="Refresh discovered sources" disabled={blocked || offline || query.isFetching || decision.isPending} onPress={() => { void query.refetch(); }} />
     </View>
     {data ? <Text style={styles.meta}>{pendingCount} pending sources | {all.filter(source => source.status === "dismissed").length} dismissed</Text> : null}
@@ -53,6 +55,7 @@ export function SourcesReview({ owner, review, blocked }: { owner: string; revie
 }
 
 function SourceRow({ owner, source, disabled, onDismiss }: { owner: string; source: DiscoveredSource; disabled: boolean; onDismiss: () => void }) {
+  const styles = useStyles();
   const [opening, setOpening] = useState(false);
   const [linkError, setLinkError] = useState(false);
   const linkLock = useRef(false);

@@ -7,7 +7,7 @@ import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDime
 import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { Screen } from "@/components/Screen";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { apiFetch as remoteFetch } from "@/services/api";
 import { openSettings } from "@/services/settingsMenu";
 import { useSpace } from "@/features/groups/useSpace";
@@ -51,6 +51,8 @@ function WeekSelection() {
 }
 
 function WeekContent({ onNavigate }: { onNavigate: (week: string, current: string) => void }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const space = useSpace();
   const apiFetch = <T,>(path: string, init?: RequestInit) => init ? remoteFetch<T>(space.path(path), init) : remoteFetch<T>(space.path(path));
   const [portion, setPortion] = useState(1);
@@ -259,7 +261,7 @@ function WeekContent({ onNavigate }: { onNavigate: (week: string, current: strin
                 </Pressable>
               ) : null}
               {space.canManage ? <Pressable accessibilityRole="button" accessibilityLabel={`Add meal to ${group.label}`} disabled={busy || !data} onPress={() => { addMeal.reset(); setAddDay(group); }} style={styles.addDay}>
-                <Ionicons name="add" size={20} color={Colors.tomato} /><Text style={styles.addLabel}>Add meal</Text>
+                <Ionicons name="add" size={20} color={Colors.accent} /><Text style={styles.addLabel}>Add meal</Text>
               </Pressable> : null}
             </View>
             </TourTarget>
@@ -340,7 +342,7 @@ function WeekContent({ onNavigate }: { onNavigate: (week: string, current: strin
                 accessibilityLabel={`Duplicate meal to ${day.label}${day.short ? `, ${day.short}` : ""}`} accessibilityState={{ disabled: busy }} disabled={busy}
                 onPress={() => { if (duplicateSlot && !busy) duplicateMeal.mutate({ slot: duplicateSlot, date: day.iso || null }); }} style={styles.duplicateDay}>
                 <Text style={[styles.meal, styles.slotMain]}>{day.label}{day.short ? `, ${day.short}` : ""}</Text>
-                <Ionicons name="copy-outline" size={20} color={Colors.tomato} />
+                <Ionicons name="copy-outline" size={20} color={Colors.accent} />
               </Pressable>)}
             </ScrollView>
             {duplicateMeal.isError ? <Text accessibilityRole="alert" style={styles.error}>{duplicateMeal.error instanceof Error ? duplicateMeal.error.message : "Unable to duplicate meal. Try again."}</Text> : null}
@@ -390,7 +392,7 @@ function slotLabel(type: WeeklySlot["slot_type"]) {
   return "Choose a meal";
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 8 },
   title: { fontSize: 28, fontWeight: "900", color: Colors.ink },
   subtitle: { color: Colors.muted },
@@ -404,7 +406,7 @@ const styles = StyleSheet.create({
   groupTitle: { color: Colors.ink, fontWeight: "800", fontSize: 18 },
   resetDay: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   addDay: { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 44, paddingHorizontal: 8 },
-  addLabel: { color: Colors.tomato, fontWeight: "800" },
+  addLabel: { color: Colors.accent, fontWeight: "800" },
   emptyDay: { color: Colors.muted },
   error: { color: Colors.danger },
   modalBackdrop: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.45)", padding: 20 },
@@ -418,10 +420,10 @@ const styles = StyleSheet.create({
   duplicatePanel: { maxHeight: "90%" },
   duplicateHeader: { flexDirection: "row", alignItems: "center", gap: 8 },
   duplicateDay: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 48, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  slotBadge: { width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.tomato, alignItems: "center", justifyContent: "center" },
+  slotBadge: { width: 30, height: 30, borderRadius: 15, backgroundColor: Colors.accent, alignItems: "center", justifyContent: "center" },
   slotBadgeText: { color: "#fff", fontWeight: "900" },
   thumb: { width: 44, height: 44, borderRadius: 6, backgroundColor: Colors.border },
-  emptyThumb: { width: 58, height: 58, borderRadius: 8, backgroundColor: Colors.softRed, borderColor: Colors.border, borderWidth: 1 },
+  emptyThumb: { width: 58, height: 58, borderRadius: 8, backgroundColor: Colors.accentSoft, borderColor: Colors.border, borderWidth: 1 },
   slotMain: { flex: 1, minWidth: 0 },
   day: { color: Colors.basil, fontWeight: "800", fontSize: 12, textTransform: "uppercase" },
   meal: { color: Colors.ink, fontSize: 18, fontWeight: "800", textTransform: "capitalize" },

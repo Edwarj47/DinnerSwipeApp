@@ -5,11 +5,13 @@ import { StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { CouponResult, PremiumStatus, SubscriptionPlanStatus, SubscriptionTier } from "@/services/types";
 
 export function SubscriptionPanel() {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const queryClient = useQueryClient();
   const [code, setCode] = useState("");
   const [status, setStatus] = useTransientMessage();
@@ -178,6 +180,7 @@ function PlanCard({
   disabled: boolean;
   onPress: () => void;
 }) {
+  const styles = useThemedStyles(createStyles);
   const price = plan?.monthly_price_cents ?? fallbackPriceCents;
   return (
     <View style={[styles.planCard, active ? styles.planCardActive : null]}>
@@ -208,20 +211,20 @@ function tierSummary(currentTier: string, trialDays: number) {
   return "Start Basic with a card on file or choose Premium for macro tracking.";
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   panel: { gap: 10, marginTop: 12, marginBottom: 8 },
   header: { flexDirection: "row", justifyContent: "space-between", gap: 10, alignItems: "center" },
   section: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
   meta: { color: Colors.muted, lineHeight: 20 },
   statusPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   activePill: { backgroundColor: "#e8f5ee" },
-  lockedPill: { backgroundColor: Colors.softRed },
+  lockedPill: { backgroundColor: Colors.accentSoft },
   statusText: { fontWeight: "900", textTransform: "capitalize" },
   activeText: { color: Colors.basil },
-  lockedText: { color: Colors.tomatoDark },
+  lockedText: { color: Colors.accentStrong },
   planList: { gap: 8 },
   planCard: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 10 },
-  planCardActive: { borderColor: Colors.tomato, backgroundColor: Colors.softRed },
+  planCardActive: { borderColor: Colors.accent, backgroundColor: Colors.accentSoft },
   planTop: { flexDirection: "row", gap: 12 },
   planName: { color: Colors.ink, fontWeight: "900", fontSize: 17 },
   planDescription: { color: Colors.muted, lineHeight: 19, marginTop: 3 },
@@ -230,8 +233,8 @@ const styles = StyleSheet.create({
   pricePeriod: { color: Colors.muted, fontWeight: "700", fontSize: 12 },
   planFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   planBadge: { color: Colors.basil, fontWeight: "900", flex: 1 },
-  codeBox: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 8 },
+  codeBox: { backgroundColor: Colors.accentSoft, borderRadius: 8, padding: 12, gap: 8 },
   codeTitle: { color: Colors.ink, fontWeight: "900" },
   actions: { flexDirection: "row", gap: 8, flexWrap: "wrap", alignItems: "center" },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, backgroundColor: Colors.surface, flex: 1, color: Colors.ink },
-});
+}));

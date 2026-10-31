@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
-import { Colors } from "@/components/theme";
+import { useThemedStyles, ThemeColors } from "@/components/theme";
 
-export const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   content: { gap: 12, minWidth: 0 },
   row: { flexDirection: "row", alignItems: "center", gap: 8 },
   wrap: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 8 },
@@ -22,7 +22,9 @@ export const styles = StyleSheet.create({
   candidate: { flexDirection: "row", gap: 8, alignItems: "center", borderBottomWidth: StyleSheet.hairlineWidth, borderColor: Colors.border, paddingVertical: 8 },
   sheet: { width: "100%", maxWidth: 640, maxHeight: "90%", backgroundColor: Colors.surface, borderTopLeftRadius: 8, borderTopRightRadius: 8, padding: 16, gap: 12 },
   preview: { gap: 14, paddingBottom: 24 },
-  photo: { width: "100%", aspectRatio: 16 / 9, backgroundColor: Colors.softRed },
+  photo: { width: "100%", aspectRatio: 16 / 9, backgroundColor: Colors.accentSoft },
   step: { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   stepNumber: { width: 26, textAlign: "center", color: Colors.basil, fontWeight: "700", lineHeight: 21 }
 });
+
+export function useStyles() { return useThemedStyles(createStyles); }

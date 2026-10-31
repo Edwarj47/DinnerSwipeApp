@@ -6,7 +6,7 @@ import { BackHandler, Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { addTutorialListener } from "@/services/tutorial";
 import { PremiumStatus, UserProfile } from "@/services/types";
@@ -17,6 +17,8 @@ export { TUTORIAL_VERSION } from "./tourSteps";
 type FinishAction = "complete_tutorial" | "dismiss_tutorial";
 
 export function OnboardingGuide({ children }: { children: ReactNode }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
@@ -123,7 +125,7 @@ export function OnboardingGuide({ children }: { children: ReactNode }) {
               accessibilityState={{ checked: selected.includes(section.id) }} style={styles.section}
               onPress={() => setSelected(current => current.includes(section.id) ? current.filter(id => id !== section.id) : [...current, section.id])}>
               <Ionicons name={section.icon} size={22} color={Colors.basil} /><Text style={styles.sectionLabel}>{section.label}</Text>
-              <Ionicons name={selected.includes(section.id) ? "checkbox" : "square-outline"} size={24} color={selected.includes(section.id) ? Colors.tomato : Colors.muted} />
+              <Ionicons name={selected.includes(section.id) ? "checkbox" : "square-outline"} size={24} color={selected.includes(section.id) ? Colors.accent : Colors.muted} />
             </Pressable>)}
           </ScrollView>
           <Button label="Start tour" icon="play" variant="primary" disabled={!chosenSteps.length} onPress={start} />
@@ -135,14 +137,16 @@ export function OnboardingGuide({ children }: { children: ReactNode }) {
 }
 
 function Icon({ label, name, onPress, disabled = false }: { label: string; name: keyof typeof Ionicons.glyphMap; onPress: () => void; disabled?: boolean }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const [hover, setHover] = useState(false);
   return <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityHint={label} accessibilityState={{ disabled }} disabled={disabled} onPress={onPress}
     onHoverIn={() => setHover(true)} onHoverOut={() => setHover(false)}
-    style={[styles.icon, disabled && { opacity: 0.35 }]}><Ionicons name={name} size={22} color={Colors.tomatoDark} />
+    style={[styles.icon, disabled && { opacity: 0.35 }]}><Ionicons name={name} size={22} color={Colors.accentStrong} />
     {hover ? <View pointerEvents="none" style={[styles.tooltip, name === "chevron-back" && { left: 0, right: undefined }]}><Text style={styles.tooltipText}>{label}</Text></View> : null}
   </Pressable>;
 }
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   root: { flex: 1, minHeight: 0 },
   barSafe: { backgroundColor: Colors.surface, zIndex: 5 },
   bar: { flexDirection: "row", alignItems: "center", borderBottomWidth: 1, borderColor: Colors.border, paddingHorizontal: 4, minHeight: 56 },

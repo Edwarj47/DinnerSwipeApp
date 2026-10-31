@@ -7,10 +7,11 @@ import { deviceOffline } from "@/services/offlineStore";
 import { appendRecipeImage, RecipeImage, RecipePhotoPicker } from "@/features/recipes/RecipePhotoPicker";
 import { workoutWrite } from "./api";
 import { WorkoutCategory, WorkoutTemplate } from "./types";
-import { WorkoutField, WorkoutPhoto, WorkoutSheet, categories, styles } from "./ui";
+import { WorkoutField, WorkoutPhoto, WorkoutSheet, categories, useStyles } from "./ui";
 import { buildWorkoutTemplate, emptyExercise, ExerciseDraft, uploadedWorkoutPhotoReference } from "./template";
 
 export function TemplateEditor({ template, onClose, onSaved }: { template?: WorkoutTemplate; onClose: () => void; onSaved: () => void }) {
+  const styles = useStyles();
   const [title, setTitle] = useState(template?.title ?? ""), [description, setDescription] = useState(template?.description ?? "");
   const [photoReference, setPhotoReference] = useState(template?.photo_reference ?? null), [photoPreview, setPhotoPreview] = useState(template?.photo_url ?? null), [uploading, setUploading] = useState(false);
   const [category, setCategory] = useState<WorkoutCategory>(template?.category ?? "full_body");

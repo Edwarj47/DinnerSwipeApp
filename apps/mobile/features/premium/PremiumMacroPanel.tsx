@@ -6,7 +6,7 @@ import { Platform, Pressable, Share, StyleSheet, Text, TextInput, useWindowDimen
 import { Button } from "@/components/Button";
 import { SUCCESS_MESSAGE_MS } from "@/components/useTransientMessage";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { WeightTextInput } from "@/components/WeightUnits";
 import { convertWeight, formatWeight } from "@/services/weightUnits";
 import { NutrientWeight, useMeasurementUnits } from "@/services/measurementPreferences";
@@ -40,6 +40,7 @@ import {
 type MacroView = "day" | "grid" | "calendar" | "analytics";
 
 export function PremiumMacroPanel() {
+  const styles = useThemedStyles(createStyles);
   const units = useMeasurementUnits();
   const unit = units.protein_g;
   const pendingMacros = useOfflineStatus(state => state.edits.some(edit => edit.kind.startsWith("macro_")));
@@ -429,6 +430,8 @@ function DayMacroView({
   onEdit: (entry: MacroConfirmation) => void;
   onCalculator: () => void;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const units = useMeasurementUnits();
   const unit = units.protein_g;
   return (
@@ -492,6 +495,7 @@ function GridMacroView({
   dailyTotals: MacroAnalytics["daily_totals"];
   onPickDay: (day: string) => void;
 }) {
+  const styles = useThemedStyles(createStyles);
   const unit = useMeasurementUnits().protein_g;
   const recent = dailyTotals.slice(-7);
   return (
@@ -524,6 +528,7 @@ function CalendarMacroView({
   onRange: (range: string) => void;
   onPickDay: (day: string) => void;
 }) {
+  const styles = useThemedStyles(createStyles);
   const [filter, setFilter] = useState("all");
   const [sort, setSort] = useState<CalendarSort>("newest");
   const recent = calendarDays(dailyTotals, filter === "logged", sort);
@@ -582,6 +587,7 @@ function AnalyticsMacroView({
   exportPending: boolean;
   onExport: () => void;
 }) {
+  const styles = useThemedStyles(createStyles);
   const unit = useMeasurementUnits().protein_g;
   return (
     <View style={styles.viewBox}>
@@ -608,6 +614,7 @@ function AnalyticsMacroView({
 }
 
 function Metric({ label, value }: { label: string; value: string }) {
+  const styles = useThemedStyles(createStyles);
   const { fontScale } = useWindowDimensions();
   const sizing: ViewStyle = Platform.OS === "web" ? { minWidth: "max-content" as ViewStyle["minWidth"], flexBasis: "auto" } : { minWidth: 100 * fontScale, flexBasis: 100 * fontScale };
   return (
@@ -619,6 +626,7 @@ function Metric({ label, value }: { label: string; value: string }) {
 }
 
 function MacroField({ label, children }: { label: string; children: ReactNode }) {
+  const styles = useThemedStyles(createStyles);
   const { fontScale } = useWindowDimensions();
   return <View style={[styles.field, fontScale > 1.3 && { flexBasis: "100%" }]}>
     <Text style={styles.fieldLabel}>{label}</Text>{children}
@@ -626,6 +634,7 @@ function MacroField({ label, children }: { label: string; children: ReactNode })
 }
 
 function EntryRow({ entry, onPress }: { entry: MacroConfirmation; onPress: () => void }) {
+  const styles = useThemedStyles(createStyles);
   const unit = useMeasurementUnits().protein_g;
   return (
     <Pressable accessibilityRole="button" onPress={onPress} style={styles.entryRow}>
@@ -651,6 +660,7 @@ function MacroLine({
   target?: number | null;
   nutrient?: NutrientWeight;
 }) {
+  const styles = useThemedStyles(createStyles);
   const units = useMeasurementUnits();
   const unit = units[nutrient ?? "protein_g"];
   const displaySuffix = nutrient ? ` ${unit}` : "";
@@ -746,7 +756,7 @@ function shortDate(value: string) {
   return `${month}/${day}`;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   panel: { gap: 12, marginTop: 12, marginBottom: 8 },
   header: { flexDirection: "row", justifyContent: "space-between", gap: 10, alignItems: "center" },
   section: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
@@ -754,13 +764,13 @@ const styles = StyleSheet.create({
   meta: { color: Colors.muted, lineHeight: 20 },
   statusPill: { borderRadius: 999, paddingHorizontal: 10, paddingVertical: 6 },
   activePill: { backgroundColor: "#e8f5ee" },
-  lockedPill: { backgroundColor: Colors.softRed },
+  lockedPill: { backgroundColor: Colors.accentSoft },
   statusText: { fontWeight: "900", textTransform: "capitalize" },
   activeText: { color: Colors.basil },
-  lockedText: { color: Colors.tomatoDark },
+  lockedText: { color: Colors.accentStrong },
   planList: { gap: 10 },
   planCard: { borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 10 },
-  planCardActive: { borderColor: Colors.tomato, backgroundColor: Colors.softRed },
+  planCardActive: { borderColor: Colors.accent, backgroundColor: Colors.accentSoft },
   planTop: { flexDirection: "row", gap: 12 },
   planName: { color: Colors.ink, fontWeight: "900", fontSize: 17 },
   planDescription: { color: Colors.muted, lineHeight: 19, marginTop: 3 },
@@ -769,7 +779,7 @@ const styles = StyleSheet.create({
   pricePeriod: { color: Colors.muted, fontWeight: "700", fontSize: 12 },
   planFooter: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10 },
   planBadge: { color: Colors.basil, fontWeight: "900", flex: 1 },
-  codeBox: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 8 },
+  codeBox: { backgroundColor: Colors.accentSoft, borderRadius: 8, padding: 12, gap: 8 },
   codeTitle: { color: Colors.ink, fontWeight: "900" },
   actions: { flexDirection: "row", gap: 10, flexWrap: "wrap", alignItems: "center" },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, backgroundColor: Colors.surface, flex: 1, color: Colors.ink },
@@ -793,17 +803,17 @@ const styles = StyleSheet.create({
   entryList: { gap: 8 },
   entryRow: { flexDirection: "row", alignItems: "center", borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, gap: 8 },
   entryTitle: { color: Colors.ink, fontWeight: "900", fontSize: 15 },
-  editText: { color: Colors.tomatoDark, fontWeight: "900" },
+  editText: { color: Colors.accentStrong, fontWeight: "900" },
   dayGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   dayCard: { flexBasis: "30%", flexGrow: 1, minWidth: 100, minHeight: 104, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10, justifyContent: "space-between" },
   dayName: { color: Colors.ink, fontWeight: "900" },
-  dayCalories: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 20 },
+  dayCalories: { color: Colors.accentStrong, fontWeight: "900", fontSize: 20 },
   miniLabel: { color: Colors.muted, fontWeight: "800", fontSize: 11, textTransform: "uppercase" },
   miniText: { color: Colors.muted, fontSize: 12 },
   calendarRow: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44 },
   calendarLabel: { minWidth: 58 },
-  calendarTrack: { flex: 1, height: 12, borderRadius: 999, backgroundColor: Colors.softRed, overflow: "hidden" },
-  calendarFill: { height: "100%", backgroundColor: Colors.tomato },
+  calendarTrack: { flex: 1, height: 12, borderRadius: 999, backgroundColor: Colors.accentSoft, overflow: "hidden" },
+  calendarFill: { height: "100%", backgroundColor: Colors.accent },
   calendarValue: { minWidth: 52, flexShrink: 0, textAlign: "right", color: Colors.ink, fontWeight: "900" },
   analyticsList: { gap: 8 },
   macroLine: { borderBottomWidth: 1, borderBottomColor: Colors.border, paddingBottom: 8 },
@@ -812,4 +822,4 @@ const styles = StyleSheet.create({
   status: { color: Colors.basil, fontWeight: "700" },
   error: { color: Colors.danger, fontWeight: "700" },
   queryStatus: { gap: 8 }
-});
+}));

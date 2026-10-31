@@ -6,7 +6,7 @@ import { Modal, Pressable, ScrollView, StyleSheet, Switch, Text, TextInput, View
 import { Button } from "@/components/Button";
 import { SearchField } from "@/components/SearchField";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { DaySelection } from "@/features/planner/DaySelection";
 import { ResetDaySelection } from "@/features/preferences/ResetDaySelection";
@@ -24,6 +24,7 @@ type Proposal = { id: string; recipe: Recipe; status: "pending" | "approved" | "
 type Proposals = { week_start: string; items: Proposal[] };
 
 export function GroupPlanningPanel({ household, initialView }: { household: Household; initialView?: "choices" }) {
+  const styles = useThemedStyles(createStyles);
   const [tab, setTab] = useState<"proposals" | "library" | "choices">("proposals");
   const owner = household.current_user_role === "owner";
   const { group_view } = useLocalSearchParams<{ group_view?: string }>();
@@ -40,6 +41,8 @@ export function GroupPlanningPanel({ household, initialView }: { household: Hous
 }
 
 function GroupLibrary({ household, editing }: { household: Household; editing: boolean }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const client = useQueryClient();
   const [search, setSearch] = useState("");
   const [changes, setChanges] = useState<Record<string, boolean>>({});
@@ -72,7 +75,7 @@ function GroupLibrary({ household, editing }: { household: Household; editing: b
     {items.map(item => {
       const checked = changes[item.recipe.id] ?? (bulk ? bulk === "enable" : item.enabled);
       return <Pressable key={item.recipe.id} accessibilityRole={editing ? "checkbox" : "button"} accessibilityLabel={item.recipe.name} accessibilityState={editing ? { checked } : undefined} aria-checked={editing ? checked : undefined} disabled={save.isPending} onPress={() => editing ? setChanges(current => ({ ...current, [item.recipe.id]: !checked })) : setDetail(item.recipe)} style={styles.recipeRow}>
-        {editing ? <Ionicons name={checked ? "checkbox" : "square-outline"} size={24} color={Colors.tomato} /> : null}
+        {editing ? <Ionicons name={checked ? "checkbox" : "square-outline"} size={24} color={Colors.accent} /> : null}
         <RecipePhoto photoUrl={item.recipe.photo_url} accessibilityLabel={`${item.recipe.name} photo`} style={styles.photo} />
         <View style={styles.copy}><Text style={styles.name}>{item.recipe.name}</Text>{item.is_blocked ? <Text style={styles.error}>Blocked by group safety</Text> : item.warning_labels.length ? <Text style={styles.meta}>{item.warning_labels.join(", ")}</Text> : null}</View>
         {!editing && item.enabled ? <Ionicons name="checkmark-circle" color={Colors.basil} size={20} /> : null}
@@ -91,6 +94,8 @@ function GroupLibrary({ household, editing }: { household: Household; editing: b
 }
 
 function ProposalList({ household }: { household: Household }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const client = useQueryClient();
   const base = `/api/v1/households/${household.id}`;
   const owner = household.current_user_role === "owner";
@@ -141,6 +146,7 @@ function ProposalList({ household }: { household: Household }) {
 }
 
 function GroupResetSettings({ household }: { household: Household }) {
+  const styles = useThemedStyles(createStyles);
   const owner = household.current_user_role === "owner";
   const client = useQueryClient();
   const [open, setOpen] = useState(false);
@@ -169,7 +175,7 @@ function GroupResetSettings({ household }: { household: Household }) {
   </View>;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   section: { gap: 8 }, sectionToggle: { minHeight: 44 }, input: { minHeight: 48, padding: 12, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, color: Colors.ink },
   row: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: 10 }, buttons: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   recipeRow: { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 12, borderBottomWidth: 1, borderColor: Colors.border },

@@ -28,6 +28,24 @@ from app.services.recipes import COMPLETED_FEEDBACK_KEY, IGNORED_FEEDBACK_KEY
 
 router = APIRouter(prefix="/profile", tags=["profile"])
 
+APPEARANCE_KEY = "appearance_preferences"
+AccentColor = Literal["red", "blue", "green", "teal", "purple", "orange"]
+
+
+class AppearanceUpdate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    accent: AccentColor
+
+
+def appearance_preferences(profile: UserProfile) -> dict[str, str]:
+    stored = (profile.notification_preferences or {}).get(APPEARANCE_KEY)
+    accent = stored.get("accent") if isinstance(stored, dict) else None
+    return {
+        "accent": accent
+        if accent in ("red", "blue", "green", "teal", "purple", "orange")
+        else "red"
+    }
+
 
 @router.get("")
 def get_profile(current_user: CurrentUser) -> dict[str, object]:
@@ -51,6 +69,7 @@ def get_profile(current_user: CurrentUser) -> dict[str, object]:
         "experience_preferences": (profile.notification_preferences or {}).get(
             "experience_preferences", {"mode": "nutrition", "weight_unit": "kg"}
         ),
+        "appearance_preferences": appearance_preferences(profile),
         "weekly_planning": planning_settings(current_user),
         "onboarding_completed_at": profile.onboarding_completed_at,
         "tutorial_completed_at": profile.tutorial_completed_at,
@@ -82,6 +101,7 @@ def update_profile(
                 DISPLAY_NAME_KEY,
                 DISCOVER_KEY,
                 "experience_preferences",
+                APPEARANCE_KEY,
             ):
                 stored = (profile.notification_preferences or {}).get(protected)
                 if stored is not None:
@@ -89,6 +109,25 @@ def update_profile(
                 else:
                     value.pop(protected, None)
         setattr(profile, key, value)
+    db.commit()
+    return get_profile(current_user)
+
+
+@router.patch("/appearance")
+def update_appearance(
+    payload: AppearanceUpdate, db: DbDep, current_user: CurrentUser
+) -> dict[str, object]:
+    profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == current_user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    assert profile is not None
+    profile.notification_preferences = {
+        **(profile.notification_preferences or {}),
+        APPEARANCE_KEY: payload.model_dump(),
+    }
     db.commit()
     return get_profile(current_user)
 

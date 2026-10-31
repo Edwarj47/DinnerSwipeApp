@@ -13,13 +13,14 @@ import { WorkoutAction, WorkoutCard, WorkoutCardHandle } from "./WorkoutCard";
 import { WorkoutDetail } from "./WorkoutDetail";
 import { useWorkoutOwner } from "./WorkoutRuntime";
 import { WorkoutCategory, WorkoutPlan, WorkoutSlot, WorkoutTemplate } from "./types";
-import { WorkoutHeader, WorkoutQueryState, WorkoutSpaceSelector, categories, styles } from "./ui";
+import { WorkoutHeader, WorkoutQueryState, WorkoutSpaceSelector, categories, useStyles } from "./ui";
 
 export function WorkoutDiscover() {
   const space = useSpace(), owner = useWorkoutOwner();
   return <DiscoverContent key={`${owner}:${space.key}`} />;
 }
 function DiscoverContent() {
+  const styles = useStyles();
   const space = useSpace(), owner = useWorkoutOwner(), client = useQueryClient(), router = useRouter();
   const [selected, setSelected] = useState<WorkoutCategory[]>(categories.map(item => item.value)), [seen, setSeen] = useState<string[]>([]);
   const [detail, setDetail] = useState<WorkoutTemplate | null>(null), [performance, setPerformance] = useState<WorkoutTemplate | null>(null), [message, setMessage] = useTransientMessage();

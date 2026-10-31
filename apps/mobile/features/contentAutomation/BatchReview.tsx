@@ -3,15 +3,17 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import { ActivityIndicator, Pressable, Text, View } from "react-native";
 import { Button } from "@/components/Button";
-import { Colors } from "@/components/theme";
+import { useThemeColors } from "@/components/theme";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { offlineOwner, useOfflineStatus } from "@/services/offlineStore";
 import { automationKey, batchKey, decideCandidates, getBatch } from "./api";
 import { CandidatePreview } from "./CandidatePreview";
 import { Batch, Candidate, isPreparing, statusLabel } from "./types";
-import { styles } from "./styles";
+import { useStyles } from "./styles";
 
 export function BatchReview({ owner, id, blocked, onBusyChange }: { owner: string; id: string; blocked: boolean; onBusyChange: (busy: boolean) => void }) {
+  const styles = useStyles();
+  const Colors = useThemeColors();
   const client = useQueryClient();
   const offline = useOfflineStatus(state => state.offline);
   const [selection, setSelection] = useState<string[]>([]);
@@ -68,7 +70,7 @@ export function BatchReview({ owner, id, blocked, onBusyChange }: { owner: strin
   return <View style={styles.content}>
     <View style={styles.row}>
       <Text style={[styles.label, styles.copy]}>Batch additions</Text>
-      <ActivityIndicator animating={query.isFetching} hidesWhenStopped accessibilityLabel={query.isFetching ? "Loading daily batch" : undefined} color={Colors.tomato} style={styles.loading} />
+      <ActivityIndicator animating={query.isFetching} hidesWhenStopped accessibilityLabel={query.isFetching ? "Loading daily batch" : undefined} color={Colors.accent} style={styles.loading} />
       <Button label="" icon="refresh" accessibilityLabel="Refresh daily batch" disabled={query.isFetching || offline || decision.isPending} onPress={() => { void query.refetch(); }} />
     </View>
     {query.isError ? <View style={styles.content}><Text accessibilityRole="alert" style={styles.error}>Couldn't load this batch.</Text>
@@ -110,6 +112,8 @@ export function BatchReview({ owner, id, blocked, onBusyChange }: { owner: strin
 }
 
 function SelectionCheckbox({ label, text, checked, mixed, disabled, onPress }: { label: string; text?: string; checked: boolean; mixed?: boolean; disabled: boolean; onPress: () => void }) {
+  const styles = useStyles();
+  const Colors = useThemeColors();
   return <Pressable accessibilityRole="checkbox" accessibilityLabel={label} accessibilityState={{ checked: mixed ? "mixed" : checked, disabled }}
     aria-checked={mixed ? "mixed" : checked} aria-disabled={disabled}
     disabled={disabled} onPress={onPress} style={[styles.checkbox, disabled && styles.disabled]}>

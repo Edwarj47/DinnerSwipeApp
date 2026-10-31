@@ -3,10 +3,11 @@ import { Text, View } from "react-native";
 import { displayWorkoutWeight, useWorkoutMode } from "@/services/workoutMode";
 import { getWorkoutProgress, workoutKey } from "./api";
 import { useWorkoutOwner } from "./WorkoutRuntime";
-import { WorkoutQueryState, WorkoutQueueNotice, styles } from "./ui";
+import { WorkoutQueryState, WorkoutQueueNotice, useStyles } from "./ui";
 import { WorkoutProgress as ProgressData } from "./types";
 
 export function WorkoutProgress() {
+  const styles = useStyles();
   const owner = useWorkoutOwner(), unit = useWorkoutMode(state => state.weight_unit);
   const progress = useQuery<ProgressData>({ queryKey: workoutKey(owner, "progress"), queryFn: getWorkoutProgress, enabled: Boolean(owner), retry: false });
   const data = progress.data;

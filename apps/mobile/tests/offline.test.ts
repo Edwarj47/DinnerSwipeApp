@@ -101,6 +101,15 @@ test("first login and shared planning edits remain online-only", async () => {
   expect((await loadOffline(owner)).edits).toHaveLength(0);
 });
 
+test("saved appearance also updates the downloaded profile and is never an offline queued edit", async () => {
+  await connect();
+  jest.mocked(fetch).mockResolvedValueOnce(response({ appearance_preferences: { accent: "blue" }, notification_preferences: { appearance_preferences: { accent: "blue" } } }));
+  await apiFetch("/api/v1/profile/appearance", { method: "PATCH", body: JSON.stringify({ accent: "blue" }) });
+  setDeviceOffline(true);
+  expect(await apiFetch("/api/v1/profile")).toMatchObject({ appearance_preferences: { accent: "blue" } });
+  expect((await loadOffline(owner)).edits).toHaveLength(0);
+});
+
 test("grocery edits survive a restart and synchronize in revision order", async () => {
   await connect();
   setDeviceOffline(true);

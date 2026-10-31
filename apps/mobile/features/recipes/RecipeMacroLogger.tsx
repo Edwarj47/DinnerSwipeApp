@@ -7,7 +7,7 @@ import { Button } from "@/components/Button";
 import { SearchField } from "@/components/SearchField";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { MacroDatePicker } from "@/features/premium/MacroDatePicker";
 import { isISODate, todayISO } from "@/features/premium/macroDates";
 import { Calculation } from "@/features/premium/calculator";
@@ -23,6 +23,8 @@ import { RecipePhoto } from "./RecipePhoto";
 export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayISO(), onClose }: {
   recipe?: Recipe; entry?: MacroConfirmation; date?: string; onClose: () => void;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const client = useQueryClient();
   const offline = useOfflineStatus(state => state.offline);
   const [recipe, setRecipe] = useState(initialRecipe);
@@ -123,7 +125,7 @@ export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayIS
             onPress={() => { setRecipe(item); setLabel(normalizeMealLabel(item.meal_type)); setNutrition(nutritionInputs(item.nutrition)); }}>
             <RecipePhoto photoUrl={item.photo_url} accessibilityLabel={`${item.name} photo`} style={styles.photo} /><View style={{ flex: 1 }}><Text style={styles.name}>{item.name}</Text>
               <Text style={styles.meta}>{item.nutrition?.calories != null ? `${item.nutrition.calories} cal / serving` : "Calories not entered"}</Text></View>
-            <Ionicons name="add-circle-outline" size={24} color={Colors.tomato} /></Pressable>)}
+            <Ionicons name="add-circle-outline" size={24} color={Colors.accent} /></Pressable>)}
           {recipes.data && !recipes.data.pages.flat().length ? <Text style={styles.meta}>No recipes found.</Text> : null}
           {recipes.hasNextPage ? <Button label="More recipes" icon="chevron-down" disabled={recipes.isFetchingNextPage} onPress={() => { void recipes.fetchNextPage(); }} /> : null}
         </> : <>
@@ -164,7 +166,7 @@ export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayIS
     </View></View>
   </Modal>;
 }
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", alignItems: "center", justifyContent: "center", padding: 12 },
   sheet: { width: "100%", maxWidth: 540, maxHeight: "90%", backgroundColor: Colors.surface, borderRadius: 8, padding: 14, gap: 12 },
   header: { flexDirection: "row", alignItems: "center", gap: 10 }, heading: { flex: 1, fontSize: 20, fontWeight: "800", color: Colors.ink },
@@ -175,4 +177,4 @@ const styles = StyleSheet.create({
   photo: { width: 48, height: 48, borderRadius: 6 }, name: { color: Colors.ink, fontSize: 16, fontWeight: "700" },
   meta: { color: Colors.muted }, error: { color: Colors.danger }, success: { color: Colors.basil },
   recipeName: { gap: 8 }, cancel: { marginLeft: "auto" }
-});
+}));

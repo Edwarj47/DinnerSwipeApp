@@ -13,7 +13,7 @@ import Animated, {
   withTiming
 } from "react-native-reanimated";
 
-import { Colors, shadow } from "@/components/theme";
+import { shadow, useThemedStyles, ThemeColors } from "@/components/theme";
 import { PhotoCredit } from "@/components/PhotoCredit";
 import { formatDifficulty, formatMealType, formatSourceType } from "@/features/recipes/recipeDisplay";
 import { Recipe } from "@/services/types";
@@ -41,6 +41,7 @@ const EXIT_TARGETS: Record<MealAction, { x: number; y: number }> = {
 };
 
 export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ recipe, onAction, onOpen, compact = false, proposing = false, availableHeight, onBodyLayout }, ref) {
+  const styles = useThemedStyles(createStyles);
   const { height } = useWindowDimensions();
   const [bodyHeight, setBodyHeight] = useState(200);
   const imageHeight = Math.max(120, Math.min(compact ? 240 : 360, (availableHeight ?? height - 200) - bodyHeight));
@@ -152,7 +153,7 @@ export const MealCard = forwardRef<MealCardHandle, Props>(function MealCard({ re
   );
 });
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   card: { backgroundColor: Colors.surface, borderRadius: 8, overflow: "hidden", ...shadow },
   image: { width: "100%", backgroundColor: Colors.border },
   photoCredit: { position: "absolute", top: 8, right: 8 },
@@ -179,7 +180,7 @@ const styles = StyleSheet.create({
   swipeBadgeText: { fontSize: 24, lineHeight: 28, fontWeight: "900" },
   planBadgeText: { color: Colors.basil },
   skipBadgeText: { color: Colors.danger },
-  favoriteBadgeText: { color: Colors.tomatoDark },
+  favoriteBadgeText: { color: Colors.accentStrong },
   hideBadgeText: { color: Colors.danger },
   swipeHint: { color: Colors.ink, fontSize: 11, fontWeight: "800", textTransform: "uppercase" }
 });

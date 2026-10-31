@@ -4,5 +4,12 @@
 
 expo-env.d.ts
 # @end expo-cli
-android/
-ios/
+# Generated application projects only; local module source must be versioned.
+/android/
+/ios/
+/modules/app-icons/android/build/
+/modules/app-icons/android/.gradle/
+*.keystore
+*.jks
+*.p12
+*.mobileprovision

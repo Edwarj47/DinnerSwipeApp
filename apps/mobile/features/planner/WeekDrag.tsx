@@ -4,7 +4,7 @@ import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "
 import { revealTourTarget, TourScrollContext } from "@/features/onboarding/TourContext";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { dragScrollOffset, findDropPosition, MealRect, Rect } from "./weekDrop";
 
 type Drag = { id: string; label: string; x: number; y: number };
@@ -28,6 +28,8 @@ export function WeekDrag({ days, disabled, onAssign, onReorder, children }: {
   onReorder?: (slotId: string, beforeId: string | null) => void;
   children: ReactNode;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const root = useRef<View>(null);
   const scroll = useRef<ScrollView>(null);
   const tourContent = useRef<View>(null);
@@ -138,7 +140,7 @@ export function WeekDrag({ days, disabled, onAssign, onReorder, children }: {
             <View pointerEvents="none" style={[styles.ghost, {
               left: Math.max(0, Math.min(viewport.current.width - 220, drag.x - viewport.current.x - 110)),
               top: Math.max(0, Math.min(viewport.current.height - 64, drag.y - viewport.current.y + 18))
-            }]}><Ionicons name="move" size={20} color={Colors.tomato} /><Text numberOfLines={2} style={styles.ghostText}>{drag.label}</Text></View>
+            }]}><Ionicons name="move" size={20} color={Colors.accent} /><Text numberOfLines={2} style={styles.ghostText}>{drag.label}</Text></View>
           ) : null}
         </View>
         <Modal visible={!!selected} transparent animationType="fade" onRequestClose={() => setSelected(null)}>
@@ -161,6 +163,7 @@ export function WeekDrag({ days, disabled, onAssign, onReorder, children }: {
 }
 
 export function WeekDropDay({ day, children }: { day: string; children: ReactNode }) {
+  const styles = useThemedStyles(createStyles);
   const controls = useContext(DragControls)!;
   const hover = useContext(HoverDay);
   const mealHover = useContext(HoverMeal);
@@ -172,6 +175,8 @@ export function WeekDropDay({ day, children }: { day: string; children: ReactNod
 }
 
 export function WeekDragHandle({ id, label, disabled }: { id: string; label: string; disabled: boolean }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const controls = useContext(DragControls)!;
   const gesture = useMemo(() => Gesture.Pan().enabled(!disabled).minDistance(7).runOnJS(true)
     .onStart(e => controls.begin(id, label, e.absoluteX, e.absoluteY))
@@ -188,6 +193,7 @@ export function WeekDragHandle({ id, label, disabled }: { id: string; label: str
 }
 
 export function WeekDropMeal({ id, day, children }: { id: string; day: string; children: ReactNode }) {
+  const styles = useThemedStyles(createStyles);
   const controls = useContext(DragControls)!;
   const hover = useContext(HoverMeal);
   const register = useCallback((node: View | null) => controls.registerMeal(id, day, node), [controls, id, day]);
@@ -197,7 +203,7 @@ export function WeekDropMeal({ id, day, children }: { id: string; day: string; c
   </View>;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   root: { flex: 1, minHeight: 0 },
   scroll: { flex: 1, minHeight: 0 },
   insertion: { position: "absolute", top: -5, left: 0, right: 0, height: 3, backgroundColor: Colors.basil },
@@ -206,7 +212,7 @@ const styles = StyleSheet.create({
   day: { gap: 8, padding: 4, paddingBottom: 12, borderWidth: 1, borderColor: "transparent", borderBottomColor: Colors.border, minHeight: 80 },
   over: { borderColor: Colors.basil, backgroundColor: "#edf6ef" },
   handle: { width: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
-  ghost: { position: "absolute", width: 220, zIndex: 100, backgroundColor: Colors.surface, borderColor: Colors.tomato, borderWidth: 2, borderRadius: 8, padding: 12, flexDirection: "row", gap: 8 },
+  ghost: { position: "absolute", width: 220, zIndex: 100, backgroundColor: Colors.surface, borderColor: Colors.accent, borderWidth: 2, borderRadius: 8, padding: 12, flexDirection: "row", gap: 8 },
   ghostText: { flex: 1, fontWeight: "800", color: Colors.ink },
   backdrop: { flex: 1, alignItems: "center", justifyContent: "center", padding: 20, backgroundColor: "rgba(0,0,0,0.45)" },
   picker: { width: "100%", maxWidth: 420, maxHeight: "85%", borderRadius: 8, backgroundColor: Colors.surface, padding: 16 },

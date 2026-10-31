@@ -8,9 +8,10 @@ import { getWorkoutLogs, ownWorkoutLogs, workoutKey } from "./api";
 import { useWorkoutQueue } from "./storage";
 import { WorkoutLog } from "./types";
 import { useWorkoutOwner } from "./WorkoutRuntime";
-import { WorkoutQueryState, WorkoutQueueNotice, WorkoutSheet, styles } from "./ui";
+import { WorkoutQueryState, WorkoutQueueNotice, WorkoutSheet, useStyles } from "./ui";
 
 export function WorkoutSessions() {
+  const styles = useStyles();
   const owner = useWorkoutOwner(), unit = useWorkoutMode(state => state.weight_unit), client = useQueryClient();
   const logs = useQuery({ queryKey: workoutKey(owner, "logs"), queryFn: getWorkoutLogs, enabled: Boolean(owner), retry: false });
   const pending = useWorkoutQueue(state => state.pending);

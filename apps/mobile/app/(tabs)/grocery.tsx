@@ -8,7 +8,7 @@ import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { Screen } from "@/components/Screen";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { apiFetch as remoteFetch } from "@/services/api";
 import { useOfflineStatus } from "@/services/offlineStore";
 import { useSpace } from "@/features/groups/useSpace";
@@ -47,6 +47,8 @@ export default function GroceryScreen() {
 }
 
 function GroceryContent() {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const space = useSpace();
   const apiFetch = <T,>(path: string, init?: RequestInit) => init ? remoteFetch<T>(space.path(path), init) : remoteFetch<T>(space.path(path));
   const weightUnit = useMeasurementUnits().ingredient_weight;
@@ -323,7 +325,7 @@ function retailerUrl(item: GroceryItem) {
   return item.retailer_search_url ?? item.walmart_search_url ?? null;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   header: { flexDirection: "row", gap: 8, justifyContent: "space-between", alignItems: "center" },
   title: { fontSize: 28, fontWeight: "900", color: Colors.ink },
   subtitle: { color: Colors.muted },
@@ -336,9 +338,9 @@ const styles = StyleSheet.create({
   chips: { gap: 8 },
   pantryRow: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 56, borderBottomWidth: 1, borderColor: Colors.border, paddingVertical: 8 },
   removePantry: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  pantryChip: { flexDirection: "row", gap: 7, alignItems: "center", borderRadius: 999, backgroundColor: Colors.softRed, paddingHorizontal: 10, minHeight: 34 },
-  pantryText: { color: Colors.tomatoDark, fontWeight: "800", textTransform: "capitalize" },
-  pantryRemove: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 16 },
+  pantryChip: { flexDirection: "row", gap: 7, alignItems: "center", borderRadius: 999, backgroundColor: Colors.accentSoft, paddingHorizontal: 10, minHeight: 34 },
+  pantryText: { color: Colors.accentStrong, fontWeight: "800", textTransform: "capitalize" },
+  pantryRemove: { color: Colors.accentStrong, fontWeight: "900", fontSize: 16 },
   group: { marginTop: 12, gap: 8 },
   groupHeader: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44, paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Colors.border },
   groupName: { flex: 1, fontSize: 18, fontWeight: "900", color: Colors.ink },

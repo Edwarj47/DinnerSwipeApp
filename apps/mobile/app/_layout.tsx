@@ -4,6 +4,7 @@ import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AuthGate } from "@/components/AuthGate";
+import { AppearanceProvider } from "@/components/AppearanceProvider";
 import { OfflineRuntime } from "@/components/OfflineRuntime";
 import { PlanningRuntime } from "@/components/PlanningRuntime";
 import { BiometricGate } from "@/components/BiometricGate";
@@ -20,6 +21,7 @@ export default function RootLayout() {
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.background }}>
       <QueryClientProvider client={queryClient}>
         <BiometricGate>
+          <AppearanceProvider>
           <AuthGate>
             <SubscriptionGate>
               <OfflineRuntime />
@@ -29,6 +31,7 @@ export default function RootLayout() {
             </SubscriptionGate>
             <StatusBar style="dark" />
           </AuthGate>
+          </AppearanceProvider>
         </BiometricGate>
       </QueryClientProvider>
     </GestureHandlerRootView>

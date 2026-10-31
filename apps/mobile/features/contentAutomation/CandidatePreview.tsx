@@ -5,9 +5,10 @@ import { BottomSheetModal } from "@/components/BottomSheetModal";
 import { PhotoCredit } from "@/components/PhotoCredit";
 import { RecipePhoto } from "@/features/recipes/RecipePhoto";
 import { Candidate, RecipePayload, WorkoutPayload, sourceLink, statusLabel } from "./types";
-import { styles } from "./styles";
+import { useStyles } from "./styles";
 
 export function CandidatePreview({ candidate, onClose }: { candidate: Candidate; onClose: () => void }) {
+  const styles = useStyles();
   const [linkError, setLinkError] = useState(false);
   const link = sourceLink(candidate.source_url);
   return <BottomSheetModal sheetStyle={styles.sheet} onRequestClose={onClose}>
@@ -31,6 +32,7 @@ export function CandidatePreview({ candidate, onClose }: { candidate: Candidate;
 }
 
 function RecipePreview({ payload }: { payload: RecipePayload }) {
+  const styles = useStyles();
   const nutrition = payload.nutrition;
   return <>
     {payload.description ? <Text style={styles.text}>{payload.description}</Text> : null}
@@ -58,6 +60,7 @@ function RecipePreview({ payload }: { payload: RecipePayload }) {
 }
 
 function WorkoutPreview({ payload }: { payload: WorkoutPayload }) {
+  const styles = useStyles();
   return <>
     <Text style={styles.meta}>{statusLabel(payload.category)}</Text>
     {payload.description ? <Text style={styles.text}>{payload.description}</Text> : null}

@@ -7,7 +7,7 @@ import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { Screen } from "@/components/Screen";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { MealCard, MealCardHandle } from "@/features/discover/MealCard";
 import { TourTarget } from "@/features/onboarding/TourTarget";
 import { useGuidedTour } from "@/features/onboarding/TourContext";
@@ -35,6 +35,8 @@ function NutritionDiscoverScreen() {
 }
 
 function DiscoverContent() {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const space = useSpace();
   const { height, fontScale } = useWindowDimensions();
   const [viewportHeight, setViewportHeight] = useState(height - 64);
@@ -181,7 +183,7 @@ function DiscoverContent() {
       <TourTarget id="discover" fill>
       {space.isLoading || isLoading || plan.isLoading ? (
         <View style={styles.empty}>
-          <ActivityIndicator color={Colors.tomato} />
+          <ActivityIndicator color={Colors.accent} />
           <Text style={styles.emptyCopy}>Loading your recipes...</Text>
         </View>
       ) : space.isError || error || plan.isError ? (
@@ -236,7 +238,7 @@ function DiscoverContent() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 6 },
   brand: { flexDirection: "row", alignItems: "center", gap: 10, flex: 1, minWidth: 0 },
   brandText: { flex: 1, minWidth: 0 },

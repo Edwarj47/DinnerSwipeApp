@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { Button } from "@/components/Button";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { useMeasurementUnits } from "@/services/measurementPreferences";
 import { saveProfilePreferences } from "@/services/profilePreferences";
@@ -15,6 +15,8 @@ import { NutritionPendingNotice } from "./NutritionPendingNotice";
 import { SummaryPeriod } from "./SummaryPeriod";
 
 export function MacroAnalyticsPanel() {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const client = useQueryClient();
   const units = useMeasurementUnits();
   const [selection, setSelection] = useState<number | null>(null);
@@ -45,7 +47,7 @@ export function MacroAnalyticsPanel() {
         <Metric label="Calories / logged day" value={String(average?.calories ?? 0)} />
       </View>
       {!data.days_logged ? <View style={styles.empty}><Text style={styles.heading}>No entries in this period</Text><Text style={styles.meta}>Your logged meals will appear here.</Text></View> : <>
-        <TrendChart title="Calories" buckets={series} field="calories" color={Colors.tomato} unit="cal" />
+        <TrendChart title="Calories" buckets={series} field="calories" color={Colors.accent} unit="cal" />
         <TrendChart title="Protein" buckets={series.map(bucket => ({ ...bucket, protein_g: bucket.protein_g === null ? null : convertWeight(bucket.protein_g, "g", units.protein_g)! }))}
           field="protein_g" color={Colors.basil} unit={units.protein_g} />
         <View style={styles.section}><Text style={styles.heading}>Daily averages</Text><Text style={styles.meta}>Per logged day</Text>
@@ -56,7 +58,7 @@ export function MacroAnalyticsPanel() {
             const text = field === "calories" ? String(value) : `${formatWeight(convertWeight(value, "g", units[field])!, units[field])} ${units[field]}`;
             const targetText = field === "calories" ? target : target == null ? null : `${formatWeight(convertWeight(target, "g", units[field])!, units[field])} ${units[field]}`;
             return <View key={field} style={styles.average}><View style={styles.row}><Text style={styles.label}>{label}</Text><Text style={styles.number}>{text}</Text></View>
-              {target != null && target > 0 ? <><View style={styles.track}><View style={[styles.fill, { width: `${Math.min(100, value / target * 100)}%`, backgroundColor: index === 0 ? Colors.tomato : Colors.basil }]} /></View>
+              {target != null && target > 0 ? <><View style={styles.track}><View style={[styles.fill, { width: `${Math.min(100, value / target * 100)}%`, backgroundColor: index === 0 ? Colors.accent : Colors.basil }]} /></View>
                 <Text style={styles.meta}>Daily target: {targetText}</Text></> : <Text style={styles.meta}>No target set</Text>}
             </View>;
           })}
@@ -70,6 +72,7 @@ export function MacroAnalyticsPanel() {
 function TrendChart({ title, buckets, field, color, unit }: {
   title: string; buckets: TrendBucket[]; field: "calories" | "protein_g"; color: string; unit: string;
 }) {
+  const styles = useThemedStyles(createStyles);
   const [picked, setPicked] = useState<number | null>(null);
   const first = buckets[0]?.start, last = buckets[buckets.length - 1]?.end;
   useEffect(() => setPicked(null), [buckets.length, first, last]);
@@ -91,9 +94,10 @@ function TrendChart({ title, buckets, field, color, unit }: {
 }
 function shortDate(value?: string) { return value ? `${Number(value.slice(5, 7))}/${Number(value.slice(8, 10))}` : ""; }
 function Metric({ label, value }: { label: string; value: string }) {
+  const styles = useThemedStyles(createStyles);
   return <View style={styles.metric}><Text style={styles.metricValue}>{value}</Text><Text style={styles.meta}>{label}</Text></View>;
 }
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   panel: { gap: 12 }, meta: { color: Colors.muted, fontSize: 13, lineHeight: 19 }, error: { color: Colors.danger },
   metrics: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, metric: { flexGrow: 1, flexBasis: 90, minWidth: 0, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 10, gap: 4 },
   metricValue: { fontSize: 20, fontWeight: "800", color: Colors.ink }, heading: { fontSize: 18, fontWeight: "800", color: Colors.ink, flexShrink: 1 },

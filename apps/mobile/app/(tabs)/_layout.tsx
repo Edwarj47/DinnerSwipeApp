@@ -4,7 +4,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 import { AdaptiveTabBar } from "@/components/AdaptiveTabBar";
-import { Colors } from "@/components/theme";
+import { useThemeColors } from "@/components/theme";
 import { OnboardingGuide } from "@/features/onboarding/OnboardingGuide";
 import { useAppAccess, useAuthSession } from "@/services/session";
 import { apiFetch } from "@/services/api";
@@ -36,6 +36,7 @@ export default function TabLayout() {
 }
 
 function NavigationTabs() {
+  const Colors = useThemeColors();
   const settings = useSettingsMenu();
   const workouts = useIsWorkoutMode(), router = useRouter(), segments = useSegments();
   const visibility = workoutTabVisibility(workouts ? "workouts" : "nutrition");
@@ -47,7 +48,7 @@ function NavigationTabs() {
         tabBar={props => <AdaptiveTabBar {...workoutTabBarProps(props, workouts)} />}
         screenOptions={({ route }) => ({
           headerShown: false,
-          tabBarActiveTintColor: Colors.tomato,
+          tabBarActiveTintColor: Colors.accent,
           tabBarInactiveTintColor: Colors.muted,
           tabBarIcon: ({ color, size }) => (
             <Ionicons name={workouts && route.name === "recipes" ? "barbell-outline" : icons[route.name as keyof typeof icons]} size={size} color={color} />

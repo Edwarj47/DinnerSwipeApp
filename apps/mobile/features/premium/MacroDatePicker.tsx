@@ -3,26 +3,29 @@ import { useState } from "react";
 import { Keyboard, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { Calendar, LocaleConfig } from "react-native-calendars";
 import { Button } from "@/components/Button";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { isISODate, todayISO } from "./macroDates";
 
 LocaleConfig.locales.dinnerSwipe = { ...LocaleConfig.locales[""], dayNamesShort: ["Su", "Mo", "Tu", "We", "Th", "Fr", "Sa"] };
 LocaleConfig.defaultLocale = "dinnerSwipe";
-const calendarTheme = {
-  calendarBackground: Colors.surface, todayTextColor: Colors.tomato, arrowColor: Colors.tomato, textDayFontSize: 16, textMonthFontSize: 16,
+const createCalendarTheme = (Colors: ThemeColors) => ({
+  calendarBackground: Colors.surface, todayTextColor: Colors.accent, arrowColor: Colors.accent, textDayFontSize: 16, textMonthFontSize: 16,
   "stylesheet.calendar.header": { dayHeader: { flex: 1, marginTop: 2, marginBottom: 7, textAlign: "center", fontSize: 14, color: Colors.muted } },
   "stylesheet.day.basic": { base: { width: "100%", minHeight: 44, paddingVertical: 4, alignItems: "center", justifyContent: "center" } }
-};
+});
 
 export function MacroDatePicker({ value, onChange, maxDate, label = "Choose macro date", title = "Choose date", todayLabel = "Today", disabled = false }: {
   value: string; onChange: (value: string) => void; maxDate?: string; label?: string; title?: string; todayLabel?: string; disabled?: boolean;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
+  const calendarTheme = useThemedStyles(createCalendarTheme);
   const [open, setOpen] = useState(false);
   function choose(day: string) { if (!disabled) onChange(day); setOpen(false); }
   return <>
     <Pressable accessibilityRole="button" accessibilityLabel={label} accessibilityState={{ disabled }} disabled={disabled}
       onPress={() => { Keyboard.dismiss(); setOpen(true); }} style={[styles.icon, disabled && styles.disabled]}>
-      <Ionicons name="calendar-outline" size={22} color={Colors.tomato} />
+      <Ionicons name="calendar-outline" size={22} color={Colors.accent} />
     </Pressable>
     <Modal visible={open} transparent animationType="fade" onRequestClose={() => setOpen(false)}>
       <View style={styles.backdrop}>
@@ -35,7 +38,7 @@ export function MacroDatePicker({ value, onChange, maxDate, label = "Choose macr
           </View>
           <ScrollView>
             {open ? <Calendar testID="macro-calendar" initialDate={isISODate(value) ? value : todayISO()} firstDay={1} enableSwipeMonths maxDate={maxDate}
-              markedDates={{ [value]: { selected: true, selectedColor: Colors.tomato } }}
+              markedDates={{ [value]: { selected: true, selectedColor: Colors.accent } }}
               onDayPress={day => { if (!maxDate || day.dateString <= maxDate) choose(day.dateString); }}
               theme={calendarTheme} /> : null}
           </ScrollView>
@@ -45,11 +48,11 @@ export function MacroDatePicker({ value, onChange, maxDate, label = "Choose macr
     </Modal>
   </>;
 }
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   icon: { width: 44, minHeight: 44, alignItems: "center", justifyContent: "center" },
   disabled: { opacity: 0.45 },
   backdrop: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: "rgba(0,0,0,0.4)", padding: 12 },
   popup: { width: "100%", maxWidth: 390, maxHeight: "90%", backgroundColor: Colors.surface, padding: 12, borderRadius: 8, gap: 12 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
   heading: { flex: 1, minWidth: 0, fontSize: 18, fontWeight: "800", color: Colors.ink }
-});
+}));

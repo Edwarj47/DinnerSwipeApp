@@ -3,7 +3,7 @@ import { useState } from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 
 import { Button } from "@/components/Button";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { Recipe } from "@/services/types";
 import { RecipePhoto } from "./RecipePhoto";
 
@@ -18,6 +18,8 @@ export function RecipeFeedbackSection({ section, recipes, pending, selectedIds, 
   onOpen: (recipe: Recipe) => void;
   onAction: (recipe: Recipe, action: FeedbackAction) => void;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const [expanded, setExpanded] = useState(section === "review");
   const title = section === "ignored" ? "Ignored feedback" : section === "completed" ? "Completed reviews" : "Recipes needing attention";
   return <View style={styles.section}>
@@ -31,7 +33,7 @@ export function RecipeFeedbackSection({ section, recipes, pending, selectedIds, 
       {!recipes.length ? <Text style={styles.empty}>{section === "review" ? "Nothing needs attention." : "No recipes here yet."}</Text> : null}
       {recipes.map(recipe => <View key={recipe.id} style={styles.row}>
         {section === "review" ? <Pressable accessibilityRole="checkbox" accessibilityLabel={`Select ${recipe.name}`} accessibilityState={{ checked: selectedIds.includes(recipe.id), disabled: pending || (selectedIds.length >= 100 && !selectedIds.includes(recipe.id)) }} disabled={pending || (selectedIds.length >= 100 && !selectedIds.includes(recipe.id))} style={styles.checkbox} onPress={() => onSelect(recipe)}>
-          <Ionicons name={selectedIds.includes(recipe.id) ? "checkbox" : "square-outline"} size={24} color={Colors.tomato} />
+          <Ionicons name={selectedIds.includes(recipe.id) ? "checkbox" : "square-outline"} size={24} color={Colors.accent} />
         </Pressable> : null}
         <Pressable accessibilityRole="button" accessibilityLabel={`Open ${recipe.name}`} style={styles.open} onPress={() => onOpen(recipe)}>
           <View style={styles.summary}>
@@ -46,7 +48,7 @@ export function RecipeFeedbackSection({ section, recipes, pending, selectedIds, 
   </View>;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   section: { borderTopWidth: 1, borderColor: Colors.border, paddingVertical: 8, gap: 8 },
   heading: { flexDirection: "row", alignItems: "center", gap: 8, minHeight: 44 },
   title: { flex: 1, color: Colors.ink, fontSize: 18, fontWeight: "800" },
@@ -59,4 +61,4 @@ const styles = StyleSheet.create({
   name: { flex: 1, color: Colors.ink, fontSize: 17, fontWeight: "800" },
   warning: { color: Colors.muted, lineHeight: 20 },
   empty: { color: Colors.muted, paddingVertical: 12 }
-});
+}));

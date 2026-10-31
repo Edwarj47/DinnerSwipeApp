@@ -2,11 +2,13 @@ import { Ionicons } from "@expo/vector-icons";
 import { useState } from "react";
 import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { SubscriptionTier } from "@/services/types";
 import { monthlyPrice, PlanPickerProps } from "./planOptions";
 
 export function PlanPicker({ value, onChange, basicPrice, premiumPrice, disabled }: PlanPickerProps) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const [open, setOpen] = useState(false);
   const options: { value: SubscriptionTier; label: string; price: number }[] = [
     { value: "basic", label: "Basic", price: basicPrice },
@@ -42,7 +44,7 @@ export function PlanPicker({ value, onChange, basicPrice, premiumPrice, disabled
                   <Text style={styles.label}>{option.label}</Text>
                   <Text style={styles.price}>{monthlyPrice(option.price)}</Text>
                 </View>
-                <Ionicons name={value === option.value ? "radio-button-on" : "radio-button-off"} size={24} color={value === option.value ? Colors.tomato : Colors.muted} />
+                <Ionicons name={value === option.value ? "radio-button-on" : "radio-button-off"} size={24} color={value === option.value ? Colors.accent : Colors.muted} />
               </Pressable>
             ))}
           </View>
@@ -52,13 +54,13 @@ export function PlanPicker({ value, onChange, basicPrice, premiumPrice, disabled
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   trigger: { minHeight: 56, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, padding: 16, flexDirection: "row", alignItems: "center", gap: 12, backgroundColor: Colors.surface },
   label: { fontSize: 16, fontWeight: "700", color: Colors.ink, flexShrink: 1 },
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center", padding: 24 },
   menu: { width: "100%", maxWidth: 420, borderRadius: 8, padding: 16, gap: 12, backgroundColor: Colors.surface },
   heading: { fontSize: 20, fontWeight: "800", color: Colors.ink },
   option: { flexDirection: "row", alignItems: "center", minHeight: 72, padding: 16, gap: 12, borderRadius: 8 },
-  selected: { backgroundColor: Colors.softRed },
+  selected: { backgroundColor: Colors.accentSoft },
   price: { color: Colors.muted, marginTop: 4 }
-});
+}));

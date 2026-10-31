@@ -10,7 +10,7 @@ import { PerformanceForm, WorkoutCheckbox } from "./PerformanceForm";
 import { WorkoutDetail } from "./WorkoutDetail";
 import { useIsWorkoutMode, useWorkoutOwner } from "./WorkoutRuntime";
 import { WorkoutPlan, WorkoutProposal, WorkoutTemplate } from "./types";
-import { WorkoutPhoto, WorkoutQueryState, styles } from "./ui";
+import { WorkoutPhoto, WorkoutQueryState, useStyles } from "./ui";
 import { WorkoutSettings } from "./WorkoutSettings";
 import { SettingsSection } from "@/features/settings/SettingsSection";
 
@@ -21,6 +21,7 @@ export function WorkoutGroupPanel(props: WorkoutGroupPanelProps) {
   return <GroupPanel key={`${props.groupId}:${props.role}`} {...props} />;
 }
 function GroupPanel({ groupId, role }: WorkoutGroupPanelProps) {
+  const styles = useStyles();
   const owner = useWorkoutOwner(), client = useQueryClient(), canManage = role === "owner";
   const [selected, setSelected] = useState<string[]>([]), [dates, setDates] = useState<Record<string, string | null>>({}), [message, setMessage] = useTransientMessage();
   const [detail, setDetail] = useState<WorkoutTemplate | null>(null), [performance, setPerformance] = useState<WorkoutTemplate | null>(null);

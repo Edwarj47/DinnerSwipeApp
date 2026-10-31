@@ -69,6 +69,7 @@ test.each([false, true])("non-Premium settings keep targets hidden with active s
     expect(screen.queryByLabelText("Save targets")).toBeNull();
     expect(request.mock.calls.some(([path]) => path === "/api/v1/macros/targets")).toBe(false);
     expect(screen.getByLabelText("Expand Account")).toBeTruthy();
+    expect(screen.getByLabelText("Expand Appearance")).toBeTruthy();
     expect(screen.getByLabelText("Expand Meals")).toBeTruthy();
     expect(screen.getByLabelText("Expand Discover")).toBeTruthy();
   } finally { screen.close(); }

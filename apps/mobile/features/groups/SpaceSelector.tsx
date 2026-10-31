@@ -4,13 +4,15 @@ import { useState } from "react";
 import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { BottomSheetModal } from "@/components/BottomSheetModal";
 import { SearchField } from "@/components/SearchField";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { apiFetch } from "@/services/api";
 import { Household } from "@/services/types";
 import { applyGroupChange } from "./groupAccess";
 import { useSpace } from "./useSpace";
 
 export function SpaceSelector({ label = "Planning for", purpose = "switch" }: { label?: string; purpose?: "switch" | "default" }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const client = useQueryClient();
   const space = useSpace();
   const [open, setOpen] = useState(false);
@@ -35,7 +37,7 @@ export function SpaceSelector({ label = "Planning for", purpose = "switch" }: { 
           {matches.map(g => <Pressable key={g.id} accessibilityRole="radio" accessibilityLabel={g.is_personal ? "Personal" : g.name} accessibilityState={{ checked: g.id === selected?.id }} aria-checked={g.id === selected?.id} disabled={change.isPending} onPress={() => change.mutate(g.id)} style={styles.row}>
             <Ionicons name={g.is_personal ? "home-outline" : "people-outline"} size={22} color={Colors.basil} />
             <View style={styles.copy}><Text style={styles.name}>{g.is_personal ? "Personal" : g.name}</Text><Text style={styles.label}>{g.is_personal ? "Private" : g.current_user_role === "owner" ? "Owner" : "Member"}</Text></View>
-            {g.id === selected?.id ? <Ionicons name="checkmark-circle" color={Colors.tomato} size={24} /> : null}
+            {g.id === selected?.id ? <Ionicons name="checkmark-circle" color={Colors.accent} size={24} /> : null}
           </Pressable>)}
           {groups.isLoading ? <Text style={styles.label}>Loading groups...</Text> : null}
           {!groups.isLoading && !groups.isError && !matches.length ? <Text style={styles.label}>No groups found.</Text> : null}
@@ -45,7 +47,7 @@ export function SpaceSelector({ label = "Planning for", purpose = "switch" }: { 
   </>;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   selector: { borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.surface, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 10, flexDirection: "row", alignItems: "center", gap: 12, marginVertical: 8 },
   copy: { flex: 1, minWidth: 0 }, label: { color: Colors.muted, fontSize: 13, lineHeight: 20 }, name: { color: Colors.ink, fontWeight: "700", fontSize: 16 },
   sheet: { width: "100%", maxWidth: 600, maxHeight: "80%", backgroundColor: Colors.surface, padding: 20, borderTopLeftRadius: 8, borderTopRightRadius: 8, gap: 12 },

@@ -4,16 +4,18 @@ import { useRef, useState } from "react";
 import { Pressable, Text, View } from "react-native";
 import { Button } from "@/components/Button";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { Colors } from "@/components/theme";
+import { useThemeColors } from "@/components/theme";
 import { MacroDatePicker } from "@/features/premium/MacroDatePicker";
 import { todayISO } from "@/features/premium/macroDates";
 import { displayWorkoutWeight, updateWorkoutPreferences, useWorkoutMode, weightInKg, WorkoutWeightUnit } from "@/services/workoutMode";
 import { saveWorkoutPerformance } from "./api";
 import { ActualSet, buildPerformance, emptyActualSet, initialPerformance, performanceFromLog } from "./performance";
 import { WorkoutLog, WorkoutTemplate } from "./types";
-import { WorkoutField, WorkoutSheet, styles } from "./ui";
+import { WorkoutField, WorkoutSheet, useStyles } from "./ui";
 
 export function WorkoutCheckbox({ label, checked, onChange, disabled = false }: { label: string; checked: boolean; onChange: () => void; disabled?: boolean }) {
+  const styles = useStyles();
+  const Colors = useThemeColors();
   return <Pressable accessibilityRole="checkbox" accessibilityLabel={label} accessibilityState={{ checked, disabled }} aria-checked={checked} disabled={disabled} onPress={onChange} style={[styles.row, { minHeight: 44 }]}><Ionicons name={checked ? "checkbox" : "square-outline"} size={24} color={checked ? Colors.basil : Colors.muted} /><Text style={[styles.label, { flexShrink: 1 }]}>{label}</Text></Pressable>;
 }
 function WeightInput({ kg, unit, label, onChange, disabled }: { kg: string; unit: WorkoutWeightUnit; label: string; onChange: (kg: string) => void; disabled: boolean }) {
@@ -25,6 +27,7 @@ function WeightInput({ kg, unit, label, onChange, disabled }: { kg: string; unit
   }} />;
 }
 export function PerformanceForm({ template, existing, slotId, groupId, onClose, onSaved }: { template: WorkoutTemplate; existing?: WorkoutLog; slotId?: string; groupId?: string; onClose: () => void; onSaved: () => void }) {
+  const styles = useStyles();
   const [exercises, setExercises] = useState(() => existing ? performanceFromLog(template, existing).exercises : initialPerformance(template));
   const [performedOn, setPerformedOn] = useState(existing?.performed_on ?? todayISO()), [completed, setCompleted] = useState(existing?.completed ?? false), [notes, setNotes] = useState(() => existing ? performanceFromLog(template, existing).notes : "");
   const [busy, setBusy] = useState(false), [unitBusy, setUnitBusy] = useState(false), [error, setError] = useState("");

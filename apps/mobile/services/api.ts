@@ -249,7 +249,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     if (owner && method !== "GET" && path.startsWith("/api/v1/groups")) {
       await remember(owner, data => { data.cache = Object.fromEntries(Object.entries(data.cache).filter(([key]) => key.startsWith("/api/v1/macros/"))); });
     }
-    if (owner && method === "PATCH" && ["/api/v1/profile/discover", "/api/v1/profile/experience"].includes(path)) {
+    if (owner && method === "PATCH" && ["/api/v1/profile/discover", "/api/v1/profile/experience", "/api/v1/profile/appearance"].includes(path)) {
       await remember(owner, data => { data.cache["/api/v1/profile"] = { data: result, at: Date.now() }; });
     }
     if (owner && method !== "GET" && path.startsWith("/api/v1/recipes")) {

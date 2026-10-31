@@ -119,6 +119,7 @@ export type WeeklyPlanningSettings = {
 };
 
 export type UserProfile = {
+  appearance_preferences?: import("./appearancePalette").AppearancePreferences;
   email: string;
   display_name?: string | null;
   household_size: number;

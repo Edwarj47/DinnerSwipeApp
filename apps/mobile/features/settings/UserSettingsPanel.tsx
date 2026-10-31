@@ -7,7 +7,7 @@ import { Button } from "@/components/Button";
 import { AppVersion } from "@/components/AppVersion";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { SubscriptionPanel } from "@/features/subscription/SubscriptionPanel";
 import { apiFetch, clearAuthTokens, getRefreshToken, getToken, setAuthTokens } from "@/services/api";
 import { BiometricSettings, BiometricTimeout, authenticateForUnlock, getBiometricSettings, setBiometricPreference, setBiometricTimeout } from "@/services/biometrics";
@@ -24,8 +24,9 @@ import { DiscoverSettings } from "@/features/discover/DiscoverSettings";
 import { WorkoutSettings } from "@/features/workouts/WorkoutSettings";
 import { useWorkoutMode } from "@/services/workoutMode";
 import { DailyAdditionsSection } from "@/features/contentAutomation/DailyAdditionsSection";
+import { AppearanceSettings } from "./AppearanceSettings";
 
-type UserSection = "account" | "meals" | "macros" | "discover" | "workouts" | "daily-additions";
+type UserSection = "account" | "appearance" | "meals" | "macros" | "discover" | "workouts" | "daily-additions";
 type AccountAction = "overview" | "reset" | "data" | "delete";
 type GroceryRetailer = UserProfile["preferred_grocery_retailer"];
 
@@ -37,6 +38,8 @@ const GROCERY_RETAILER_OPTIONS: { label: string; value: GroceryRetailer }[] = [
 ];
 
 export function UserSettingsPanel({ initialSection, initialFocus, initialResetToken, onExit }: { initialSection?: UserSection; initialFocus?: "subscription" | "planning"; initialResetToken?: string; onExit?: () => void }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const workoutsEnabled = useWorkoutMode(state => state.enabled);
   const queryClient = useQueryClient();
   const router = useRouter();
@@ -328,8 +331,8 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
                 value={shouldConfirmPlanReset(profile.data)}
                 disabled={!profile.data || profile.isError || resetPreference.isPending || saveProfile.isPending}
                 onValueChange={(value) => resetPreference.mutate(value)}
-                thumbColor={shouldConfirmPlanReset(profile.data) ? Colors.tomato : Colors.surface}
-                trackColor={{ false: Colors.border, true: "#f4aaa8" }}
+                thumbColor={shouldConfirmPlanReset(profile.data) ? Colors.accent : Colors.surface}
+                trackColor={{ false: Colors.border, true: Colors.accentTrack }}
               />
             </View>
             <View style={styles.divider} />
@@ -348,8 +351,8 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
                 onValueChange={(value) => {
                   void updateBiometricSetting(() => toggleBiometrics(value));
                 }}
-                thumbColor={biometricSettings?.enabled ? Colors.tomato : Colors.surface}
-                trackColor={{ false: Colors.border, true: "#f4aaa8" }}
+                thumbColor={biometricSettings?.enabled ? Colors.accent : Colors.surface}
+                trackColor={{ false: Colors.border, true: Colors.accentTrack }}
               />
             </View>
             {biometricSettings?.enabled ? (
@@ -374,6 +377,7 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
           </SettingsSection>
           <AppVersion />
       </SettingsSection>
+      <SettingsSection title="Appearance" icon="color-palette-outline" expanded={section === "appearance"} onToggle={() => setSection(section === "appearance" ? null : "appearance")}><AppearanceSettings /></SettingsSection>
       <SettingsSection title="Meals" icon="restaurant-outline" expanded={section === "meals"} onToggle={() => setSection(section === "meals" ? null : "meals")}>
         <TourTarget id="preferences"><View style={styles.panel}>
           <Text style={styles.section}>Food and shopping</Text>
@@ -428,6 +432,7 @@ function TagEditor({
   values: string[];
   onChange: (values: string[]) => void;
 }) {
+  const styles = useThemedStyles(createStyles);
   const [draft, setDraft] = useState("");
   const [inputError, setInputError] = useState("");
 
@@ -529,15 +534,15 @@ async function deliverAccountExport(data: Record<string, unknown>) {
   await Share.share({ title: filename, message: json });
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   content: { gap: 4 },
   title: { fontSize: 28, fontWeight: "900", color: Colors.ink, marginBottom: 8 },
   panel: { borderTopColor: Colors.border, borderTopWidth: 1, paddingTop: 12, gap: 10, marginTop: 12 },
   input: { minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12 },
   timeoutOptions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   timeoutOption: { flexGrow: 1, minHeight: 44, alignItems: "center", justifyContent: "center", paddingHorizontal: 12, borderRadius: 8, borderWidth: 1, borderColor: Colors.border },
-  timeoutSelected: { borderColor: Colors.tomato, backgroundColor: Colors.softRed },
-  timeoutSelectedText: { color: Colors.tomato, fontWeight: "800" },
+  timeoutSelected: { borderColor: Colors.accent, backgroundColor: Colors.accentSoft },
+  timeoutSelectedText: { color: Colors.accent, fontWeight: "800" },
   actions: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   sectionHeader: { flexDirection: "row", gap: 8, alignItems: "center" },
   toolGrid: { gap: 8 },
@@ -545,7 +550,7 @@ const styles = StyleSheet.create({
   flowTitle: { color: Colors.ink, fontWeight: "900", fontSize: 16 },
   securityBox: { gap: 8 },
   divider: { height: 1, backgroundColor: Colors.border, marginVertical: 4 },
-  deleteBox: { borderWidth: 1, borderColor: "#f0b6b2", backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 9 },
+  deleteBox: { borderWidth: 1, borderColor: "#f0b6b2", backgroundColor: Colors.accentSoft, borderRadius: 8, padding: 12, gap: 9 },
   deleteTitle: { color: Colors.danger, fontWeight: "900" },
   retailerPicker: { gap: 8 },
   tagEditor: { gap: 8 },
@@ -556,7 +561,7 @@ const styles = StyleSheet.create({
   chip: {
     minHeight: 44,
     borderRadius: 999,
-    backgroundColor: Colors.softRed,
+    backgroundColor: Colors.accentSoft,
     borderColor: "#f4c4c0",
     borderWidth: 1,
     paddingLeft: 12,
@@ -565,8 +570,8 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     gap: 7
   },
-  chipText: { color: Colors.tomatoDark, fontWeight: "900" },
-  chipRemove: { color: Colors.tomatoDark, fontWeight: "900", fontSize: 18, lineHeight: 20 },
+  chipText: { color: Colors.accentStrong, fontWeight: "900" },
+  chipRemove: { color: Colors.accentStrong, fontWeight: "900", fontSize: 18, lineHeight: 20 },
   tagHint: { color: Colors.muted, lineHeight: 19, fontSize: 13 },
   tagError: { color: Colors.danger, lineHeight: 19, fontSize: 13, fontWeight: "700" },
   toggleRow: { flexDirection: "row", minHeight: 44, alignItems: "center", justifyContent: "space-between", gap: 12 },
@@ -574,7 +579,7 @@ const styles = StyleSheet.create({
   toggleTitle: { color: Colors.ink, fontWeight: "900", fontSize: 16 },
   status: { color: Colors.basil, fontWeight: "700" },
   verified: { color: Colors.basil, fontWeight: "900" },
-  unverified: { color: Colors.tomatoDark, fontWeight: "900" },
+  unverified: { color: Colors.accentStrong, fontWeight: "900" },
   section: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
   meta: { color: Colors.muted, lineHeight: 20 }
-});
+}));

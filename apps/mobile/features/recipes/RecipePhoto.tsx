@@ -1,10 +1,13 @@
 import { Image, ImageProps } from "expo-image";
 import { useEffect, useRef, useState } from "react";
 import { API_URL, apiFetch } from "../../services/api";
+import { useAppearance } from "@/services/appearanceState";
+import { appearanceArtwork } from "@/services/appearanceArtwork";
 
 type Props = Omit<ImageProps, "source" | "placeholder" | "onError"> & { photoUrl?: string | null; fallbackStyle?: ImageProps["style"] };
 
 export function RecipePhoto({ photoUrl, contentFit = "cover", fallbackStyle, ...props }: Props) {
+  const accent = useAppearance(state => state.accent);
   const candidate = photoUrl?.trim() || null;
   let url: string | null = null;
   let cacheKey: string | undefined;
@@ -38,8 +41,8 @@ export function RecipePhoto({ photoUrl, contentFit = "cover", fallbackStyle, ...
       }
     } catch { /* Offline or unavailable photos retain the local placeholder. */ }
   };
-  return <Image {...props} style={[props.style, !hasPhoto && fallbackStyle]} source={hasPhoto ? { uri: displayedUrl!, cacheKey } : require("../../assets/icon.png")}
-    placeholder={require("../../assets/icon.png")} placeholderContentFit="contain"
+  return <Image {...props} style={[props.style, !hasPhoto && fallbackStyle]} source={hasPhoto ? { uri: displayedUrl!, cacheKey } : appearanceArtwork(accent)}
+    placeholder={appearanceArtwork(accent)} placeholderContentFit="contain"
     contentFit={hasPhoto ? contentFit : "contain"}
     onError={() => { if (displayedUrl) setFailedUrl(displayedUrl); void renew(); }} />;
 }

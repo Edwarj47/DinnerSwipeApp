@@ -8,7 +8,7 @@ import { Button } from "@/components/Button";
 import { Screen } from "@/components/Screen";
 import { SearchField } from "@/components/SearchField";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { AiRecipePanel } from "@/features/recipes/AiRecipePanel";
 import { UrlIngestionPanel } from "@/features/ingestion/UrlIngestionPanel";
 import { UrlRecycleBinPanel } from "@/features/ingestion/UrlRecycleBinPanel";
@@ -32,6 +32,8 @@ export default function RecipesScreen() {
 }
 
 function NutritionRecipesScreen() {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const queryClient = useQueryClient();
   const params = useLocalSearchParams<{ mode?: string; method?: string; tour?: string }>();
   const [q, setQ] = useState("");
@@ -246,7 +248,7 @@ function NutritionRecipesScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   header: { flexDirection: "row", gap: 10, alignItems: "center" },
   kicker: { color: Colors.basil, fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
   title: { color: Colors.ink, fontSize: 28, fontWeight: "900", lineHeight: 34 },
@@ -255,14 +257,14 @@ const styles = StyleSheet.create({
   search: { minHeight: 48, backgroundColor: Colors.surface, borderRadius: 8, borderColor: Colors.border, borderWidth: 1, paddingHorizontal: 12, marginVertical: 12 },
   listHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
   sectionTitle: { fontSize: 18, fontWeight: "900", color: Colors.ink },
-  count: { color: Colors.tomato, fontWeight: "900" },
+  count: { color: Colors.accent, fontWeight: "900" },
   row: { flexDirection: "row", gap: 12, padding: 12, backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, marginBottom: 8 },
   thumb: { width: 64, height: 64, borderRadius: 8, backgroundColor: Colors.border },
   body: { flex: 1, minWidth: 0, justifyContent: "center" },
   name: { fontSize: 17, fontWeight: "900", color: Colors.ink, lineHeight: 22 },
   meta: { color: Colors.muted, marginTop: 2, lineHeight: 20 },
   warning: { color: Colors.danger, marginTop: 4, lineHeight: 20 },
-  rowSelected: { borderColor: Colors.tomato, backgroundColor: Colors.softRed },
+  rowSelected: { borderColor: Colors.accent, backgroundColor: Colors.accentSoft },
   emptyPanel: { alignItems: "center", paddingVertical: 24, gap: 8 },
   emptyTitle: { color: Colors.ink, fontWeight: "900", fontSize: 20 },
   empty: { color: Colors.muted, textAlign: "center", lineHeight: 20 },

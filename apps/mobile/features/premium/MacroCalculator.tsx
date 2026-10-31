@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { AppState, KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 import { Button } from "@/components/Button";
 import { SearchField } from "@/components/SearchField";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { NutritionFields } from "@/features/recipes/NutritionFields";
 import { EMPTY_NUTRITION, NUTRIENTS, nutritionInputs, parseNutrition } from "@/features/recipes/recipeNutrition";
 import { apiFetch } from "@/services/api";
@@ -29,6 +29,8 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
   calculationId?: string; onClose: () => void; onSaved?: (result: Calculation) => void;
   initialRows?: CalculatorRow[]; initialName?: string; initialMealLabel?: string; initialMealDate?: string;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const client = useQueryClient();
   const offline = useOfflineStatus(state => state.offline);
   const [rows, setRows] = useState<CalculatorRow[]>(initialRows ?? []);
@@ -293,6 +295,7 @@ export function MacroCalculator({ calculationId, onClose, onSaved, initialRows, 
 }
 
 function Totals({ value }: { value: RecipeNutrition }) {
+  const styles = useThemedStyles(createStyles);
   const units = useMeasurementUnits();
   return <View style={styles.totals}>{NUTRIENTS.map(([field, label]) => <View key={field} style={styles.metric}>
     <Text style={styles.meta}>{field === "calories" ? label : label.replace("(g)", `(${units[field]})`)}</Text>
@@ -301,7 +304,7 @@ function Totals({ value }: { value: RecipeNutrition }) {
 }
 function message(reason: unknown) { return reason instanceof Error ? reason.message : "Unable to complete this action. Try again."; }
 function emptyValues(): RecipeNutrition { return { calories: null, protein_g: null, carbs_g: null, fat_g: null, fiber_g: null }; }
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: "rgba(0,0,0,0.4)", justifyContent: "center", alignItems: "center", padding: 12 },
   sheet: { width: "100%", maxWidth: 540, maxHeight: "92%", backgroundColor: Colors.surface, borderRadius: 8, padding: 14, gap: 12 },
   header: { flexDirection: "row", alignItems: "center", gap: 10 }, heading: { flex: 1, fontSize: 20, color: Colors.ink, fontWeight: "800" },
@@ -310,7 +313,7 @@ const styles = StyleSheet.create({
   input: { minHeight: 48, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, paddingHorizontal: 10, color: Colors.ink },
   portions: { flex: 1, minWidth: 0, width: 0, textAlign: "center" }, actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   toolbar: { flexDirection: "row", alignItems: "center", gap: 8 }, searchAction: { flex: 1.5, minWidth: 0 }, newAction: { flex: 1, minWidth: 0 }, dateValue: { flex: 1 },
-  item: { backgroundColor: Colors.softRed, borderRadius: 6, padding: 10, flexDirection: "row", alignItems: "center", gap: 4 },
+  item: { backgroundColor: Colors.accentSoft, borderRadius: 6, padding: 10, flexDirection: "row", alignItems: "center", gap: 4 },
   itemInfo: { flex: 1, gap: 4, minWidth: 0 }, result: { paddingVertical: 12, borderBottomWidth: 1, borderColor: Colors.border, gap: 4 },
   divider: { borderTopWidth: 1, borderColor: Colors.border, paddingTop: 12, gap: 12 },
   totals: { flexDirection: "row", flexWrap: "wrap", gap: 12 }, metric: { minWidth: 80, flexGrow: 1, gap: 4 },

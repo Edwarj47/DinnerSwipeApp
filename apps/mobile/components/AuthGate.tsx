@@ -17,7 +17,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { BrandLogo } from "@/components/BrandLogo";
 import { Button } from "@/components/Button";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { AuthSessionContext } from "@/services/session";
 import { usePlannerStore } from "@/stores/plannerStore";
 import {
@@ -46,6 +46,8 @@ const LEGAL_DOCUMENT_VERSION = "2026-10-14";
 type AuthMode = "choice" | "login" | "register";
 
 export function AuthGate({ children }: Props) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const pathname = usePathname();
   const queryClient = useQueryClient();
   const [checking, setChecking] = useState(true);
@@ -311,8 +313,8 @@ export function AuthGate({ children }: Props) {
                           accessibilityLabel="Enable Biometrics"
                           value={enableBiometricAfterAuth}
                           onValueChange={setEnableBiometricAfterAuth}
-                          thumbColor={enableBiometricAfterAuth ? Colors.tomato : Colors.surface}
-                          trackColor={{ false: Colors.border, true: "#f4aaa8" }}
+                          thumbColor={enableBiometricAfterAuth ? Colors.accent : Colors.surface}
+                          trackColor={{ false: Colors.border, true: Colors.accentTrack }}
                         />
                       </View>
                     ) : null}
@@ -381,11 +383,11 @@ export function AuthGate({ children }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: Colors.tomato, zIndex: 20 },
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
+  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: Colors.accent, zIndex: 20 },
   keyboard: { flex: 1 },
   content: { flexGrow: 1, justifyContent: "center", alignItems: "center", padding: 20, gap: 20 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.tomato },
+  centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.accent },
   hero: { alignItems: "center", gap: 9, width: "100%", maxWidth: 520 },
   kicker: { color: "#fff", fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
   title: { color: "#fff", fontSize: 32, fontWeight: "900", textAlign: "center", lineHeight: 37 },
@@ -396,12 +398,12 @@ const styles = StyleSheet.create({
   actions: { gap: 10 },
   consentRow: { flexDirection: "row", alignItems: "center", gap: 10, minHeight: 44 },
   checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 1, borderColor: Colors.border, alignItems: "center", justifyContent: "center", backgroundColor: Colors.surface },
-  checkboxChecked: { backgroundColor: Colors.tomato, borderColor: Colors.tomato },
+  checkboxChecked: { backgroundColor: Colors.accent, borderColor: Colors.accent },
   checkmark: { color: "#fff", fontWeight: "900", fontSize: 16, lineHeight: 20 },
   consentText: { color: Colors.ink, fontWeight: "700", flex: 1 },
   legalTextRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center" },
   legalText: { color: Colors.muted, lineHeight: 21 },
-  legalLink: { color: Colors.tomatoDark, fontWeight: "900", lineHeight: 21 },
+  legalLink: { color: Colors.accentStrong, fontWeight: "900", lineHeight: 21 },
   helperText: { color: Colors.muted, lineHeight: 20 },
   requirements: { gap: 7, marginTop: -2, marginBottom: 2 },
   requirementRow: { flexDirection: "row", alignItems: "center", gap: 8 },
@@ -427,7 +429,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: 8,
     padding: 12,
-    backgroundColor: Colors.softRed
+    backgroundColor: Colors.accentSoft
   },
   biometricTitle: { color: Colors.ink, fontWeight: "900" },
   status: { color: Colors.danger, fontWeight: "700", lineHeight: 20 }

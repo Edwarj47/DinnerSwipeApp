@@ -2,9 +2,10 @@ import { Text, View } from "react-native";
 import { Button } from "@/components/Button";
 import { PhotoCredit } from "@/components/PhotoCredit";
 import { WorkoutTemplate } from "./types";
-import { WorkoutPhoto, WorkoutSheet, categoryLabel, styles } from "./ui";
+import { WorkoutPhoto, WorkoutSheet, categoryLabel, useStyles } from "./ui";
 
 export function WorkoutDetail({ template, onClose, onPlan, onLog, proposing = false, busy = false }: { template: WorkoutTemplate; onClose: () => void; onPlan?: () => void; onLog?: () => void; proposing?: boolean; busy?: boolean }) {
+  const styles = useStyles();
   return <WorkoutSheet title={template.title} onClose={onClose} busy={busy}>
     <WorkoutPhoto template={template} />
     <PhotoCredit credit={template.photo_credit} />

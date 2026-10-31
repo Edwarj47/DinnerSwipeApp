@@ -2,7 +2,7 @@ import { Platform, Pressable, StyleSheet, Text, useWindowDimensions, View, ViewS
 import { Ionicons } from "@expo/vector-icons";
 import { ComponentProps, useState } from "react";
 
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 
 type Option<T extends string> = {
   label: string;
@@ -22,6 +22,8 @@ type Props<T extends string> = {
 };
 
 export function SegmentedControl<T extends string>({ value, options, onChange, accessibilityLabel, wrap = false, adaptive = false, disabled = false }: Props<T>) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const { width, fontScale } = useWindowDimensions();
   const [measuredWidth, setMeasuredWidth] = useState<number | null>(null);
   const available = (measuredWidth ?? width - 36) - 8;
@@ -56,12 +58,12 @@ export function SegmentedControl<T extends string>({ value, options, onChange, a
   );
 }
 
-const styles = StyleSheet.create({
-  segment: { flexDirection: "row", backgroundColor: Colors.softRed, borderRadius: 8, padding: 4, gap: 4 },
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
+  segment: { flexDirection: "row", backgroundColor: Colors.accentSoft, borderRadius: 8, padding: 4, gap: 4 },
   wrap: { flexWrap: "wrap" },
   wrapButton: { flexBasis: 124, minWidth: 124, flexGrow: 1 },
   button: { flex: 1, minHeight: 44, flexDirection: "row", gap: 4, alignItems: "center", justifyContent: "center", borderRadius: 7, paddingHorizontal: 8, paddingVertical: 8 },
   active: { backgroundColor: Colors.surface },
   label: { color: Colors.muted, fontWeight: "900", flexShrink: 1, textAlign: "center" },
-  activeLabel: { color: Colors.tomato }
+  activeLabel: { color: Colors.accent }
 });

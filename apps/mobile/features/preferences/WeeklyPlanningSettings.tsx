@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { Platform, StyleSheet, Switch, Text, View } from "react-native";
 import { Button } from "@/components/Button";
 import { SegmentedControl } from "@/components/SegmentedControl";
-import { Colors } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { useTransientMessage } from "@/components/useTransientMessage";
 import { apiFetch } from "@/services/api";
 import { deviceTimeZone, saveWeeklyPlanning, weeklyPlanning } from "@/services/planningPreferences";
@@ -12,6 +12,8 @@ import { UserProfile, WeeklyPlanningSettings as Settings } from "@/services/type
 import { ResetDaySelection } from "./ResetDaySelection";
 
 export function WeeklyPlanningSettings() {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const client = useQueryClient();
   const profile = useQuery<UserProfile>({ queryKey: ["profile"], queryFn: () => apiFetch<UserProfile>("/api/v1/profile") });
   const [settings, setSettings] = useState<Settings>(() => weeklyPlanning(profile.data));
@@ -54,8 +56,8 @@ export function WeeklyPlanningSettings() {
       <View style={styles.row}><Text style={styles.label}>Weekly phone reminder</Text>
         <Switch accessibilityLabel="Weekly phone reminder" disabled={disabled}
           value={settings.notify} onValueChange={notify => setSettings(current => ({ ...current, notify }))}
-          thumbColor={settings.notify ? Colors.tomato : Colors.surface}
-          trackColor={{ false: Colors.border, true: "#f4aaa8" }} /></View>
+          thumbColor={settings.notify ? Colors.accent : Colors.surface}
+          trackColor={{ false: Colors.border, true: Colors.accentTrack }} /></View>
       {settings.notify ? <Text style={styles.meta}>9 AM on your reset day, in your phone's time zone.</Text> : null}
       {Platform.OS === "web" ? <Text style={styles.meta}>Phone reminders are scheduled when you open the mobile app.</Text> : null}
     </> : null}
@@ -68,7 +70,7 @@ export function WeeklyPlanningSettings() {
   </View>;
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   section: { gap: 10, marginTop: 12 }, heading: { color: Colors.ink, fontWeight: "900", fontSize: 16 },
   meta: { color: Colors.muted, fontSize: 14, lineHeight: 20 },
   row: { flexDirection: "row", alignItems: "center", gap: 12 },

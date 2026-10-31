@@ -16,7 +16,7 @@ import { Button } from "@/components/Button";
 import { BottomSheetModal } from "@/components/BottomSheetModal";
 import { PhotoCredit } from "@/components/PhotoCredit";
 import { useTransientMessage } from "@/components/useTransientMessage";
-import { Colors, shadow } from "@/components/theme";
+import { shadow, useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { formatDifficulty, formatMealType, formatSourceType } from "@/features/recipes/recipeDisplay";
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
@@ -39,6 +39,8 @@ type Props = {
 };
 
 export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, onAction, onUpdated, planningAction }: Props) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const weightUnit = useMeasurementUnits().ingredient_weight;
   const queryClient = useQueryClient();
   const [savedRecipe, setSavedRecipe] = useState<{ sourceId: string; recipe: Recipe } | null>(null);
@@ -249,6 +251,7 @@ export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, on
 }
 
 function Stat({ label, value }: { label: string; value: string }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.stat}>
       <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75} style={styles.statValue}>
@@ -274,6 +277,8 @@ function ActionTile({
   onPress: () => void;
   disabled?: boolean;
 }) {
+  const styles = useThemedStyles(createStyles);
+  const Colors = useThemeColors();
   const isPrimary = tone === "primary" || tone === "danger";
   return (
     <Pressable
@@ -305,6 +310,7 @@ function ActionTile({
 }
 
 function RecipeSection({ title, children }: { title: string; children: ReactNode }) {
+  const styles = useThemedStyles(createStyles);
   return (
     <View style={styles.section}>
       <Text style={styles.sectionTitle}>{title}</Text>
@@ -313,7 +319,7 @@ function RecipeSection({ title, children }: { title: string; children: ReactNode
   );
 }
 
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   sheet: { width: "100%", maxWidth: 960, alignSelf: "center", maxHeight: "92%", backgroundColor: Colors.background, borderTopLeftRadius: 18, borderTopRightRadius: 18, overflow: "hidden", ...shadow },
   dragHandle: { minHeight: 28, alignItems: "center", justifyContent: "center" },
   grabber: { width: 42, height: 5, borderRadius: 999, backgroundColor: Colors.border },
@@ -323,7 +329,7 @@ const styles = StyleSheet.create({
   kicker: { color: Colors.basil, fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
   title: { color: Colors.ink, fontSize: 28, lineHeight: 33, fontWeight: "900" },
   description: { color: Colors.muted, fontSize: 15, lineHeight: 22 },
-  favoriteBadge: { flexDirection: "row", gap: 5, alignItems: "center", backgroundColor: Colors.tomato, borderRadius: 999, paddingHorizontal: 10, minHeight: 30 },
+  favoriteBadge: { flexDirection: "row", gap: 5, alignItems: "center", backgroundColor: Colors.accent, borderRadius: 999, paddingHorizontal: 10, minHeight: 30 },
   favoriteText: { color: "#fff", fontWeight: "900", fontSize: 12 },
   stats: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   stat: { width: "48%", minHeight: 64, backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 10, justifyContent: "center" },
@@ -333,14 +339,14 @@ const styles = StyleSheet.create({
   actionTitle: { color: Colors.ink, fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
   actionGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   actionTile: { width: "48%", minHeight: 62, flexDirection: "row", alignItems: "center", gap: 9, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, backgroundColor: Colors.surface, paddingHorizontal: 11, paddingVertical: 9 },
-  actionTilePrimary: { backgroundColor: Colors.tomato, borderColor: Colors.tomato },
-  actionTileSoft: { backgroundColor: Colors.softRed, borderColor: "#f0c7c4" },
+  actionTilePrimary: { backgroundColor: Colors.accent, borderColor: Colors.accent },
+  actionTileSoft: { backgroundColor: Colors.accentSoft, borderColor: "#f0c7c4" },
   actionTileDanger: { backgroundColor: Colors.danger, borderColor: Colors.danger },
   actionTileTitle: { color: Colors.ink, fontWeight: "900", fontSize: 15 },
   actionTileTitleLight: { color: "#fff" },
   actionTileSubtitle: { color: Colors.muted, marginTop: 1, fontSize: 12 },
   actionTileSubtitleLight: { color: "rgba(255,255,255,0.82)" },
-  votePanel: { backgroundColor: Colors.softRed, borderRadius: 8, padding: 12, gap: 10 },
+  votePanel: { backgroundColor: Colors.accentSoft, borderRadius: 8, padding: 12, gap: 10 },
   voteActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   section: { borderTopColor: Colors.border, borderTopWidth: 1, paddingTop: 16, gap: 8 },
   sectionTitle: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
@@ -349,8 +355,8 @@ const styles = StyleSheet.create({
   checked: { backgroundColor: Colors.basil, borderColor: Colors.basil },
   checkedText: { textDecorationLine: "line-through", color: Colors.muted },
   stepRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
-  stepBadge: { minWidth: 32, minHeight: 32, borderRadius: 8, backgroundColor: Colors.softRed, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, paddingVertical: 4, flexShrink: 0 },
-  stepNumber: { color: Colors.tomato, fontWeight: "900", fontSize: 14, textAlign: "center", includeFontPadding: false },
+  stepBadge: { minWidth: 32, minHeight: 32, borderRadius: 8, backgroundColor: Colors.accentSoft, alignItems: "center", justifyContent: "center", paddingHorizontal: 6, paddingVertical: 4, flexShrink: 0 },
+  stepNumber: { color: Colors.accent, fontWeight: "900", fontSize: 14, textAlign: "center", includeFontPadding: false },
   rowText: { color: Colors.ink, fontSize: 16, lineHeight: 23, flex: 1 },
   ingredientEquivalent: { color: Colors.muted, fontSize: 14, lineHeight: 20 },
   tags: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
@@ -360,4 +366,4 @@ const styles = StyleSheet.create({
   status: { color: Colors.basil, fontWeight: "700" },
   notice: { paddingHorizontal: 16, paddingRight: 64, paddingBottom: 8 },
   error: { color: Colors.danger }
-});
+}));

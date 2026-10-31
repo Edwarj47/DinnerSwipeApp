@@ -13,10 +13,11 @@ import { PerformanceForm } from "./PerformanceForm";
 import { WorkoutDetail } from "./WorkoutDetail";
 import { useWorkoutOwner } from "./WorkoutRuntime";
 import { WorkoutPlan, WorkoutProposal, WorkoutTemplate } from "./types";
-import { WorkoutHeader, WorkoutQueryState, WorkoutQueueNotice, WorkoutSpaceSelector, styles } from "./ui";
+import { WorkoutHeader, WorkoutQueryState, WorkoutQueueNotice, WorkoutSpaceSelector, useStyles } from "./ui";
 
 export function WorkoutWeek() { const space = useSpace(), owner = useWorkoutOwner(); return <WeekContent key={`${owner}:${space.key}`} />; }
 function WeekContent() {
+  const styles = useStyles();
   const owner = useWorkoutOwner(), space = useSpace(), client = useQueryClient(), router = useRouter();
   const [selected, setSelected] = useState<string | null>(null), [detail, setDetail] = useState<WorkoutTemplate | null>(null), [performance, setPerformance] = useState<WorkoutTemplate | null>(null);
   const [performanceSlot, setPerformanceSlot] = useState<string | undefined>();
