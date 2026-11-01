@@ -1,9 +1,9 @@
-FROM node:20-bookworm AS build
+FROM node:22-bookworm AS build
 WORKDIR /app
 COPY package.json package-lock.json* ./
 COPY apps/mobile/package.json apps/mobile/package.json
 COPY packages packages
-RUN npm install
+RUN npm ci
 COPY apps/mobile apps/mobile
 RUN npm run build:web -w apps/mobile
 

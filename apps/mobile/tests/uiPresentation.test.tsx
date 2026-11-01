@@ -1,5 +1,5 @@
-import { fireEvent, render } from "@testing-library/react-native";
-import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
+import { fireEvent, render, userEvent } from "@testing-library/react-native";
+import { BottomTabBarHeightContext } from "expo-router/js-tabs";
 import * as ReactNative from "react-native";
 import { StyleSheet, Text, View } from "react-native";
 
@@ -46,7 +46,7 @@ test.each([
   expect(press).toHaveBeenCalledTimes(1);
 });
 
-test("default buttons keep their outline; quiet buttons still respect disabled state", () => {
+test("default buttons keep their outline; quiet buttons still respect disabled state", async () => {
   const press = jest.fn();
   const screen = render(<>
     <Button label="Default" onPress={press} />
@@ -54,7 +54,7 @@ test("default buttons keep their outline; quiet buttons still respect disabled s
   </>);
   expect(StyleSheet.flatten(screen.getByLabelText("Default").props.style)).toMatchObject({ borderWidth: 1, borderColor: Colors.border });
   expect(screen.getByLabelText("Quiet").props.accessibilityState.disabled).toBe(true);
-  fireEvent.press(screen.getByLabelText("Quiet"));
+  await userEvent.press(screen.getByLabelText("Quiet"));
   expect(press).not.toHaveBeenCalled();
 });
 

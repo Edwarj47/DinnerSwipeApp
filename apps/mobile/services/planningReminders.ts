@@ -66,8 +66,8 @@ async function applyPlanningReminder(owner: string, settings: WeeklyPlanningSett
       data: { route: "/week", signature, ...(experience === "workouts" ? { experience: "workouts" } : {}), ...(group ? { household_id: group.id } : {}) }
     },
     // Expo numbers weekdays Sunday=1. Delivery follows the phone's local clock/DST.
-    trigger: { weekday: ((settings.reset_day + 1) % 7) + 1, hour: 9, minute: 0,
-      repeats: true, channelId: CHANNEL }
+    trigger: { type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
+      weekday: ((settings.reset_day + 1) % 7) + 1, hour: 9, minute: 0, channelId: CHANNEL }
   });
 }
 

@@ -22,7 +22,7 @@ export function BiometricGate({ children }: Props) {
   const [settings, setSettings] = useState<BiometricSettings | null>(null);
   const [message, setMessage] = useState("");
   const [appState, setAppState] = useState(AppState.currentState);
-  const lastAppState = useRef<AppStateStatus>(AppState.currentState);
+  const lastAppState = useRef<typeof AppState.currentState>(AppState.currentState);
   const promptInProgress = useRef(false);
   const autoUnlockAttempted = useRef(false);
   const awaySince = useRef<number | null>(null);

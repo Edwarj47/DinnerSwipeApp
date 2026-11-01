@@ -2,7 +2,7 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "$0")/../.." && pwd)"
-node_image="${DINNER_SWIPE_WEB_NODE_IMAGE:-node:20-bookworm}"
+node_image="${DINNER_SWIPE_WEB_NODE_IMAGE:-node:22-bookworm}"
 image_tag="${DINNER_SWIPE_WEB_IMAGE_TAG:-dinner-swipe-dinner-swipe-web}"
 tmp_context="$(mktemp -d)"
 

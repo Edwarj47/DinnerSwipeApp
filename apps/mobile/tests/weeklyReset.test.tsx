@@ -23,7 +23,7 @@ test.each([[0, 2], [5, 7], [6, 1]])("weekday %s schedules only one recurring 9 A
   await syncPlanningReminder("tester", { ...manual, mode: "automatic", reset_day });
   expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledTimes(1);
   expect(Notifications.scheduleNotificationAsync).toHaveBeenCalledWith(expect.objectContaining({
-    identifier: "dinner-weekly-reset", trigger: expect.objectContaining({ weekday, hour: 9, minute: 0, repeats: true })
+    identifier: "dinner-weekly-reset", trigger: expect.objectContaining({ type: "weekly", weekday, hour: 9, minute: 0 })
   }));
 });
 

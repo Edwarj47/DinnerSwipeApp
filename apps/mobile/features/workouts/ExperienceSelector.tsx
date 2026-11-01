@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { ReactNode, useEffect, useRef, useState } from "react";
-import { Modal, Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Platform, Pressable, StyleSheet, Text, View, ViewInstance } from "react-native";
 import { Button } from "@/components/Button";
 import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { SegmentedControl } from "@/components/SegmentedControl";
@@ -12,7 +12,7 @@ export function ExperienceSelector({ children }: { children?: ReactNode }) {
   const { enabled, mode } = useWorkoutMode();
   const [open, setOpen] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState("");
   const label = mode === "workouts" ? "Workouts" : "Nutrition";
-  const trigger = useRef<View>(null);
+  const trigger = useRef<ViewInstance>(null);
   useEffect(() => { if (Platform.OS === "web") (trigger.current as unknown as HTMLElement | null)?.setAttribute("title", "Nutrition or workouts"); }, [enabled]);
   if (!enabled) return <>{children}</>;
   async function change(next: ExperienceMode) {

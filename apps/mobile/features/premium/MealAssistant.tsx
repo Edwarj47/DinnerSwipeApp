@@ -14,6 +14,7 @@ import { MealDraft, ReviewedFood, portionInput, prefillServing, reviewedRows, su
 import { NutritionAttribution } from "./NutritionAttribution";
 import { NutritionConsent, NutritionConsentStatus } from "./NutritionConsent";
 import { useMealVoice } from "./useMealVoice";
+import { appendMealAudio, MealAudio } from "./mealVoiceAudio";
 import { useLookupCooldown } from "./useLookupCooldown";
 
 export function MealAssistant({ voiceEnabled, onClose, onSaved, initialMealDate }: {
@@ -38,8 +39,8 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved, initialMealDate 
   const abort = useRef<AbortController | null>(null);
   const alive = useRef(true);
   const inFlight = useRef(false);
-  const autoAttempted = useRef(new WeakSet<Blob>());
-  const transcription = useRef<{ audio: Blob; id: string } | null>(null);
+  const autoAttempted = useRef(new WeakSet<MealAudio>());
+  const transcription = useRef<{ audio: MealAudio; id: string } | null>(null);
   const voice = useMealVoice();
   const voiceRef = useRef(voice);
   voiceRef.current = voice;
@@ -65,7 +66,8 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved, initialMealDate 
       }
       transcription.current = null; voiceRef.current.clear(); setVoiceFailure(false);
     };
-    const subscription = AppState.addEventListener("change", state => { if (state !== "active") background(); });
+    // Native permission prompts can be inactive without actually backgrounding the app.
+    const subscription = AppState.addEventListener("change", state => { if (state === "background") background(); });
     if (Platform.OS === "web") document.addEventListener("visibilitychange", background);
     return () => {
       alive.current = false; abort.current?.abort(); transcription.current = null; voiceRef.current.clear(); subscription.remove();
@@ -74,11 +76,17 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved, initialMealDate 
     };
   }, []);
   useEffect(() => {
-    if (!accepted || !voiceEnabled || !voice.supported || !voice.audio || voice.recording || draft || busy || offline || inFlight.current) return;
+    if (!accepted || !voiceEnabled || !voice.supported || !voice.audio || voice.recording || draft || busy || offline || cooldown.waiting || inFlight.current) return;
     if (autoAttempted.current.has(voice.audio)) return;
     autoAttempted.current.add(voice.audio);
     autoTranscribe.current();
-  }, [accepted, voiceEnabled, voice.supported, voice.audio, voice.recording, draft, busy, offline]);
+  }, [accepted, voiceEnabled, voice.supported, voice.audio, voice.recording, draft, busy, offline, cooldown.waiting]);
+  useEffect(() => {
+    if (transcription.current && transcription.current.audio !== voice.audio) {
+      abort.current?.abort(); abort.current = null; inFlight.current = false;
+      transcription.current = null; setBusy(false); setTranscribing(false); setVoiceFailure(false);
+    }
+  }, [voice.audio]);
   useEffect(() => {
     function expire() {
       const now = Date.now();
@@ -127,13 +135,13 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved, initialMealDate 
     setDraft({ ...result, items: [] }); setItems(result.items.map(item => ({ ...item, key: Crypto.randomUUID(),
       ...prefillServing(item), recommended_food_id: item.food_id, expires: Date.now() + PROVIDER_VIEW_MS })));
   }
-  async function transcribe(audio: Blob, signal: AbortSignal) {
+  async function transcribe(audio: MealAudio, signal: AbortSignal) {
     setTranscribing(true); setVoiceFailure(false);
     if (transcription.current?.audio !== audio) transcription.current = { audio, id: Crypto.randomUUID() };
-    const body = new FormData(); body.append("request_id", transcription.current.id); body.append("audio", audio, "meal-recording");
+    const body = new FormData(); body.append("request_id", transcription.current.id); appendMealAudio(body, audio);
     try {
       const result = await apiFetch<{ text: string }>("/api/v1/nutrition/ai/transcriptions", { method: "POST", signal, body });
-      if (signal.aborted || !alive.current) return;
+      if (signal.aborted || !alive.current || voiceRef.current.audio !== audio || transcription.current?.audio !== audio) return;
       const text = [description.trim(), result.text.trim()].filter(Boolean).join(" ");
       if (text.length > 4000) throw new Error("Shorten the meal description before retrying transcription.");
       changeDescription(text); transcription.current = null; voiceRef.current.clear();
@@ -185,8 +193,8 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved, initialMealDate 
             <TextInput style={[styles.input, styles.description]} multiline maxLength={4000} accessibilityLabel="Meal description"
               value={description} onChangeText={changeDescription} editable={!busy && !voice.recording} />
             {voiceEnabled && voice.supported ? <View style={styles.section}>
-              <Button label={voice.recording ? "Stop recording" : "Record meal"} icon={voice.recording ? "stop-circle-outline" : "mic-outline"}
-                disabled={busy || offline} onPress={() => { if (voice.recording) voice.stop(); else { transcription.current = null; setVoiceFailure(false); setError(""); void voice.start(); } }} />
+              <Button label={voice.preparing ? "Preparing microphone..." : voice.recording ? "Stop recording" : "Record meal"} icon={voice.recording ? "stop-circle-outline" : "mic-outline"}
+                disabled={!voice.recording && (busy || offline || voice.preparing)} onPress={() => { if (voice.recording) voice.stop(); else { transcription.current = null; setVoiceFailure(false); setError(""); void voice.start(); } }} />
               {voice.audio ? <View style={styles.row}>
                 {voiceFailure && !busy ? <View style={styles.equal}><Button label="Retry transcription" icon="refresh-outline" disabled={offline}
                   onPress={() => { void run(signal => transcribe(voice.audio!, signal)); }} /></View> : null}
@@ -194,7 +202,7 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved, initialMealDate 
                   disabled={busy && !transcribing} onPress={discardRecording} /></View></View> : null}
             </View> : null}
             <Button label={busy && !transcribing ? "Preparing..." : "Preview meal"} icon="sparkles-outline" variant="primary"
-              disabled={busy || offline || cooldown.waiting || voice.recording || !!voice.audio || description.trim().length < 3} onPress={() => { void run(describe); }} />
+              disabled={busy || offline || cooldown.waiting || voice.recording || voice.preparing || !!voice.audio || description.trim().length < 3} onPress={() => { void run(describe); }} />
           </> : <>
             {items.map(item => <View key={item.key} testID="meal-review-item" style={styles.item}>
               <View style={styles.row}><Text style={[styles.label, styles.equal]}>{item.name}</Text>

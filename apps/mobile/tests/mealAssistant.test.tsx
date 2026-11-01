@@ -699,16 +699,18 @@ describe("MealAssistant review flow", () => {
 
 function enableVoice() {
   const clear = jest.fn();
+  let invalidate = () => undefined;
   const audio = new Blob(["synthetic clip"], { type: "audio/webm" });
   voiceHook.mockImplementation(function useMockVoice() {
     const [recording, setRecording] = useState(false);
     const [clip, setClip] = useState<Blob | null>(null);
     const reset = useCallback(() => { clear(); setRecording(false); setClip(null); return undefined; }, []);
+    invalidate = reset;
     return { supported: true, recording, audio: clip, error: "",
       start: async () => { setClip(null); setRecording(true); },
       stop: () => { setRecording(false); setClip(audio); }, clear: reset };
   });
-  return { clear, audio };
+  return { clear, audio, invalidate: () => invalidate() };
 }
 
 function transcriptionCalls() { return request.mock.calls.filter(([path]) => path.endsWith("/transcriptions")); }
@@ -724,6 +726,23 @@ async function recordAndStop(screen: Awaited<ReturnType<typeof mount>>) {
 }
 
 describe("automatic meal transcription", () => {
+  test("native clip invalidation aborts an upload even without a background event", async () => {
+    const voice = enableVoice();
+    let resolve!: (value: { text: string }) => void;
+    const original = request.getMockImplementation()!;
+    request.mockImplementation(async (path, init) => path.endsWith("/transcriptions")
+      ? new Promise<{ text: string }>(done => { resolve = done; }) : original(path, init));
+    const screen = await mount(true);
+    try {
+      fireEvent.changeText(screen.getByLabelText("Meal description"), "Keep my text");
+      await recordAndStop(screen);
+      act(() => voice.invalidate());
+      expect(transcriptionCalls()[0][1]?.signal?.aborted).toBe(true);
+      await act(async () => resolve({ text: "discarded words" }));
+      expect(screen.getByLabelText("Meal description").props.value).toBe("Keep my text");
+      expectNoAutosave(screen.saved);
+    } finally { screen.cleanup(); }
+  });
   test("stopping fills editable words once, preserves typed text, and never previews or saves automatically", async () => {
     const voice = enableVoice();
     const original = request.getMockImplementation()!;

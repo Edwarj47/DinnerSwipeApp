@@ -252,7 +252,7 @@ async function refreshSubscriptions(queryClient: ReturnType<typeof useQueryClien
 }
 
 const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: Colors.accent, zIndex: 15 },
+  overlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: Colors.accent, zIndex: 15 },
   checking: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 16 },
   accountRow: { gap: 10, alignItems: "flex-start", paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: Colors.border },
   accountIdentity: { width: "100%", gap: 2 },

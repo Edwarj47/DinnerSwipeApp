@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient } from "@tanstack/react-query";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
-import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { BottomTabBarProps } from "expo-router/js-tabs";
 import { apiFetch } from "@/services/api";
 import { setOfflineOwner } from "@/services/offlineStore";
 import { bindWorkoutModeClient, parseExperiencePreferences, resetWorkoutMode, restoreWorkoutPreferences, seedWorkoutPreferences, setWorkoutsEnabled, updateWorkoutPreferences, useWorkoutMode, workoutTabVisibility } from "@/services/workoutMode";

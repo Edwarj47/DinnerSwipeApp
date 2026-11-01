@@ -101,7 +101,7 @@ test("ingredient checkboxes toggle independently with stable targets and no pers
   const screen = mount(<RecipeDetailSheet recipe={duplicate} visible onClose={jest.fn()} onAction={onAction} onUpdated={onUpdated} />);
   try {
     const boxes = () => screen.getAllByRole("checkbox", { name: "2 carrots" });
-    const webBoxes = () => screen.UNSAFE_getAllByType(Pressable).filter(box => box.props.accessibilityRole === "checkbox");
+    const webBoxes = () => screen.UNSAFE_getAllByType((Pressable as unknown as { type?: typeof Pressable }).type ?? Pressable).filter(box => box.props.accessibilityRole === "checkbox");
     const targetStyle = StyleSheet.flatten(boxes()[0].props.style);
     expect(targetStyle.minHeight).toBeGreaterThanOrEqual(44);
     expect(boxes().map(box => box.props.accessibilityState.checked)).toEqual([false, false]);
@@ -121,6 +121,49 @@ test("ingredient checkboxes toggle independently with stable targets and no pers
   } finally { screen.close(); }
 });
 
+test("recipe component headings group consecutive ingredients and steps without changing checkbox behavior", () => {
+  const grouped: Recipe = { ...recipe,
+    ingredients: [
+      { ...recipe.ingredients[0], section: " Soup " },
+      { original_text: "1 cup broth", normalized_name: "broth", section: "Soup" },
+      { original_text: "Chopped parsley", normalized_name: "parsley", section: "To serve" },
+      { original_text: "Black pepper", normalized_name: "pepper", section: "   " }
+    ],
+    instructions: [
+      { text: "Simmer the carrots.", step_number: 1, section: "Cook" },
+      { text: "Stir the soup.", step_number: 2, section: " Cook " },
+      { text: "Add parsley.", step_number: 3, section: "Serve" }
+    ]
+  };
+  const original = JSON.stringify(grouped);
+  const screen = mount(<RecipeDetailSheet recipe={grouped} visible onClose={jest.fn()} />);
+  try {
+    for (const name of ["Soup", "To serve", "Cook", "Serve"]) {
+      expect(screen.getAllByRole("header", { name })).toHaveLength(1);
+    }
+    expect(screen.getAllByRole("checkbox")).toHaveLength(4);
+    fireEvent.press(screen.getByRole("checkbox", { name: "1 cup broth" }));
+    expect(screen.getByRole("checkbox", { name: "1 cup broth" }).props.accessibilityState.checked).toBe(true);
+    expect(screen.getByRole("checkbox", { name: "2 carrots" }).props.accessibilityState.checked).toBe(false);
+    expect(JSON.stringify(grouped)).toBe(original);
+    expect(request).not.toHaveBeenCalled();
+  } finally { screen.close(); }
+});
+
+test("unsectioned recipes keep their existing ingredient rows and step numbers", () => {
+  const unsectioned: Recipe = { ...recipe,
+    ingredients: [{ original_text: "2 carrots", normalized_name: "carrot", section: null }],
+    instructions: [{ text: "Simmer the carrots.", step_number: 1, section: null }]
+  };
+  const screen = mount(<RecipeDetailSheet recipe={unsectioned} visible onClose={jest.fn()} />);
+  try {
+    expect(screen.queryByRole("header", { name: "Soup" })).toBeNull();
+    expect(screen.getByRole("checkbox", { name: "2 carrots" })).toBeTruthy();
+    expect(screen.getByText("1")).toBeTruthy();
+    expect(screen.getByText("Simmer the carrots.")).toBeTruthy();
+  } finally { screen.close(); }
+});
+
 test("web ingredient checkboxes toggle on Space without scrolling or repeating", () => {
   const platform = Object.getOwnPropertyDescriptor(Platform, "OS")!;
   Object.defineProperty(Platform, "OS", { configurable: true, value: "web" });
@@ -129,7 +172,7 @@ test("web ingredient checkboxes toggle on Space without scrolling or repeating",
   try {
     screen = mount(<RecipeDetailSheet recipe={recipe} visible onClose={jest.fn()} />);
     const box = () => screen!.getByRole("checkbox", { name: "2 carrots" });
-    const webBox = () => screen!.UNSAFE_getAllByType(Pressable).find(box => box.props.accessibilityRole === "checkbox")!;
+    const webBox = () => screen!.UNSAFE_getAllByType((Pressable as unknown as { type?: typeof Pressable }).type ?? Pressable).find(box => box.props.accessibilityRole === "checkbox")!;
     const preventDefault = jest.fn();
     fireEvent(box(), "keyDown", { key: " ", repeat: false, preventDefault });
     expect(preventDefault).toHaveBeenCalledTimes(1);

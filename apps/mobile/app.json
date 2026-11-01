@@ -4,15 +4,19 @@
     "owner": "data-centric-software-solutions",
     "slug": "dinner-swipe",
     "scheme": "dinnerswipe",
-    "version": "0.1.0",
+    "version": "0.2.0",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/fbe8bf7c-1e7e-4ace-9cd8-68f231173d90",
+      "enabled": true,
+      "checkAutomatically": "ON_LOAD",
+      "fallbackToCacheTimeout": 0
+    },
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "image": "./assets/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#d71920"
-    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -29,7 +33,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#d71920"
       },
-      "versionCode": 27
+      "versionCode": 28
     },
     "web": {
       "bundler": "metro",
@@ -42,6 +46,7 @@
     },
     "plugins": [
       "expo-router",
+      ["expo-splash-screen", { "image": "./assets/splash.png", "resizeMode": "contain", "backgroundColor": "#d71920", "imageWidth": 200 }],
       "expo-secure-store",
       "expo-notifications",
       [
@@ -49,7 +54,7 @@
         {
           "photosPermission": "Choose a recipe photo from your library.",
           "cameraPermission": "Take a photo for a recipe.",
-          "microphonePermission": false
+          "microphonePermission": "Allow Dinner Swipe to record a meal description."
         }
       ],
       [
@@ -59,9 +64,19 @@
         }
       ],
       "./plugins/withAndroidMonorepoGradlePaths",
-      "./plugins/withAppIcons"
+      "./plugins/withAppIcons",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow Dinner Swipe to record a meal description.",
+          "recordAudioAndroid": true,
+          "enableBackgroundRecording": false,
+          "enableBackgroundPlayback": false
+        }
+      ]
     ],
     "experiments": {
+      "reactCompiler": false,
       "typedRoutes": true
     },
     "extra": {

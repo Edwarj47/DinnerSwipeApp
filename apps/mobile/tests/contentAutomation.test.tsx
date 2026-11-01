@@ -125,7 +125,8 @@ function sourceRequests() { return request.mock.calls.filter(([path]) => path ==
 function writes() { return request.mock.calls.filter(([, init]) => init?.method === "POST" || init?.method === "PATCH"); }
 // Native host views translate ARIA props; inspect Pressable for the web contract.
 function webControl(screen: ReturnType<typeof mount>, label: string) {
-  const control = screen.UNSAFE_getAllByType(Pressable).find(node => node.props.accessibilityLabel === label);
+  const type = (Pressable as unknown as { type?: typeof Pressable }).type ?? Pressable;
+  const control = screen.UNSAFE_getAllByType(type).find(node => node.props.accessibilityLabel === label);
   if (!control) throw new Error(`Missing control: ${label}`);
   return control.props;
 }

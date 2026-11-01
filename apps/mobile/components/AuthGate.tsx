@@ -384,7 +384,7 @@ export function AuthGate({ children }: Props) {
 }
 
 const createStyles = (Colors: ThemeColors) => StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, backgroundColor: Colors.accent, zIndex: 20 },
+  overlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: Colors.accent, zIndex: 20 },
   keyboard: { flex: 1 },
   content: { flexGrow: 1, justifyContent: "center", alignItems: "center", padding: 20, gap: 20 },
   centered: { flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: Colors.accent },

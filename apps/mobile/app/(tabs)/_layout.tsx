@@ -50,8 +50,8 @@ function NavigationTabs() {
           headerShown: false,
           tabBarActiveTintColor: Colors.accent,
           tabBarInactiveTintColor: Colors.muted,
-          tabBarIcon: ({ color, size }) => (
-            <Ionicons name={workouts && route.name === "recipes" ? "barbell-outline" : icons[route.name as keyof typeof icons]} size={size} color={color} />
+          tabBarIcon: ({ focused, size }) => (
+            <Ionicons name={workouts && route.name === "recipes" ? "barbell-outline" : icons[route.name as keyof typeof icons]} size={size} color={focused ? Colors.accent : Colors.muted} />
           )
         })}
       >

@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Linking,
   PanResponder,
@@ -204,14 +204,19 @@ export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, on
               {recipe.ingredients.map((item, index) => {
                 const equivalent = ingredientWeightNote(item.quantity, item.unit, weightUnit);
                 const checked = checkedIngredients.has(index);
+                const section = item.section?.trim();
                 return (
-                <Pressable key={`${item.original_text}-${index}`} style={styles.ingredientRow}
+                <Fragment key={`${item.original_text}-${index}`}>
+                {section && section !== recipe.ingredients[index - 1]?.section?.trim() ? (
+                  <Text accessibilityRole="header" style={styles.componentHeading}>{section}</Text>
+                ) : null}
+                <Pressable style={styles.ingredientRow}
                   accessibilityRole="checkbox" accessibilityLabel={item.original_text} accessibilityState={{ checked }} aria-checked={checked}
                   onPress={() => toggleIngredient(index)}
-                  {...(Platform.OS === "web" ? { onKeyDown: (event: KeyboardEvent) => {
-                    if (event.key === " ") {
+                  {...(Platform.OS === "web" ? { onKeyDown: (event: { key?: string; repeat?: boolean; nativeEvent?: { key?: string; repeat?: boolean }; preventDefault: () => void }) => {
+                    if ((event.key ?? event.nativeEvent?.key) === " ") {
                       event.preventDefault();
-                      if (!event.repeat) toggleIngredient(index);
+                      if (!(event.repeat ?? event.nativeEvent?.repeat)) toggleIngredient(index);
                     }
                   } } : {})}>
                   <View style={[styles.check, checked && styles.checked]}>
@@ -220,17 +225,23 @@ export function RecipeDetailSheet({ recipe: originalRecipe, visible, onClose, on
                   <View style={{ flex: 1, gap: 4 }}><Text style={[styles.rowText, { flex: 0 }, checked && styles.checkedText]}>{item.original_text}</Text>
                     {equivalent ? <Text style={styles.ingredientEquivalent}>{equivalent}</Text> : null}</View>
                 </Pressable>
+                </Fragment>
                 );
               })}
             </RecipeSection>
             <RecipeSection title="Steps">
-              {recipe.instructions.map((step) => (
-                <View key={`${step.step_number}-${step.text}`} style={styles.stepRow}>
+              {recipe.instructions.map((step, index) => (
+                <Fragment key={`${step.step_number}-${step.text}`}>
+                {step.section?.trim() && step.section.trim() !== recipe.instructions[index - 1]?.section?.trim() ? (
+                  <Text accessibilityRole="header" style={styles.componentHeading}>{step.section.trim()}</Text>
+                ) : null}
+                <View style={styles.stepRow}>
                   <View style={styles.stepBadge} testID="recipe-step-badge">
                     <Text style={styles.stepNumber}>{step.step_number}</Text>
                   </View>
                   <Text style={styles.rowText}>{step.text}</Text>
                 </View>
+                </Fragment>
               ))}
             </RecipeSection>
             {recipe.tags.length ? (
@@ -350,6 +361,7 @@ const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   voteActions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   section: { borderTopColor: Colors.border, borderTopWidth: 1, paddingTop: 16, gap: 8 },
   sectionTitle: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
+  componentHeading: { color: Colors.basil, fontWeight: "800", fontSize: 14, paddingTop: 8 },
   ingredientRow: { flexDirection: "row", gap: 10, alignItems: "center", minHeight: 44, paddingVertical: 6 },
   check: { width: 22, height: 22, flexShrink: 0, borderRadius: 6, borderColor: Colors.border, borderWidth: 2, alignItems: "center", justifyContent: "center" },
   checked: { backgroundColor: Colors.basil, borderColor: Colors.basil },

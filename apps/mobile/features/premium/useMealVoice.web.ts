@@ -6,7 +6,7 @@ export function useMealVoice() {
   const [error, setError] = useState("");
   const recorder = useRef<MediaRecorder | null>(null);
   const stream = useRef<MediaStream | null>(null);
-  const timer = useRef<ReturnType<typeof setTimeout>>();
+  const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const epoch = useRef(0);
   const supported = typeof window !== "undefined" && window.isSecureContext &&
     typeof MediaRecorder !== "undefined" && Boolean(navigator.mediaDevices?.getUserMedia);

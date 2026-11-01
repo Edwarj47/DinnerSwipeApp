@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { ReactNode, useContext, useEffect, useRef } from "react";
-import { AccessibilityInfo, StyleSheet, Text, View } from "react-native";
+import { AccessibilityInfo, StyleSheet, Text, View, ViewInstance } from "react-native";
 import { Button } from "@/components/Button";
 import { Colors, shadow } from "@/components/theme";
 import { TourScrollContext, useGuidedTour } from "./TourContext";
@@ -9,7 +9,7 @@ import { TourScrollContext, useGuidedTour } from "./TourContext";
 export function TourTarget({ id, children, fill = false }: { id: string; children: ReactNode; fill?: boolean }) {
   const tour = useGuidedTour();
   const reveal = useContext(TourScrollContext);
-  const node = useRef<View>(null);
+  const node = useRef<ViewInstance>(null);
   const active = tour?.step.id === id;
   const expanded = active && tour?.expanded;
   useEffect(() => {
@@ -40,5 +40,5 @@ const styles = StyleSheet.create({
   body: { color: Colors.muted, fontSize: 14, lineHeight: 21 },
   actions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   pointer: { position: "absolute", bottom: -6, left: 24, width: 10, height: 10, backgroundColor: Colors.surface, borderRightWidth: 1, borderBottomWidth: 1, borderColor: Colors.basil, transform: [{ rotate: "45deg" }] },
-  highlight: { ...StyleSheet.absoluteFillObject, borderWidth: 2, borderColor: Colors.basil, borderRadius: 8 }
+  highlight: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, borderWidth: 2, borderColor: Colors.basil, borderRadius: 8 }
 });

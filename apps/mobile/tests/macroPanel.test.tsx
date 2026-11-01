@@ -225,7 +225,7 @@ test("meal dropdown retains all five choices and nutrition labels remain visible
 });
 
 test("all-time Trends and its export use the same selected period", async () => {
-  const share = jest.spyOn(Share, "share").mockResolvedValue({ action: Share.sharedAction });
+  const share = jest.spyOn(Share, "share").mockResolvedValue({ action: Share.sharedAction, activityType: undefined });
   const screen = mount();
   try {
     await screen.findByText("Trends");

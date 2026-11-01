@@ -1,6 +1,6 @@
-import { BottomTabBarHeightContext } from "@react-navigation/bottom-tabs";
+import { BottomTabBarHeightContext } from "expo-router/js-tabs";
 import { ReactNode, useCallback, useContext, useRef } from "react";
-import { Platform, ScrollView, StyleSheet, View } from "react-native";
+import { Platform, ScrollView, StyleSheet, View, ViewInstance, ScrollViewInstance } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import { Colors } from "@/components/theme";
@@ -19,10 +19,10 @@ type Props = {
 export function Screen({ children, scroll = true, contentWidth, onViewportLayout, header }: Props) {
   const tour = useGuidedTour();
   const tabBarHeight = useContext(BottomTabBarHeightContext);
-  const contentRef = useRef<View>(null);
-  const scrollRef = useRef<ScrollView>(null);
+  const contentRef = useRef<ViewInstance>(null);
+  const scrollRef = useRef<ScrollViewInstance>(null);
   const canScroll = scroll;
-  const reveal = useCallback((node: View) => revealTourTarget(node, contentRef.current, scrollRef.current), []);
+  const reveal = useCallback((node: ViewInstance) => revealTourTarget(node, contentRef.current, scrollRef.current), []);
   const content = <View ref={contentRef} testID="screen-content" collapsable={false} onLayout={!canScroll && onViewportLayout ? event => onViewportLayout(event.nativeEvent.layout.height) : undefined} style={[styles.content, tabBarHeight !== undefined && { paddingBottom: 16 }, contentWidth !== undefined && { width: "100%", maxWidth: contentWidth, alignSelf: "center" }, !canScroll && { flex: 1, minHeight: 0, paddingBottom: 12 }]}>{children}</View>;
   return (
     <TourScrollContext.Provider value={reveal}>

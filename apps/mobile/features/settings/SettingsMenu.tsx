@@ -1,7 +1,7 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useQuery } from "@tanstack/react-query";
 import { ReactNode, useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, ViewInstance, ScrollViewInstance } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Button } from "@/components/Button";
 import { Colors, shadow } from "@/components/theme";
@@ -23,9 +23,9 @@ export function SettingsMenuProvider({ children }: { children: ReactNode }) {
   const [visit, setVisit] = useState(0);
   const tour = useGuidedTour();
   const wasSettingsTour = useRef(false);
-  const content = useRef<View>(null);
-  const scroll = useRef<ScrollView>(null);
-  const reveal = useCallback((node: View) => revealTourTarget(node, content.current, scroll.current), []);
+  const content = useRef<ViewInstance>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
+  const reveal = useCallback((node: ViewInstance) => revealTourTarget(node, content.current, scroll.current), []);
   const close = useCallback(() => setRequest(null), []);
   const subscription = useQuery({ queryKey: ["subscription-status"], queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status") });
   const premium = Boolean(subscription.data?.premium_active ?? subscription.data?.active);

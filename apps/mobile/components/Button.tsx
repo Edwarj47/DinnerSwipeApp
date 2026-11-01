@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useEffect, useRef } from "react";
-import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, ViewInstance } from "react-native";
 
 import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 
@@ -17,7 +17,7 @@ type Props = {
 export function Button({ label, icon, variant = "secondary", onPress, accessibilityLabel, disabled = false, compact = false }: Props) {
   const Colors = useThemeColors();
   const styles = useThemedStyles(createStyles);
-  const ref = useRef<View>(null);
+  const ref = useRef<ViewInstance>(null);
   useEffect(() => {
     // RN Web filters title props, so attach the browser tooltip to the DOM node.
     if (Platform.OS === "web") (ref.current as unknown as HTMLElement | null)?.setAttribute("title", accessibilityLabel ?? label);

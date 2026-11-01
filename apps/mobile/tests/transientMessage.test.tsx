@@ -18,7 +18,7 @@ test("success stays for five seconds and identical messages restart the timer", 
 });
 
 test("persistent errors are not erased; changing back to success starts the timer", () => {
-  const hook = renderHook(({ persistent }) => useTransientMessage(persistent), { initialProps: { persistent: true } });
+  const hook = renderHook(({ persistent }: { persistent: boolean }) => useTransientMessage(persistent), { initialProps: { persistent: true } });
   act(() => hook.result.current[1]("Try again."));
   act(() => jest.advanceTimersByTime(10000));
   expect(hook.result.current[0]).toBe("Try again.");

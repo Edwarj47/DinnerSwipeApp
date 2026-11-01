@@ -1,4 +1,4 @@
-import { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { BottomTabBarProps } from "expo-router/js-tabs";
 
 export function workoutTabBarProps(props: BottomTabBarProps, workouts: boolean): BottomTabBarProps {
   if (!workouts) return props;

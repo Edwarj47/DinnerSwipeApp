@@ -1,5 +1,5 @@
 import { useRef } from "react";
-import { StyleProp, StyleSheet, TextInput, TextInputProps, View, ViewStyle } from "react-native";
+import { StyleProp, StyleSheet, TextInput, TextInputInstance, TextInputProps, View, ViewStyle } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 
 import { Button } from "./Button";
@@ -13,7 +13,7 @@ type Props = TextInputProps & {
 };
 
 export function SearchField({ value, onChangeText, editable = true, containerStyle, style, showSearchIcon = false, ...props }: Props) {
-  const input = useRef<TextInput>(null);
+  const input = useRef<TextInputInstance>(null);
   return <View style={[styles.field, containerStyle]}>
     {showSearchIcon ? <Ionicons name="search-outline" size={20} color={Colors.muted} style={styles.searchIcon} /> : null}
     <TextInput {...props} ref={input} value={value} editable={editable} onChangeText={onChangeText}

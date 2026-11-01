@@ -100,9 +100,9 @@ const slot: WorkoutSlot = {
 };
 
 test.each([
-  ["candidate preview", <CandidatePreview candidate={candidate} onClose={jest.fn()} />],
-  ["recipe details", <RecipeDetailSheet recipe={recipe} visible onClose={jest.fn()} />],
-  ["workout snapshot details", <WorkoutDetail template={slot.snapshot} onClose={jest.fn()} />]
+  ["candidate preview", <CandidatePreview key="candidate" candidate={candidate} onClose={jest.fn()} />],
+  ["recipe details", <RecipeDetailSheet key="recipe" recipe={recipe} visible onClose={jest.fn()} />],
+  ["workout snapshot details", <WorkoutDetail key="workout" template={slot.snapshot} onClose={jest.fn()} />]
 ])("%s renders the shared photo credit", (_name, element) => {
   const client = new QueryClient({ defaultOptions: { queries: { gcTime: 0, retry: false }, mutations: { gcTime: 0 } } });
   client.setQueryData(["profile"], { notification_preferences: {} });

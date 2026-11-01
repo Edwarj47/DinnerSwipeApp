@@ -58,6 +58,9 @@ jobs:
       - run: npm run lint -w apps/mobile
       - run: npm run typecheck -w apps/mobile
       - run: npm run test:icons -w apps/mobile
+      - run: npm run test:release -w apps/mobile
+      - name: Check native runtime contract
+        run: node infrastructure/scripts/check-ota-runtime.cjs
       - name: Run mobile tests with a cold transform cache
         run: npm test -w apps/mobile -- --runInBand --no-cache --testTimeout=15000 --forceExit --json --outputFile="$RUNNER_TEMP/mobile-tests.json"
       - name: Annotate mobile test failures

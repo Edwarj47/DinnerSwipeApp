@@ -40,7 +40,7 @@ export function PlanningRuntime() {
   useEffect(() => {
     if (Platform.OS === "web") return;
     Notifications.setNotificationHandler({ handleNotification: async () => ({
-      shouldShowAlert: true, shouldPlaySound: false, shouldSetBadge: false
+      shouldShowBanner: true, shouldShowList: true, shouldPlaySound: false, shouldSetBadge: false
     }) });
     const open = (response: Notifications.NotificationResponse) => {
       if (response.notification.request.content.data?.route === "/week") {

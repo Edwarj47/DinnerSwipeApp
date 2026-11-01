@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { fireEvent, fireEventAsync, render, waitFor } from "@testing-library/react-native";
 import { RecipeMacroLogger } from "@/features/recipes/RecipeMacroLogger";
 import { RecipeNutritionPanel } from "@/features/recipes/RecipeNutritionPanel";
 import { RecipeLibrarySection } from "@/features/recipes/RecipeLibrarySection";
@@ -51,7 +51,7 @@ test("Log meal preserves a sauce recipe category instead of defaulting to Dinner
     fireEvent.press(await screen.findByLabelText("Log meal"));
     expect(screen.getByRole("button", { name: "Sauce" }).props.accessibilityState.selected).toBe(true);
     expect(screen.getByRole("button", { name: "Dinner" }).props.accessibilityState.selected).toBe(false);
-    fireEvent.press(screen.getByLabelText("Save entry"));
+    await fireEventAsync.press(screen.getByLabelText("Save entry"));
     await waitFor(() => expect(screen.queryByLabelText("Save entry")).toBeNull());
     const writes = request.mock.calls.filter(([, init]) => init?.method);
     expect(writes).toHaveLength(1);

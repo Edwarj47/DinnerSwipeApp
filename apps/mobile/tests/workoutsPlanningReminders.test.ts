@@ -42,8 +42,8 @@ function notification(
       categoryIdentifier: null, threadIdentifier: null
     },
     trigger: {
-      type: "calendar", repeats: true,
-      dateComponents: { weekday: 2, hour: 9, minute: 0, isLeapMonth: false }
+      type: Notifications.SchedulableTriggerInputTypes.CALENDAR, repeats: true,
+      weekday: 2, hour: 9, minute: 0
     }
   };
 }
@@ -95,7 +95,7 @@ test.each(["ios", "android"] as const)(
         title: "Time to plan your workouts", body: "Open This Week to choose your workouts for the week.",
         data: { route: "/week", signature: JSON.stringify([owner, 0]), experience: "workouts" }
       },
-      trigger: { weekday: 2, hour: 9, minute: 0, repeats: true, channelId: "weekly-planning" }
+      trigger: { type: "weekly", weekday: 2, hour: 9, minute: 0, channelId: "weekly-planning" }
     });
     expect(schedule).toHaveBeenCalledWith(expect.objectContaining({
       identifier: "dinner-workout-group-reset-team",
@@ -103,7 +103,7 @@ test.each(["ios", "android"] as const)(
         title: "Plan workouts for Training team",
         data: { route: "/week", signature: JSON.stringify([owner, 2]), experience: "workouts", household_id: "team" }
       }),
-      trigger: expect.objectContaining({ weekday: 4, hour: 9, minute: 0, repeats: true })
+      trigger: expect.objectContaining({ type: "weekly", weekday: 4, hour: 9, minute: 0 })
     }));
     expect(schedule).toHaveBeenCalledWith(expect.objectContaining({
       identifier: "dinner-workout-group-reset-friends",

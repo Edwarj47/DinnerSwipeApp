@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { createContext, useContext, useEffect, useRef } from "react";
-import { Platform, Pressable, StyleSheet, View } from "react-native";
+import { Platform, Pressable, StyleSheet, ViewInstance } from "react-native";
 import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { openSettings } from "@/services/settingsMenu";
 
@@ -11,7 +11,7 @@ export function SettingsButton() {
   const styles = useThemedStyles(createStyles);
   const Colors = useThemeColors();
   const settings = useSettingsMenu();
-  const ref = useRef<View>(null);
+  const ref = useRef<ViewInstance>(null);
   useEffect(() => { if (Platform.OS === "web") (ref.current as unknown as HTMLElement | null)?.setAttribute("title", "User and group settings"); }, []);
   if (!settings) return null;
   return <Pressable ref={ref} accessibilityRole="button" accessibilityLabel="Open settings" accessibilityState={{ expanded: settings.open }} onPress={() => openSettings()}

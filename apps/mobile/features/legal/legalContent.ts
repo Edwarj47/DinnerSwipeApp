@@ -49,6 +49,11 @@ export const privacySections = [
       "Information is used to operate the app, authenticate users, support meal discovery, generate grocery lists, support group voting, preserve recipe attribution, troubleshoot issues, improve the product, and communicate with users."
   },
   {
+    title: "App Software Updates",
+    body:
+      "Native Dinner Swipe builds may check Expo's EAS Update service for compatible app code and assets. These requests include network and technical update information such as platform, app runtime, channel and update identifiers. This delivery integration does not send your meals, voice recordings, nutrition logs or account credentials to Expo. The app keeps its embedded or previously cached code available when an update cannot be downloaded. Native voice clips use temporary private app-cache files; removal is attempted after successful transcription, discard or cancellation. Files may remain in that private cache if the operating system terminates the app before cleanup finishes."
+  },
+  {
     title: "Third-Party Services",
     body:
       "Dinner Swipe may use hosting, database, email, analytics, AI, app-build, payment, and infrastructure providers. Retailer links are search links only. Dinner Swipe does not automate retailer login, cart actions, or checkout."

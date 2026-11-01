@@ -122,7 +122,7 @@ function GroupRecipePicker({ household, onClose, onShared }: {
             })(); }} /> : null}
           </View>}
           ListFooterComponent={recipes.hasNextPage ? <View style={styles.more}><Button label={recipes.isFetchingNextPage ? "Loading..." : "More recipes"} icon="chevron-down" disabled={recipes.isFetchingNextPage || share.isPending} onPress={more} />
-            {recipes.isFetchNextPageError ? <Text accessibilityRole="alert" style={styles.error}>More recipes couldn't be loaded. Try again.</Text> : null}</View> : null} />
+            {recipes.isFetchNextPageError ? <Text accessibilityRole="alert" style={styles.error}>More recipes couldn't be loaded. Try again.</Text> : null}</View> : undefined} />
         <View style={styles.footer}>
           <Text accessibilityLiveRegion="polite" style={styles.selectionCount}>{count} selected</Text>
           {share.error ? <Text accessibilityRole="alert" style={styles.error}>{share.error.message}</Text> : null}

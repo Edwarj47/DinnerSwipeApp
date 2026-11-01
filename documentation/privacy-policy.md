@@ -30,6 +30,10 @@ Cooking preferences, disliked ingredients, and allergens are stored per user. Th
 
 Dinner Swipe may store subscription status, plan tier, billing provider identifiers, billing events, trial timing, and support records. Payment cards and checkout are handled by the billing provider and are not stored directly by Dinner Swipe.
 
+## App Software Updates
+
+Native builds may check Expo's EAS Update service for compatible app code and assets. The update requests carry network and technical update metadata, including platform, runtime, channel and update identifiers, not the meal, recording, nutrition-log or account-credential payloads handled by Dinner Swipe's backend. Embedded/cached app code remains available for offline startup. Native voice recordings use temporary private app-cache files and cleanup is attempted after transcription, discard or cancellation; an interrupted process can leave cache files until later cleanup or operating-system eviction. The in-app Privacy Policy is the maintained full version, updated November 1, 2026.
+
 ## Contact
 
 Privacy questions can be sent to dinnerswipe@dcss.dev.

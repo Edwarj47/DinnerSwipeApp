@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, View, ViewInstance, ScrollViewInstance } from "react-native";
 import { revealTourTarget, TourScrollContext } from "@/features/onboarding/TourContext";
 import { Gesture, GestureDetector } from "react-native-gesture-handler";
 
@@ -14,8 +14,8 @@ type Controls = {
   finish: (x: number, y: number) => void;
   cancel: () => void;
   select: (id: string, label: string) => void;
-  register: (day: string, node: View | null) => void;
-  registerMeal: (id: string, day: string, node: View | null) => void;
+  register: (day: string, node: ViewInstance | null) => void;
+  registerMeal: (id: string, day: string, node: ViewInstance | null) => void;
 };
 const DragControls = createContext<Controls | null>(null);
 const HoverDay = createContext<string | null>(null);
@@ -30,16 +30,16 @@ export function WeekDrag({ days, disabled, onAssign, onReorder, children }: {
 }) {
   const styles = useThemedStyles(createStyles);
   const Colors = useThemeColors();
-  const root = useRef<View>(null);
-  const scroll = useRef<ScrollView>(null);
-  const tourContent = useRef<View>(null);
-  const revealTour = useCallback((node: View) => revealTourTarget(node, tourContent.current, scroll.current), []);
+  const root = useRef<ViewInstance>(null);
+  const scroll = useRef<ScrollViewInstance>(null);
+  const tourContent = useRef<ViewInstance>(null);
+  const revealTour = useCallback((node: ViewInstance) => revealTourTarget(node, tourContent.current, scroll.current), []);
   const viewport = useRef<Rect>({ x: 0, y: 0, width: 320, height: 0 });
   const offset = useRef(0);
   const contentHeight = useRef(0);
-  const targets = useRef(new Map<string, View>());
+  const targets = useRef(new Map<string, ViewInstance>());
   const rects = useRef(new Map<string, Rect>());
-  const mealTargets = useRef(new Map<string, { day: string; node: View }>());
+  const mealTargets = useRef(new Map<string, { day: string; node: ViewInstance }>());
   const mealRects = useRef(new Map<string, MealRect>());
   const active = useRef<Drag | null>(null);
   const lastDrag = useRef<{ id: string; until: number } | null>(null);
@@ -167,7 +167,7 @@ export function WeekDropDay({ day, children }: { day: string; children: ReactNod
   const controls = useContext(DragControls)!;
   const hover = useContext(HoverDay);
   const mealHover = useContext(HoverMeal);
-  const register = useCallback((node: View | null) => controls.register(day, node), [controls, day]);
+  const register = useCallback((node: ViewInstance | null) => controls.register(day, node), [controls, day]);
   return <View testID={`week-day-${day || "unscheduled"}`} ref={register} collapsable={false} style={[styles.day, hover === day && styles.over]}>
     {children}
     {hover === day && mealHover && mealHover.beforeId === null ? <View pointerEvents="none" style={styles.endInsertion} /> : null}
@@ -196,7 +196,7 @@ export function WeekDropMeal({ id, day, children }: { id: string; day: string; c
   const styles = useThemedStyles(createStyles);
   const controls = useContext(DragControls)!;
   const hover = useContext(HoverMeal);
-  const register = useCallback((node: View | null) => controls.registerMeal(id, day, node), [controls, id, day]);
+  const register = useCallback((node: ViewInstance | null) => controls.registerMeal(id, day, node), [controls, id, day]);
   return <View ref={register} collapsable={false} testID={`week-meal-${id}`} style={{ position: "relative", opacity: hover?.activeId === id ? 0.45 : 1 }}>
     {hover?.beforeId === id ? <View pointerEvents="none" style={styles.insertion} /> : null}
     {children}
