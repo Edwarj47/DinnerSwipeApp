@@ -7,15 +7,18 @@ import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme
 import { apiFetch } from "@/services/api";
 import { Recipe } from "@/services/types";
 import { usePlannerStore } from "@/stores/plannerStore";
+import { useOfflineStatus } from "@/services/offlineStore";
 import { RecipePhoto } from "./RecipePhoto";
 
 export function RecipeLibrarySection({ collection, q, onOpen, onActions }: {
-  collection: "library" | "hidden" | "archived"; q: string; onOpen: (recipe: Recipe) => void; onActions: (recipe: Recipe) => void;
+  collection: "library" | "favorites" | "hidden" | "archived"; q: string; onOpen: (recipe: Recipe) => void; onActions: (recipe: Recipe) => void;
 }) {
   const styles = useThemedStyles(createStyles);
   const Colors = useThemeColors();
   const [expanded, setExpanded] = useState(collection === "library");
-  const title = { library: "Recipe Library", hidden: "Hidden Recipes", archived: "Archived Recipes" }[collection];
+  const title = { library: "Recipe Library", favorites: "Favorites", hidden: "Hidden Recipes", archived: "Archived Recipes" }[collection];
+  const libraryActions = collection === "library" || collection === "favorites";
+  const offline = useOfflineStatus(state => state.offline);
   const client = useQueryClient();
   const recipes = useInfiniteQuery({
     queryKey: ["recipes", "collection", collection, q], initialPageParam: 0,
@@ -30,28 +33,37 @@ export function RecipeLibrarySection({ collection, q, onOpen, onActions }: {
       await client.invalidateQueries({ queryKey: ["recipes"] });
     }
   });
+  const removeFavorite = useMutation({
+    mutationFn: (recipe: Recipe) => apiFetch(`/api/v1/recipes/${recipe.id}/favorite`, { method: "DELETE" }),
+    onSuccess: () => client.invalidateQueries({ queryKey: ["recipes"] })
+  });
   return <View style={styles.section}>
     <Pressable accessibilityRole="button" accessibilityLabel={title} accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)} style={styles.heading}>
-      <Ionicons name={collection === "hidden" ? "eye-off-outline" : collection === "archived" ? "archive-outline" : "book-outline"} size={22} color={Colors.accent} />
+      <Ionicons name={collection === "favorites" ? "heart-outline" : collection === "hidden" ? "eye-off-outline" : collection === "archived" ? "archive-outline" : "book-outline"} size={22} color={Colors.accent} />
       <Text style={styles.title}>{title}</Text><Ionicons name={expanded ? "chevron-up" : "chevron-down"} size={22} color={Colors.muted} />
     </Pressable>
     {expanded ? <>
       {recipes.isLoading ? <Text style={styles.meta}>Loading recipes...</Text> : null}
       {recipes.isError ? <Button label="Retry recipes" icon="refresh" onPress={() => { void recipes.refetch(); }} /> : null}
-      {recipes.data && !recipes.data.pages.flat().length ? <Text style={styles.empty}>{q ? "No matching recipes." : "No recipes here yet."}</Text> : null}
+      {recipes.data && !recipes.data.pages.flat().length ? <Text style={styles.empty}>{q ? "No matching recipes." : collection === "favorites" ? "No favorite recipes yet." : "No recipes here yet."}</Text> : null}
       {recipes.data?.pages.flat().map(recipe => <View key={recipe.id} style={styles.row}>
         <Pressable accessibilityRole="button" accessibilityLabel={`Open ${recipe.name}`} style={styles.open} onPress={() => onOpen(recipe)}
-          onLongPress={collection === "library" ? () => onActions(recipe) : undefined} delayLongPress={420}>
+          onLongPress={libraryActions ? () => onActions(recipe) : undefined} delayLongPress={420}>
           <RecipePhoto photoUrl={recipe.photo_url} accessibilityLabel={`${recipe.name} photo`} style={styles.photo} />
           <View style={styles.body}><Text style={styles.name}>{recipe.name}</Text><Text style={styles.meta}>{recipe.total_minutes ?? "?"} min</Text></View>
         </Pressable>
-        {collection === "library" ? <Pressable accessibilityRole="button" accessibilityLabel={`Actions for ${recipe.name}`} style={styles.icon} onPress={() => onActions(recipe)}>
-          <Ionicons name="ellipsis-horizontal" size={22} color={Colors.ink} /></Pressable> :
+        {libraryActions ? <View style={styles.actions}>
+          {collection === "favorites" ? <Button label="" icon="heart-dislike-outline" variant="quiet-danger" accessibilityLabel={`Remove ${recipe.name} from favorites`}
+            disabled={offline || removeFavorite.isPending} onPress={() => removeFavorite.mutate(recipe)} /> : null}
+          <Pressable accessibilityRole="button" accessibilityLabel={`Actions for ${recipe.name}`} style={styles.icon} onPress={() => onActions(recipe)}>
+            <Ionicons name="ellipsis-horizontal" size={22} color={Colors.ink} /></Pressable>
+        </View> :
           <Button label={collection === "hidden" ? "Unhide" : "Restore"} accessibilityLabel={`${collection === "hidden" ? "Unhide" : "Restore"} ${recipe.name}`}
             icon={collection === "hidden" ? "eye-outline" : "arrow-undo-outline"} disabled={restore.isPending} onPress={() => restore.mutate(recipe)} />}
       </View>)}
       {recipes.hasNextPage ? <Button label="More recipes" icon="chevron-down" disabled={recipes.isFetchingNextPage} onPress={() => { void recipes.fetchNextPage(); }} /> : null}
       {restore.isError ? <Text accessibilityRole="alert" style={styles.error}>{restore.error instanceof Error ? restore.error.message : "Unable to restore recipe."}</Text> : null}
+      {removeFavorite.isError ? <Text accessibilityRole="alert" style={styles.error}>{removeFavorite.error instanceof Error ? removeFavorite.error.message : "Unable to remove favorite."}</Text> : null}
     </> : null}
   </View>;
 }
@@ -62,5 +74,6 @@ const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   open: { flexDirection: "row", flex: 1, minWidth: 170, gap: 10, alignItems: "center" }, body: { flex: 1, minWidth: 0 },
   photo: { width: 64, height: 64, borderRadius: 6, backgroundColor: Colors.border }, name: { color: Colors.ink, fontSize: 16, fontWeight: "700", lineHeight: 22 },
   meta: { color: Colors.muted, marginTop: 2 }, empty: { color: Colors.muted, paddingVertical: 16 },
-  icon: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }, error: { color: Colors.danger }
+  icon: { width: 44, height: 44, alignItems: "center", justifyContent: "center" }, error: { color: Colors.danger },
+  actions: { alignItems: "center", flexShrink: 0 }
 }));

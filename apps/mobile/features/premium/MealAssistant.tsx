@@ -64,7 +64,10 @@ export function MealAssistant({ voiceEnabled, onClose, onSaved, initialMealDate 
         abort.current?.abort(); abort.current = null; inFlight.current = false;
         setBusy(false); setTranscribing(false);
       }
-      transcription.current = null; voiceRef.current.clear(); setVoiceFailure(false);
+      transcription.current = null;
+      // Native voice owns its lifecycle so an Android permission dialog cannot cancel startup.
+      if (Platform.OS === "web") voiceRef.current.clear();
+      setVoiceFailure(false);
     };
     // Native permission prompts can be inactive without actually backgrounding the app.
     const subscription = AppState.addEventListener("change", state => { if (state === "background") background(); });

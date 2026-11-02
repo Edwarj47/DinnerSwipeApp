@@ -172,7 +172,7 @@ function NutritionRecipesScreen() {
           <SearchField accessibilityLabel="Search recipes" value={q} onChangeText={value => { setQ(value); setSelectedFeedbackIds([]); }} placeholder="Search saved recipes" />
         </>
       ) : null}
-      {pageMode === "library" ? (["library", "hidden", "archived"] as const).map(collection => <RecipeLibrarySection
+      {pageMode === "library" ? (["library", "favorites", "hidden", "archived"] as const).map(collection => <RecipeLibrarySection
         key={collection} collection={collection} q={q} onOpen={setSelectedRecipe} onActions={recipe => { setActionStatus(""); setQuickActionRecipe(recipe); }} />) : null}
       {pageMode === "review" ? <>
         {review.isLoading ? <Text style={styles.subtitle}>Loading feedback...</Text> : null}

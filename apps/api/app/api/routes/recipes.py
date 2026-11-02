@@ -56,7 +56,7 @@ def list_recipes(
     max_total_minutes: int | None = Query(default=None, ge=1, le=1440),
     limit: int = Query(30, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    collection: Literal["library", "hidden", "archived"] | None = None,
+    collection: Literal["library", "favorites", "hidden", "archived"] | None = None,
     discover: bool = False,
 ) -> list[dict[str, object]]:
     query = accessible_recipes_query(current_user, include_archived=collection == "archived")
@@ -69,6 +69,10 @@ def list_recipes(
         )
     elif collection == "hidden":
         query = query.where(Recipe.id.in_(hidden_ids))
+    elif collection == "favorites":
+        query = query.where(
+            Recipe.id.in_(select(Favorite.recipe_id).where(Favorite.user_id == current_user.id))
+        )
     if owned_only:
         query = query.where(Recipe.owner_user_id == current_user.id)
     if q:
@@ -362,9 +366,20 @@ def undo_swipe(request_id: str, db: DbDep, current_user: BasicUser) -> dict[str,
 
 @router.post("/{recipe_id}/favorite")
 def favorite(recipe_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
+    if not db.scalar(accessible_recipes_query(current_user).where(Recipe.id == recipe_id)):
+        raise HTTPException(404, "Recipe not found")
     if not db.scalar(
         select(Favorite).where(Favorite.user_id == current_user.id, Favorite.recipe_id == recipe_id)
     ):
         db.add(Favorite(user_id=current_user.id, recipe_id=recipe_id))
         db.commit()
     return {"status": "favorited"}
+
+
+@router.delete("/{recipe_id}/favorite")
+def unfavorite(recipe_id: str, db: DbDep, current_user: BasicUser) -> dict[str, str]:
+    db.execute(
+        delete(Favorite).where(Favorite.user_id == current_user.id, Favorite.recipe_id == recipe_id)
+    )
+    db.commit()
+    return {"status": "unfavorited"}

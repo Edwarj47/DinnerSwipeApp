@@ -1,6 +1,6 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, fireEvent, render, waitFor, within } from "@testing-library/react-native";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { AppState, AppStateStatus } from "react-native";
 import { MealAssistant } from "@/features/premium/MealAssistant";
 import { MacroCalculator } from "@/features/premium/MacroCalculator";
@@ -705,6 +705,10 @@ function enableVoice() {
     const [recording, setRecording] = useState(false);
     const [clip, setClip] = useState<Blob | null>(null);
     const reset = useCallback(() => { clear(); setRecording(false); setClip(null); return undefined; }, []);
+    useEffect(() => {
+      const listener = AppState.addEventListener("change", state => { if (state === "background" || state === "inactive") reset(); });
+      return () => listener.remove();
+    }, [reset]);
     invalidate = reset;
     return { supported: true, recording, audio: clip, error: "",
       start: async () => { setClip(null); setRecording(true); },
