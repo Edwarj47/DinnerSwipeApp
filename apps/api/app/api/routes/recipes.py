@@ -72,7 +72,7 @@ def list_recipes(
     elif collection == "favorites":
         query = query.where(
             Recipe.id.in_(select(Favorite.recipe_id).where(Favorite.user_id == current_user.id))
-        )
+        ).order_by(Recipe.id.desc())
     if owned_only:
         query = query.where(Recipe.owner_user_id == current_user.id)
     if q:

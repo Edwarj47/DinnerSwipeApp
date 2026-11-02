@@ -1,9 +1,10 @@
 from collections.abc import Callable
+from datetime import datetime
 
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models.entities import Favorite, HiddenRecipe, User, UserSubscription
+from app.models.entities import Favorite, HiddenRecipe, Recipe, User, UserSubscription
 from app.tests.test_recipe_nutrition_library import create
 
 
@@ -22,6 +23,9 @@ def test_favorites_collection_filters_before_search_and_pagination(
                 == 200
             )
     assert db_session.query(Favorite).count() == 2
+    for row in db_session.query(Recipe).all():
+        row.created_at = datetime(2026, 11, 2)
+    db_session.commit()
     url = "/api/v1/recipes?collection=favorites"
     response = client.get(url, headers=auth_headers)
     assert response.status_code == 200
@@ -33,6 +37,9 @@ def test_favorites_collection_filters_before_search_and_pagination(
     first = client.get(url + "&limit=1", headers=auth_headers).json()
     second = client.get(url + "&limit=1&offset=1", headers=auth_headers).json()
     assert len(first) == len(second) == 1 and first[0]["id"] != second[0]["id"]
+    assert [first[0]["id"], second[0]["id"]] == sorted(
+        [r["id"] for r in recipes[:2]], reverse=True
+    )
     assert client.get(url + "&offset=2", headers=auth_headers).json() == []
 
 
