@@ -1,7 +1,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient } from "@tanstack/react-query";
 import { AppState } from "react-native";
-import { apiFetch } from "./api";
+import { apiFetch, getStoredSessionIdentity } from "./api";
 import { AccentColor, parseAppearance } from "./appearancePalette";
 import { applyAppIcon } from "./appIcon";
 import { deviceOffline, offlineOwner, useOfflineStatus } from "./offlineStore";
@@ -14,15 +14,33 @@ let generation = 0, revision = 0;
 let storageWrites: Promise<unknown> = Promise.resolve();
 let iconWrites: Promise<unknown> = Promise.resolve();
 let iconRequest = 0;
+let startupOwner: string | null = null;
 
 function current(owner: string | null, version: number) { return generation === version && offlineOwner() === owner && useAppearance.getState().owner === owner; }
 export function resetAppearance(owner: string | null) {
-  const previous = useAppearance.getState().owner;
+  const state = useAppearance.getState(), previous = state.owner ?? startupOwner;
+  const accent = owner && owner === startupOwner && !state.owner ? state.savedAccent : "red";
+  startupOwner = null;
   generation++; revision++; iconRequest++;
-  useAppearance.setState({ owner, accent: "red", savedAccent: "red", ready: !owner && !!previous, pending: false, error: "", iconError: "" });
+  useAppearance.setState({ owner, accent, savedAccent: accent, ready: !owner && !!previous, pending: false, error: "", iconError: "" });
   if (!owner && previous) void syncAppearanceIcon();
 }
 useOfflineStatus.subscribe(() => { if (useAppearance.getState().owner !== offlineOwner()) resetAppearance(offlineOwner()); });
+
+export async function restoreStartupAppearance() {
+  const version = generation, started = revision, state = useAppearance.getState();
+  if (offlineOwner() || state.owner || state.ready || state.pending) return;
+  try {
+    const session = await getStoredSessionIdentity();
+    if (!session) return;
+    const raw = await AsyncStorage.getItem(PREFIX + session.owner);
+    if (!raw || !session.isCurrent() || version !== generation || started !== revision || offlineOwner() || useAppearance.getState().owner) return;
+    const { accent } = parseAppearance(JSON.parse(raw));
+    startupOwner = session.owner;
+    // Keep owner/ready unchanged: a cached color must never unlock content or change the launcher icon.
+    useAppearance.setState({ accent, savedAccent: accent });
+  } catch { /* A missing/unreadable cache must not prevent normal device authentication. */ }
+}
 
 function cache(owner: string, accent: AccentColor) {
   const task = storageWrites.then(() => AsyncStorage.setItem(PREFIX + owner, JSON.stringify({ accent })));

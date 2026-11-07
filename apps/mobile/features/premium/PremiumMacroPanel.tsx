@@ -351,8 +351,9 @@ export function PremiumMacroPanel() {
               onExport={() => exportMacros.mutate()}
             />
           ) : null}
-          {summary.data?.temporary_nutrition || (macroView === "day" ? selectedEntries.some(entry => entry.temporary_nutrition) :
-            (macroView === "analytics" ? analytics.data : calendarAnalytics.data)?.temporary_nutrition) ? <NutritionAttribution /> : null}
+          {!recipeLog && !calculator && !mealAssistant && (summary.data?.temporary_nutrition ||
+            (macroView === "day" ? selectedEntries.some(entry => entry.temporary_nutrition) :
+              (macroView === "analytics" ? analytics.data : calendarAnalytics.data)?.temporary_nutrition)) ? <NutritionAttribution /> : null}
         </>
       )}
       {summary.data?.unmatched_meals ? <Text style={styles.meta}>{summary.data.unmatched_meals} meals need macro review.</Text> : null}

@@ -5,6 +5,7 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 
 import { AuthGate } from "@/components/AuthGate";
 import { AppearanceProvider } from "@/components/AppearanceProvider";
+import { AppearanceBootstrap } from "@/components/AppearanceBootstrap";
 import { OfflineRuntime } from "@/components/OfflineRuntime";
 import { PlanningRuntime } from "@/components/PlanningRuntime";
 import { BiometricGate } from "@/components/BiometricGate";
@@ -20,6 +21,7 @@ export default function RootLayout() {
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.background }}>
       <QueryClientProvider client={queryClient}>
+        <AppearanceBootstrap>
         <BiometricGate>
           <AppearanceProvider>
           <AuthGate>
@@ -33,6 +35,7 @@ export default function RootLayout() {
           </AuthGate>
           </AppearanceProvider>
         </BiometricGate>
+        </AppearanceBootstrap>
       </QueryClientProvider>
     </GestureHandlerRootView>
   );

@@ -129,6 +129,18 @@ export async function getRefreshToken() {
   return getStorageItem(REFRESH_TOKEN_KEY);
 }
 
+// Presentation-only bootstrap: never refresh tokens, load account data or authorize a session.
+export async function getStoredSessionIdentity() {
+  const epoch = sessionEpoch;
+  const [owner, access, refresh] = await Promise.all([
+    getStorageItem(OFFLINE_OWNER_KEY), getStorageItem(ACCESS_TOKEN_KEY), getStorageItem(REFRESH_TOKEN_KEY)
+  ]);
+  const savedSession = access || refresh || (Platform.OS === "web" &&
+    (webAccess || webRefresh || webStorage()?.getItem(WEB_SESSION_KEY)));
+  if (epoch !== sessionEpoch || !owner || !savedSession) return null;
+  return { owner, isCurrent: () => epoch === sessionEpoch };
+}
+
 export async function clearAuthTokens() {
   sessionEpoch++;
   const previousOwner = offlineOwner() ?? await getStorageItem(OFFLINE_OWNER_KEY);

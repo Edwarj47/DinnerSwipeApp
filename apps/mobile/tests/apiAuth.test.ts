@@ -14,7 +14,8 @@ jest.mock("expo-secure-store", () => ({
   })
 }));
 
-import { apiFetch, clearAuthTokens, getRefreshToken, getToken, setAuthTokens } from "@/services/api";
+import { apiFetch, clearAuthTokens, getRefreshToken, getStoredSessionIdentity, getToken, setAuthTokens } from "@/services/api";
+import { offlineOwner, setOfflineOwner } from "@/services/offlineStore";
 
 function jsonResponse(body: unknown, status = 200) {
   return {
@@ -27,7 +28,26 @@ function jsonResponse(body: unknown, status = 200) {
 
 beforeEach(() => {
   mockSecureStore.clear();
+  setOfflineOwner(null);
   global.fetch = jest.fn();
+});
+
+test("appearance identity reads only an existing stored session without authentication, networking or offline access", async () => {
+  mockSecureStore.set("dinnerSwipeOfflineOwner", "owner-a");
+  expect(await getStoredSessionIdentity()).toBeNull();
+  mockSecureStore.set("dinnerSwipeRefreshToken", "fixture-refresh");
+  const identity = await getStoredSessionIdentity();
+  expect(identity?.owner).toBe("owner-a"); expect(identity?.isCurrent()).toBe(true);
+  expect(offlineOwner()).toBeNull(); expect(fetch).not.toHaveBeenCalled();
+  await clearAuthTokens(); expect(identity?.isCurrent()).toBe(false);
+});
+
+test("switching accounts invalidates a previously read appearance identity", async () => {
+  mockSecureStore.set("dinnerSwipeOfflineOwner", "owner-a");
+  mockSecureStore.set("dinnerSwipeAccessToken", "fixture-token");
+  const identity = await getStoredSessionIdentity();
+  await setAuthTokens({ access_token: "fixture-new", refresh_token: "fixture-new-refresh" });
+  expect(identity?.isCurrent()).toBe(false); expect(await getStoredSessionIdentity()).toBeNull();
 });
 
 test("stores and clears access and refresh tokens", async () => {

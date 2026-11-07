@@ -6,16 +6,16 @@ import { StyleSheet, TextInput } from "react-native";
 import { Button } from "@/components/Button";
 import { themeColors } from "@/components/theme";
 import { AppearanceSettings } from "@/features/settings/AppearanceSettings";
-import { apiFetch } from "@/services/api";
+import { apiFetch, getStoredSessionIdentity } from "@/services/api";
 import { applyAppIcon } from "@/services/appIcon";
-import { resetAppearance, restoreAppearance, seedAppearance, syncAppearanceIcon, updateAppearance, useAppearance } from "@/services/appearance";
+import { resetAppearance, restoreAppearance, restoreStartupAppearance, seedAppearance, syncAppearanceIcon, updateAppearance, useAppearance } from "@/services/appearance";
 import { ACCENT_OPTIONS, parseAppearance } from "@/services/appearancePalette";
 import { setDeviceOffline, setOfflineOwner } from "@/services/offlineStore";
 import { UserProfile } from "@/services/types";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-image", () => ({ Image: jest.requireActual("react-native").Image }));
-jest.mock("@/services/api", () => ({ apiFetch: jest.fn() }));
+jest.mock("@/services/api", () => ({ apiFetch: jest.fn(), getStoredSessionIdentity: jest.fn() }));
 jest.mock("@/services/appIcon", () => ({ applyAppIcon: jest.fn(async () => undefined) }));
 const request = jest.mocked(apiFetch), icon = jest.mocked(applyAppIcon);
 let client: QueryClient;
@@ -102,6 +102,68 @@ test("logout clears the theme and resets the native icon", async () => {
   await updateAppearance("teal", client); setOfflineOwner(null); await syncAppearanceIcon();
   expect(useAppearance.getState()).toMatchObject({ owner: null, accent: "red", savedAccent: "red" });
   expect(icon).toHaveBeenLastCalledWith("red");
+});
+
+async function coldStart(owner = "owner-a", accent = "green") {
+  setOfflineOwner(null); resetAppearance(null);
+  useAppearance.setState({ ready: false });
+  await syncAppearanceIcon(); icon.mockClear(); request.mockClear();
+  await AsyncStorage.setItem("dinnerSwipe.appearance.v1." + owner, JSON.stringify({ accent }));
+  jest.mocked(getStoredSessionIdentity).mockResolvedValue({ owner, isCurrent: () => true });
+}
+
+test("startup restores only the saved color before authentication without an owner, API call or icon change", async () => {
+  await coldStart();
+  await restoreStartupAppearance();
+  expect(useAppearance.getState()).toMatchObject({ owner: null, accent: "green", savedAccent: "green", ready: false });
+  expect(request).not.toHaveBeenCalled(); expect(icon).not.toHaveBeenCalled();
+  setOfflineOwner("owner-a");
+  expect(useAppearance.getState()).toMatchObject({ owner: "owner-a", accent: "green", ready: false });
+  await restoreAppearance("owner-a");
+  expect(useAppearance.getState()).toMatchObject({ accent: "green", ready: true });
+});
+
+test("startup color cannot carry into a different account or survive sign-out", async () => {
+  await coldStart(); await restoreStartupAppearance();
+  setOfflineOwner("owner-b");
+  expect(useAppearance.getState()).toMatchObject({ owner: "owner-b", accent: "red", savedAccent: "red" });
+  await coldStart(); await restoreStartupAppearance(); resetAppearance(null);
+  await syncAppearanceIcon();
+  expect(useAppearance.getState()).toMatchObject({ owner: null, accent: "red", savedAccent: "red" });
+  expect(icon).toHaveBeenLastCalledWith("red");
+});
+
+test("startup never uses an orphaned account color without a saved session", async () => {
+  await coldStart(); jest.mocked(getStoredSessionIdentity).mockResolvedValue(null);
+  await restoreStartupAppearance();
+  expect(useAppearance.getState().accent).toBe("red");
+});
+
+test.each(["corrupt", "unreadable", "invalid"])("startup tolerates a %s cache", async kind => {
+  await coldStart();
+  if (kind === "unreadable") jest.spyOn(AsyncStorage, "getItem").mockRejectedValueOnce(new Error("Unavailable"));
+  else await AsyncStorage.setItem("dinnerSwipe.appearance.v1.owner-a", kind === "corrupt" ? "{" : JSON.stringify({ accent: "#ffffff" }));
+  try { await restoreStartupAppearance(); expect(useAppearance.getState().accent).toBe("red"); }
+  finally { jest.restoreAllMocks(); }
+});
+
+test.each(["logout", "switch", "server", "expired"])("late startup cache cannot override %s", async reason => {
+  await coldStart();
+  let resolve!: (value: string) => void;
+  const spy = jest.spyOn(AsyncStorage, "getItem").mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  let current = true;
+  jest.mocked(getStoredSessionIdentity).mockResolvedValue({ owner: "owner-a", isCurrent: () => current });
+  const task = restoreStartupAppearance();
+  await waitFor(() => expect(resolve).toBeDefined());
+  if (reason === "logout") resetAppearance(null);
+  if (reason === "switch" || reason === "server") {
+    const owner = reason === "switch" ? "owner-b" : "owner-a";
+    setOfflineOwner(owner); seedAppearance({ accent: "blue" }, owner);
+  }
+  if (reason === "expired") current = false;
+  resolve(JSON.stringify({ accent: "green" })); await task;
+  expect(useAppearance.getState().accent).toBe(reason === "switch" || reason === "server" ? "blue" : "red");
+  spy.mockRestore();
 });
 
 function Form() {

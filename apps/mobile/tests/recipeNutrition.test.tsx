@@ -60,6 +60,24 @@ test("Log meal preserves a sauce recipe category instead of defaulting to Dinner
   } finally { screen.close(); }
 });
 
+test("provider credit appears once on the active logger instead of duplicating behind it", async () => {
+  request.mockImplementation(async path => path.endsWith("subscription/status") ? { premium_active: true } :
+    path.includes("/nutrition/calculations/") ? { id: "calc-1", servings: 4,
+      totals: { calories: 1600, protein_g: 80, carbs_g: null, fat_g: 0, fiber_g: null },
+      temporary_nutrition: true, nutrition_unavailable: false } : {});
+  const screen = mount(<RecipeNutritionPanel recipe={{ ...recipe, calculator_id: "calc-1" }} />);
+  try {
+    await screen.findByText("Powered by fatsecret Platform API");
+    expect(screen.getAllByText("Powered by fatsecret Platform API")).toHaveLength(1);
+    fireEvent.press(await screen.findByLabelText("Log meal"));
+    await screen.findByLabelText("Calculated Calories");
+    expect(screen.getAllByText("Powered by fatsecret Platform API")).toHaveLength(1);
+    fireEvent.press(screen.getByLabelText("Close recipe log"));
+    await waitFor(() => expect(screen.queryByLabelText("Calculated Calories")).toBeNull());
+    expect(screen.getAllByText("Powered by fatsecret Platform API")).toHaveLength(1);
+  } finally { screen.close(); }
+});
+
 test("recipe picker logging preserves a custom meal type and permits an explicit change", async () => {
   request.mockResolvedValue([{ ...recipe, meal_type: "side_dish" }]);
   const screen = mount(<RecipeMacroLogger onClose={jest.fn()} />);

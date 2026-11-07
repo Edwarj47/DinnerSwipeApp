@@ -25,6 +25,16 @@ recipe yield and saves ingredients plus per-serving nutrition. Saved stacks can
 be reopened through Edit nutrition or a linked macro entry. Logging a saved
 recipe and weekly Ate confirmations retain serving scaling.
 
+Recipe logging displays read-only calculated calories, protein, carbs, fat and
+fiber for the selected portions. Recipe calculations are divided by their yield;
+logged-entry calculation responses are already scaled to the saved portion and
+are adjusted only by the ratio between edited and saved servings. Missing values
+stay unknown, including after provider-view expiry or failed refresh. Offline
+logging does not display cached provider totals. The existing in-memory query
+and NutritionRuntime expiry rules apply; the preview never writes resolved
+nutrition into the save payload. Notes have a visible optional label and a
+theme-colored placeholder.
+
 AI meal review recommends a food match from the existing bounded search results,
 preferring matching food names, stated brands, and preparation methods. Compatible
 servings and explicitly reported quantities are prefilled and marked Recommended;
@@ -64,6 +74,11 @@ The app includes the official attribution link wherever database nutrition is
 displayed, public legal-page attribution, provider terms in app terms, and a
 one-time account acceptance before using database lookup. When store listings are published, include:
 "Powered by fatsecret nutrition API" (www.fatsecret.com).
+
+When a nutrition logger, calculator or meal-assistant modal is active, its parent
+view suppresses its background credit so the active nutrition view carries the
+single attribution. This does not remove the provider credit from displayed
+nutrition or replace attribution with one-time terms acceptance.
 
 Sources: https://platform.fatsecret.com/terms,
 https://platform.fatsecret.com/docs/guides/storable-data,

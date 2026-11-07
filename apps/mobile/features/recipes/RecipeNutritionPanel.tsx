@@ -57,7 +57,7 @@ export function RecipeNutritionPanel({ recipe, onUpdated }: { recipe: Recipe; on
         {(subscription.data?.premium_active ?? subscription.data?.active) && !recipe.is_archived ? <Button label="Log meal" icon="add-circle-outline" variant="primary" onPress={() => setLogging(true)} /> : null}
       </View>
     </>}
-    {calculated.data?.temporary_nutrition ? <NutritionAttribution /> : null}
+    {calculated.data?.temporary_nutrition && !logging && !calculator ? <NutritionAttribution /> : null}
     {calculated.isError || calculated.data?.nutrition_unavailable ? <Text style={styles.error}>Database nutrition is temporarily unavailable.</Text> : null}
     {save.isError ? <Text accessibilityRole="alert" style={styles.error}>{save.error instanceof Error ? save.error.message : "Unable to save nutrition."}</Text> : null}
     {reloadRecipe.isError ? <Text accessibilityRole="alert" style={styles.error}>Recipe saved. Reopen it to refresh the details.</Text> : null}

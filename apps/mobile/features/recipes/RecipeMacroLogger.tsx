@@ -18,6 +18,7 @@ import { MacroConfirmation, Recipe } from "@/services/types";
 import { NutritionFields } from "./NutritionFields";
 import { nutritionInputs, parseNutrition, scaleNutritionInputs } from "./recipeNutrition";
 import { RecipePhoto } from "./RecipePhoto";
+import { CalculatedEntryNutrition } from "./CalculatedEntryNutrition";
 
 // Mount a fresh logger for each entry so drafts cannot leak between recipes or days.
 export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayISO(), onClose }: {
@@ -41,6 +42,7 @@ export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayIS
   const [savedFingerprint, setSavedFingerprint] = useState("");
   const [recipeStatus, setRecipeStatus] = useTransientMessage();
   const recipeRequest = useRef<{ fingerprint: string; id: string } | null>(null);
+  const calculationId = entry?.calculator_id ?? recipe?.calculator_id;
   const recipeFingerprint = JSON.stringify({ name: recipeName.trim(), label, portions, nutrition, notes });
   const recipes = useInfiniteQuery({
     queryKey: ["recipes", "macro-picker", q], initialPageParam: 0,
@@ -138,12 +140,15 @@ export function RecipeMacroLogger({ recipe: initialRecipe, entry, date = todayIS
             <TextInput accessibilityLabel="Servings eaten" keyboardType="decimal-pad" value={portions} onChangeText={changePortions} style={[styles.input, styles.flexInput, { textAlign: "center" }]} />
             <Button label="" accessibilityLabel="Half serving more" icon="add" disabled={Number(portions) >= 20} onPress={() => changePortions(String(Math.min(20, Number(portions) + 0.5)))} />
           </View>
-          <Text style={styles.name}>Nutrition for this entry</Text>
-          {recipe?.calculator_id || entry?.calculator_id ? <Text style={styles.meta}>Nutrition is calculated from the saved ingredients and servings.</Text> : <>
+          {calculationId ? <CalculatedEntryNutrition calculationId={calculationId}
+            servings={portions.trim() ? Number(portions) : NaN} savedEntryServings={entry?.servings_consumed} /> : <>
+            <Text style={styles.name}>Nutrition for this entry</Text>
             <NutritionFields value={nutrition} onChange={setNutrition} />
             {recipe ? <Button label="Use recipe values" icon="refresh" onPress={() => { setNutrition(nutritionInputs(recipe.nutrition, scaledPortions)); setLocalError(""); }} /> : null}
           </>}
-          <TextInput accessibilityLabel="Recipe log notes" placeholder="Notes" value={notes} onChangeText={setNotes} style={styles.input} />
+          <View style={styles.notes}><Text style={styles.name}>Notes (optional)</Text>
+            <TextInput accessibilityLabel="Recipe log notes" placeholder="Notes" placeholderTextColor={Colors.muted} value={notes} onChangeText={setNotes} style={styles.input} />
+          </View>
           <Button label={save.isPending ? "Saving..." : "Save entry"} icon="checkmark" variant="primary" disabled={working || !isISODate(mealDate)} onPress={() => save.mutate()} />
           {entry ? <>
             <Button label="Delete entry" icon="trash-outline" disabled={working} onPress={() => remove.mutate()} />
@@ -176,5 +181,5 @@ const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   recipe: { flexDirection: "row", gap: 10, alignItems: "center", paddingVertical: 12, borderBottomWidth: 1, borderColor: Colors.border },
   photo: { width: 48, height: 48, borderRadius: 6 }, name: { color: Colors.ink, fontSize: 16, fontWeight: "700" },
   meta: { color: Colors.muted }, error: { color: Colors.danger }, success: { color: Colors.basil },
-  recipeName: { gap: 8 }, cancel: { marginLeft: "auto" }
+  recipeName: { gap: 8 }, notes: { gap: 5 }, cancel: { marginLeft: "auto" }
 }));
