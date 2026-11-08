@@ -20,7 +20,8 @@ type Props = {
   children: ReactNode;
 };
 
-const PUBLIC_PATHS = new Set(["/privacy", "/terms"]);
+// Deletion remains authenticated by AuthGate, but must not require payment.
+const ACCESS_INDEPENDENT_PATHS = new Set(["/privacy", "/terms", "/delete-account"]);
 
 export function SubscriptionGate({ children }: Props) {
   const styles = useThemedStyles(createStyles);
@@ -41,7 +42,7 @@ export function SubscriptionGate({ children }: Props) {
     hadAccess.current = false;
   }, [session.email, setStatus]);
 
-  const shouldCheck = session.authenticated && !PUBLIC_PATHS.has(pathname);
+  const shouldCheck = session.authenticated && !ACCESS_INDEPENDENT_PATHS.has(pathname);
   const subscription = useQuery({
     queryKey: ["subscription-status"],
     queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status"),
@@ -130,6 +131,7 @@ export function SubscriptionGate({ children }: Props) {
                 <Text style={styles.subtitle}>{subscription.error instanceof Error ? subscription.error.message : "Check your connection and try again."}</Text>
                 <Button label="Try again" icon="refresh" disabled={subscription.isFetching} onPress={async () => { await reconnectOffline(); await subscription.refetch(); }} />
                 <Button label="Switch account" icon="swap-horizontal" onPress={() => { void switchAccount(); }} />
+                <Link href="/delete-account" style={styles.onAccentLink}>Account deletion</Link>
               </>
             )}
           </View>
@@ -218,6 +220,7 @@ export function SubscriptionGate({ children }: Props) {
                 </View>
               </View>
               <View style={styles.footerRow}>
+                <Link href="/delete-account" style={styles.legalLink}>Account deletion</Link>
                 <View style={styles.legalRow}>
                   <Link href="/privacy" style={styles.legalLink}>
                     Privacy
@@ -279,6 +282,7 @@ const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
   legalRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", flex: 1 },
   legalText: { color: Colors.muted },
   legalLink: { color: Colors.accentStrong, fontWeight: "900" },
+  onAccentLink: { color: "#fff", fontWeight: "900" },
   nativeNote: { color: Colors.muted, lineHeight: 20, fontSize: 13 },
   statusRow: { flexDirection: "row", gap: 8, alignItems: "center" },
   status: { color: Colors.basil, fontWeight: "700", flex: 1 },

@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from "react-native";
+import { Link } from "expo-router";
 
 import { BrandLogo } from "@/components/BrandLogo";
 import { Screen } from "@/components/Screen";
@@ -34,6 +35,7 @@ export function LegalPage({ eyebrow, title, effectiveDate, sections }: Props) {
           <Text style={styles.body}>{section.body}</Text>
         </View>
       ))}
+      <Link href="/delete-account" style={styles.accountLink}>Account deletion</Link>
       <NutritionAttribution />
     </Screen>
   );
@@ -46,5 +48,6 @@ const styles = StyleSheet.create({
   date: { color: Colors.muted, marginTop: 2 },
   section: { backgroundColor: Colors.surface, borderColor: Colors.border, borderWidth: 1, borderRadius: 8, padding: 14, gap: 8, marginBottom: 10 },
   sectionTitle: { color: Colors.ink, fontWeight: "900", fontSize: 18 },
-  body: { color: Colors.muted, lineHeight: 22 }
+  body: { color: Colors.muted, lineHeight: 22 },
+  accountLink: { color: Colors.basil, fontWeight: "700", marginVertical: 16 }
 });

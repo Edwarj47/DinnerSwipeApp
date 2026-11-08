@@ -20,6 +20,7 @@ import { Button } from "@/components/Button";
 import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
 import { AuthSessionContext } from "@/services/session";
 import { usePlannerStore } from "@/stores/plannerStore";
+import { deviceOffline } from "@/services/offlineStore";
 import {
   addAuthChangeListener,
   apiFetch,
@@ -49,14 +50,16 @@ export function AuthGate({ children }: Props) {
   const styles = useThemedStyles(createStyles);
   const Colors = useThemeColors();
   const pathname = usePathname();
+  const accountTools = pathname === "/delete-account";
   const queryClient = useQueryClient();
   const [checking, setChecking] = useState(true);
   const [connectionError, setConnectionError] = useState("");
   const [authenticated, setAuthenticated] = useState(false);
   const [sessionEmail, setSessionEmail] = useState<string | null>(null);
+  const [sessionUserId, setSessionUserId] = useState<string | null>(null);
   const sessionCheck = useRef(0);
   const previousEmail = useRef<string | null>(null);
-  const [authMode, setAuthMode] = useState<AuthMode>("choice");
+  const [authMode, setAuthMode] = useState<AuthMode>(accountTools ? "login" : "choice");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -84,7 +87,8 @@ export function AuthGate({ children }: Props) {
       }
       setAuthenticated(false);
       setSessionEmail(null);
-      setAuthMode("choice");
+      setSessionUserId(null);
+      setAuthMode(pathname === "/delete-account" ? "login" : "choice");
       setPassword("");
       setConfirmPassword("");
       setAcceptedLegal(false);
@@ -93,7 +97,8 @@ export function AuthGate({ children }: Props) {
       return;
     }
     try {
-      const session = await apiFetch<{ email: string }>("/api/v1/auth/status");
+      if (pathname === "/delete-account" && deviceOffline()) await reconnectOffline({ accountOnly: true });
+      const session = await apiFetch<{ email: string; user_id: string }>("/api/v1/auth/status");
       if (check !== sessionCheck.current) return;
       if (previousEmail.current && previousEmail.current !== session.email) {
         queryClient.clear();
@@ -101,6 +106,7 @@ export function AuthGate({ children }: Props) {
       }
       previousEmail.current = session.email;
       setSessionEmail(session.email);
+      setSessionUserId(session.user_id ?? null);
       setAuthenticated(true);
       setConnectionError("");
     } catch (error) {
@@ -109,6 +115,7 @@ export function AuthGate({ children }: Props) {
       else setConnectionError(error instanceof Error ? error.message : "Unable to check your session. Try again.");
       setAuthenticated(false);
       setSessionEmail(null);
+      setSessionUserId(null);
     } finally {
       if (check === sessionCheck.current) setChecking(false);
     }
@@ -161,6 +168,7 @@ export function AuthGate({ children }: Props) {
     setPendingMode(mode);
     setStatus("");
     try {
+      if (accountTools && deviceOffline()) await reconnectOffline({ accountOnly: true });
       const tokens = await apiFetch<{ access_token: string; refresh_token: string }>(`/api/v1/auth/${mode}`, {
         method: "POST",
         body: JSON.stringify({
@@ -194,7 +202,7 @@ export function AuthGate({ children }: Props) {
     }
   }
 
-  const session = { authenticated, email: sessionEmail };
+  const session = { authenticated, email: sessionEmail, userId: sessionUserId };
   if (PUBLIC_PATHS.has(pathname) || authenticated) {
     return <AuthSessionContext.Provider value={session}>{children}</AuthSessionContext.Provider>;
   }
@@ -213,7 +221,7 @@ export function AuthGate({ children }: Props) {
         ) : connectionError ? (
           <View style={styles.centered}>
             <Text style={styles.subtitle}>{connectionError}</Text>
-            <Button label="Try again" icon="refresh" onPress={async () => { setChecking(true); await reconnectOffline(); await checkSession(); }} />
+            <Button label="Try again" icon="refresh" onPress={async () => { setChecking(true); await reconnectOffline({ accountOnly: accountTools }); await checkSession(); }} />
             <Button label="Switch account" icon="swap-horizontal" onPress={() => void clearAuthTokens()} />
           </View>
         ) : (
@@ -222,9 +230,9 @@ export function AuthGate({ children }: Props) {
               <View style={styles.hero}>
                 <BrandLogo size={94} framed />
                 <Text style={styles.kicker}>Dinner Swipe</Text>
-                <Text style={styles.title}>Plan dinners everyone can vote on.</Text>
+                <Text style={styles.title}>{accountTools ? "Delete your Dinner Swipe account" : "Plan dinners everyone can vote on."}</Text>
                 <Text style={styles.subtitle}>
-                  Save recipes, build your week, and share group picks without the spreadsheet.
+                  {accountTools ? "Sign in to request account and data deletion. A subscription is not required." : "Save recipes, build your week, and share group picks without the spreadsheet."}
                 </Text>
               </View>
               <View style={styles.panel}>
@@ -352,7 +360,7 @@ export function AuthGate({ children }: Props) {
                     </Pressable>
                   </>
                 ) : null}
-                {authMode !== "choice" ? (
+                {authMode !== "choice" && !accountTools ? (
                   <Button
                     label={authMode === "login" ? "Create account instead" : "Log in instead"}
                     icon={authMode === "login" ? "person-add" : "log-in"}

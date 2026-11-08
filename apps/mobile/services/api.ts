@@ -210,6 +210,8 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
   const owner = offlineOwner();
   const method = init.method?.toUpperCase() ?? "GET";
+  // An unrelated service outage must not prevent an online account-deletion request.
+  const accountControl = path === "/api/v1/auth/account/deletion-request" || path === "/api/v1/auth/account/delete-request";
   const stored = owner ? await loadOffline(owner).catch(() => undefined) : undefined;
   if (owner && stored?.subscription?.offline_sync_version === 1 && method !== "GET") {
     let edit = makeOfflineEdit(path, init, stored);
@@ -232,9 +234,10 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
     }
   }
   try {
-    if (deviceOffline()) throw new ConnectionError("You're offline. Reconnect to use this action.");
+    if (deviceOffline() && !accountControl) throw new ConnectionError("You're offline. Reconnect to use this action.");
     const result = await authorizedFetch<T>(path, init, true);
     if (epoch !== sessionEpoch) throw new ApiError("Account changed. Try again.", 409);
+    if (accountControl) setDeviceOffline(false);
     if (path === "/api/v1/auth/status") {
       const session = result as { user_id?: string; email: string };
       if (session.user_id) {
@@ -439,12 +442,13 @@ export async function syncOffline(): Promise<void> {
   return syncInFlight;
 }
 
-export async function reconnectOffline() {
+export async function reconnectOffline({ accountOnly = false }: { accountOnly?: boolean } = {}) {
   try {
     await request("/api/v1/health", {});
     setDeviceOffline(false);
     if (!await getToken()) return;
     await apiFetch("/api/v1/auth/status");
+    if (accountOnly) return;
     await apiFetch("/api/v1/subscription/status");
     await syncOffline();
     emitAuthChanged();

@@ -4,7 +4,12 @@ This roadmap keeps Dinner Swipe easy to edit, test, deploy, and eventually submi
 
 ## Current State
 
-Reviewed 2026-09-26. Configuration is not evidence of a finished native build.
+For the current verified state and remaining release blockers, use
+[Launch Readiness: November 8, 2026](launch-readiness-20261108.md).
+Expo SDK/native voice/EAS Update have since been integrated. The inventory and
+milestones below are the **historical September 26 baseline**, not a claim that
+those SDK/update steps are still outstanding or that store readiness is complete.
+Configuration is not evidence of a finished native build or store acceptance.
 
 - Production web URL: `https://dinner.dcss.dev`
 - API health URL: `https://dinner.dcss.dev/api/v1/health`

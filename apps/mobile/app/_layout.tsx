@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { Stack } from "expo-router";
+import { Stack, usePathname } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { GestureHandlerRootView } from "react-native-gesture-handler";
 
@@ -18,6 +18,7 @@ const queryClient = new QueryClient({ defaultOptions: {
 } });
 
 export default function RootLayout() {
+  const accountControls = usePathname() === "/delete-account";
   return (
     <GestureHandlerRootView style={{ flex: 1, backgroundColor: Colors.background }}>
       <QueryClientProvider client={queryClient}>
@@ -26,9 +27,9 @@ export default function RootLayout() {
           <AppearanceProvider>
           <AuthGate>
             <SubscriptionGate>
-              <OfflineRuntime />
-              <NutritionRuntime />
-              <PlanningRuntime />
+              {/* Keep provider-cache expiry alive without app-data traffic on account tools. */}
+              <NutritionRuntime refresh={!accountControls} />
+              {!accountControls ? <><OfflineRuntime /><PlanningRuntime /></> : null}
               <Stack screenOptions={{ headerShown: false }} />
             </SubscriptionGate>
             <StatusBar style="dark" />

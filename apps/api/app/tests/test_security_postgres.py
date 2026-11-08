@@ -20,11 +20,75 @@ from alembic import command
 from app.core.config import settings
 from app.core.rate_limit import DatabaseRateLimiter
 from app.core.security import hash_password, verify_password
-from app.models.entities import RefreshToken, User
+from app.models.entities import AuditEvent, RefreshToken, User
 from app.models.security import MediaObject, RateLimitCounter
 from app.services.auth_tokens import hash_refresh_token, invalidate_user_sessions
 from app.services.media_storage import LocalMediaStorageAdapter
 from app.services.private_media import normalize_image, store_image
+
+
+@pytest.mark.skipif(
+    not os.environ.get("SECURITY_TEST_DATABASE_URL"), reason="Disposable PostgreSQL only"
+)
+def test_deletion_request_retries_are_atomic(monkeypatch: pytest.MonkeyPatch) -> None:
+    from app.api.routes.auth import request_account_deletion
+    from app.core.rate_limit import auth_rate_limiter
+    from app.schemas.common import AccountDeletionRequest
+
+    url = os.environ["SECURITY_TEST_DATABASE_URL"]
+    parsed = make_url(url)
+    assert (
+        parsed.host == "127.0.0.1" and parsed.port == 15413 and parsed.database == "security_test"
+    )
+    monkeypatch.setattr(settings, "database_url", url)
+    command.upgrade(Config("alembic.ini"), "head")
+    engine = create_engine(url)
+    sessions = sessionmaker(engine)
+    monkeypatch.setattr(auth_rate_limiter, "sessions", sessions)
+    password = str(uuid4())
+    with sessions() as db:
+        user = User(email=f"{uuid4()}@example.com", password_hash=hash_password(password))
+        db.add(user)
+        db.commit()
+        identity = user.id
+    barrier = threading.Barrier(4)
+
+    def submit(_: int) -> dict[str, str]:
+        with sessions() as db:
+            user = db.get(User, identity)
+            assert user
+            barrier.wait(timeout=10)
+            request = Request(
+                {"type": "http", "method": "POST", "headers": [], "client": ("127.0.0.1", 12345)}
+            )
+            return request_account_deletion(
+                AccountDeletionRequest(current_password=password, confirmation="DELETE"),
+                request,
+                Response(),
+                db,
+                user,
+            )
+
+    try:
+        with ThreadPoolExecutor(max_workers=4) as workers:
+            responses = list(workers.map(submit, range(4)))
+        assert responses == [{"status": "deletion_requested"}] * 4
+        with sessions() as db:
+            assert (
+                db.scalar(
+                    select(func.count())
+                    .select_from(AuditEvent)
+                    .where(
+                        AuditEvent.user_id == identity,
+                        AuditEvent.event_type == "account_deletion_requested",
+                    )
+                )
+                == 1
+            )
+            remaining = db.get(User, identity)
+            assert remaining and remaining.is_active
+    finally:
+        engine.dispose()
 
 
 @pytest.mark.skipif(
@@ -44,6 +108,8 @@ def test_shared_rate_limit_and_photo_quota_are_atomic(
     engine = create_engine(url)
     sessions = sessionmaker(engine)
     key = f"concurrent-security-{uuid4()}"
+    with sessions() as db:
+        prior_counter_keys = set(db.scalars(select(RateLimitCounter.key)))
 
     def reserve(_: int) -> int:
         try:
@@ -57,7 +123,10 @@ def test_shared_rate_limit_and_photo_quota_are_atomic(
             results = list(workers.map(reserve, range(8)))
         assert sorted(results) == [200] * 3 + [429] * 5
         with sessions() as db:
-            assert db.scalar(select(func.max(RateLimitCounter.count))) == 3
+            counters = db.scalars(
+                select(RateLimitCounter).where(RateLimitCounter.key.not_in(prior_counter_keys))
+            ).all()
+            assert len(counters) == 1 and counters[0].count == 3
             user = User(email=f"{uuid4()}@example.com", password_hash=str(uuid4()))
             db.add(user)
             db.commit()

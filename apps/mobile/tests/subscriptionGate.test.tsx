@@ -1,6 +1,7 @@
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { fireEvent, render, waitFor } from "@testing-library/react-native";
 import { Text } from "react-native";
+import { usePathname } from "expo-router";
 
 import { SubscriptionGate } from "@/features/subscription/SubscriptionGate";
 import { apiFetch } from "@/services/api";
@@ -8,7 +9,7 @@ import { AuthSessionContext, useAppAccess } from "@/services/session";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-linking", () => ({ openURL: jest.fn() }));
-jest.mock("expo-router", () => ({ usePathname: () => "/", Link: () => null }));
+jest.mock("expo-router", () => ({ usePathname: jest.fn(() => "/"), Link: () => null }));
 jest.mock("@/components/BrandLogo", () => ({ BrandLogo: () => null }));
 jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: jest.requireActual("react-native").View }));
 jest.mock("@/services/api", () => ({
@@ -120,4 +121,21 @@ test("subscription failure keeps protected screens closed and allows retry", asy
     fireEvent.press(screen.getByLabelText("Try again"));
     await screen.findByText("Choose your plan");
   } finally { screen.unmount(); client.clear(); }
+});
+
+test("deletion route does not require subscription access or load protected screens", async () => {
+  jest.mocked(usePathname).mockReturnValue("/delete-account");
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  jest.mocked(apiFetch).mockClear();
+  const screen = render(<QueryClientProvider client={client}>
+    <AuthSessionContext.Provider value={{ authenticated: true, email: "unpaid@example.com" }}>
+      <SubscriptionGate><Text>Account deletion form</Text><AppScreens /></SubscriptionGate>
+    </AuthSessionContext.Provider>
+  </QueryClientProvider>);
+  try {
+    expect(screen.getByText("Account deletion form")).toBeTruthy();
+    expect(screen.queryByText("Choose your plan")).toBeNull();
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(screen.queryByText("Waiting for recipes")).toBeNull();
+  } finally { screen.unmount(); client.clear(); jest.mocked(usePathname).mockReturnValue("/"); }
 });

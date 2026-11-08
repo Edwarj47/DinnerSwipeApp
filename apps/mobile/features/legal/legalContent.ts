@@ -69,6 +69,21 @@ export const privacySections = [
       "Data Centric Software Solutions LLC does not sell personal information. Information may be shared with service providers, infrastructure providers, professional advisors, or other parties when reasonably necessary to operate the app, protect systems, provide support, or comply with legal obligations."
   },
   {
+    title: "Macro Tracking And Workout Records",
+    body:
+      "If you use macro tracking, Dinner Swipe stores your meal dates, labels, portions, notes, targets and saved calculation references. Manually entered nutrition can be stored; nutrition returned by fatsecret remains temporary as described above. Workout features store your templates, weekly choices and performance logs, including exercise names, sets, repetitions, weights, durations, completion status and notes you enter. These records can reveal health and fitness information. Shared workout templates and group planning choices are visible to the relevant group; your personal performance logs are account-specific. Dinner Swipe does not currently connect to Garmin or read Apple Health or Android Health Connect data."
+  },
+  {
+    title: "Device Settings And Security",
+    body:
+      "The app can save appearance preferences, selected groups, measurement units and optional planning-reminder preferences. Native session credentials are stored using the device's secure-storage facilities; web sign-in uses session cookies. Optional biometric unlock uses your device's authentication service. Dinner Swipe does not receive or store your fingerprint or facial biometric template. Reminder permission is optional; planning reminders are scheduled locally on your device."
+  },
+  {
+    title: "Account Data And Deletion Requests",
+    body:
+      "You can export account data in User settings, Account, Data and legal. You can request deletion there or at https://dinner.dcss.dev/delete-account after signing in, even without an active subscription. Requests currently require manual review and do not immediately erase your account or cancel billing. The request status remains available on the deletion page. Contact dinnerswipe@dcss.dev about a pending request or if you cannot access your account. Shared group records, subscription obligations and backup handling must be resolved during review; a pending request is not confirmation that deletion has been completed."
+  },
+  {
     title: "Contact",
     body:
       "Privacy questions can be sent to dinnerswipe@dcss.dev."

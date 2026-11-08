@@ -14,8 +14,8 @@ jest.mock("expo-secure-store", () => ({
   })
 }));
 
-import { apiFetch, clearAuthTokens, getRefreshToken, getStoredSessionIdentity, getToken, setAuthTokens } from "@/services/api";
-import { offlineOwner, setOfflineOwner } from "@/services/offlineStore";
+import { apiFetch, clearAuthTokens, getRefreshToken, getStoredSessionIdentity, getToken, reconnectOffline, setAuthTokens } from "@/services/api";
+import { deviceOffline, offlineOwner, setDeviceOffline, setOfflineOwner } from "@/services/offlineStore";
 
 function jsonResponse(body: unknown, status = 200) {
   return {
@@ -29,6 +29,7 @@ function jsonResponse(body: unknown, status = 200) {
 beforeEach(() => {
   mockSecureStore.clear();
   setOfflineOwner(null);
+  setDeviceOffline(false);
   global.fetch = jest.fn();
 });
 
@@ -58,6 +59,42 @@ test("stores and clears access and refresh tokens", async () => {
   await clearAuthTokens();
   expect(await getToken()).toBeNull();
   expect(await getRefreshToken()).toBeNull();
+});
+
+test.each(["GET", "POST"])("account deletion %s preserves the form's account binding after another session switches", async (method) => {
+  await setAuthTokens({ access_token: "account-b-access", refresh_token: "account-b-refresh" });
+  setOfflineOwner("account-b");
+  jest.mocked(fetch).mockResolvedValue(jsonResponse({ detail: "Account changed. Reload before continuing." }, 409));
+  const path = method === "GET" ? "/api/v1/auth/account/deletion-request" : "/api/v1/auth/account/delete-request";
+  await expect(apiFetch(path, {
+    method, headers: { "X-Dinner-Account": "account-a" },
+    ...(method === "POST" ? { body: JSON.stringify({ current_password: "fixture-password", confirmation: "DELETE" }) } : {})
+  })).rejects.toMatchObject({ status: 409 });
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect((jest.mocked(fetch).mock.calls[0][1]?.headers as Headers).get("X-Dinner-Account")).toBe("account-a");
+});
+
+test.each(["GET", "POST"])("account deletion %s retries the server despite an earlier subscription outage", async method => {
+  await setAuthTokens({ access_token: "account-a", refresh_token: "refresh-a" });
+  setOfflineOwner("account-a"); setDeviceOffline(true);
+  jest.mocked(fetch).mockResolvedValue(jsonResponse({ status: "deletion_requested" }));
+  const path = method === "GET" ? "/api/v1/auth/account/deletion-request" : "/api/v1/auth/account/delete-request";
+  await apiFetch(path, { method, headers: { "X-Dinner-Account": "account-a" },
+    ...(method === "POST" ? { body: JSON.stringify({ current_password: "fixture-password", confirmation: "DELETE" }) } : {}) });
+  expect(fetch).toHaveBeenCalledTimes(1);
+  expect(deviceOffline()).toBe(false);
+});
+
+test("account-only reconnection does not require billing or synchronize pending app edits", async () => {
+  await setAuthTokens({ access_token: "account-a", refresh_token: "refresh-a" });
+  setDeviceOffline(true);
+  jest.mocked(fetch).mockResolvedValueOnce(jsonResponse({ status: "ok" }))
+    .mockResolvedValueOnce(jsonResponse({ user_id: "account-a", email: "fixture@example.com" }));
+  await reconnectOffline({ accountOnly: true });
+  expect(jest.mocked(fetch).mock.calls.map(([url]) => new URL(String(url)).pathname)).toEqual([
+    "/api/v1/health", "/api/v1/auth/status"
+  ]);
+  expect(deviceOffline()).toBe(false);
 });
 
 test("refreshes an expired access token and retries the request once", async () => {

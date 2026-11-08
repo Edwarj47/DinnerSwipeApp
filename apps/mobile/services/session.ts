@@ -1,8 +1,9 @@
 import { createContext, useContext } from "react";
 
-export const AuthSessionContext = createContext<{ authenticated: boolean; email: string | null }>({
+export const AuthSessionContext = createContext<{ authenticated: boolean; email: string | null; userId?: string | null }>({
   authenticated: false,
-  email: null
+  email: null,
+  userId: null
 });
 
 export const AppAccessContext = createContext(false);

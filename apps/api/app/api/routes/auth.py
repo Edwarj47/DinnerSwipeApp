@@ -565,12 +565,27 @@ def export_account(db: DbDep, current_user: CurrentUser, response: Response) -> 
 
 @router.post("/account/delete-request")
 def request_account_deletion(
-    payload: AccountDeletionRequest, db: DbDep, current_user: CurrentUser
+    payload: AccountDeletionRequest,
+    request: Request,
+    response: Response,
+    db: DbDep,
+    current_user: CurrentUser,
 ) -> dict[str, str]:
+    response.headers["Cache-Control"] = "no-store"
+    check_auth_rate_limit(
+        request, "account_deletion", current_user.id, subject_limit=5, ip_limit=30
+    )
+    # Serialize retries and re-read credentials changed since authentication.
+    db.refresh(current_user, with_for_update=True)
+    if not current_user.is_active:
+        raise HTTPException(401, "Invalid token")
     if not verify_password(payload.current_password, current_user.password_hash):
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Current password is incorrect"
         )
+    if _pending_deletion_request(db, current_user.id) is not None:
+        db.commit()
+        return {"status": "deletion_requested"}
     db.add(
         AuditEvent(
             user_id=current_user.id,
@@ -582,3 +597,28 @@ def request_account_deletion(
     )
     db.commit()
     return {"status": "deletion_requested"}
+
+
+def _pending_deletion_request(db: DbDep, user_id: str) -> AuditEvent | None:
+    return db.scalar(
+        select(AuditEvent)
+        .where(
+            AuditEvent.user_id == user_id,
+            AuditEvent.event_type == "account_deletion_requested",
+            AuditEvent.payload["status"].as_string() == "pending_manual_review",
+        )
+        .order_by(AuditEvent.created_at, AuditEvent.id)
+        .limit(1)
+    )
+
+
+@router.get("/account/deletion-request")
+def account_deletion_status(
+    db: DbDep, current_user: CurrentUser, response: Response
+) -> dict[str, str | None]:
+    response.headers["Cache-Control"] = "no-store"
+    pending = _pending_deletion_request(db, current_user.id)
+    return {
+        "status": "pending_manual_review" if pending else "not_requested",
+        "requested_at": pending.created_at.isoformat() + "Z" if pending else None,
+    }

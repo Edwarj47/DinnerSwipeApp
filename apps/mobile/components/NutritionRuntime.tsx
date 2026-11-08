@@ -1,10 +1,12 @@
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { AppState } from "react-native";
 import { expireNutrition, hasTemporaryNutrition } from "@/services/temporaryNutrition";
 
-export function NutritionRuntime() {
+export function NutritionRuntime({ refresh = true }: { refresh?: boolean }) {
   const client = useQueryClient();
+  const refreshEnabled = useRef(refresh);
+  refreshEnabled.current = refresh;
   useEffect(() => {
     const deadlines = new Map<string, number>();
     const unsubscribe = client.getQueryCache().subscribe(event => {
@@ -20,7 +22,8 @@ export function NutritionRuntime() {
         const query = client.getQueryCache().get(hash);
         if (query) {
           client.setQueryData(query.queryKey, expireNutrition(query.state.data));
-          void client.invalidateQueries({ queryKey: query.queryKey, exact: true });
+          void client.invalidateQueries({ queryKey: query.queryKey, exact: true,
+            refetchType: refreshEnabled.current ? "active" : "none" });
         }
       }
     }

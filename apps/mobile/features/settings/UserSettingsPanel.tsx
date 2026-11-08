@@ -25,6 +25,7 @@ import { WorkoutSettings } from "@/features/workouts/WorkoutSettings";
 import { useWorkoutMode } from "@/services/workoutMode";
 import { DailyAdditionsSection } from "@/features/contentAutomation/DailyAdditionsSection";
 import { AppearanceSettings } from "./AppearanceSettings";
+import { AccountDeletionPanel } from "./AccountDeletionPanel";
 
 type UserSection = "account" | "appearance" | "meals" | "macros" | "discover" | "workouts" | "daily-additions";
 type AccountAction = "overview" | "reset" | "data" | "delete";
@@ -56,8 +57,6 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
   const [dislikes, setDislikes] = useState<string[]>([]);
   const [preferredRetailer, setPreferredRetailer] = useState<GroceryRetailer>("walmart");
   const [status, setStatus] = useTransientMessage();
-  const [deletePassword, setDeletePassword] = useState("");
-  const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [biometricSettings, setBiometricSettings] = useState<BiometricSettings | null>(null);
   const [biometricBusy, setBiometricBusy] = useState(false);
   useEffect(() => {
@@ -158,19 +157,6 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
     onSuccess: async (data) => {
       await deliverAccountExport(data);
       setStatus("Account export generated.");
-    },
-    onError: (error) => setStatus(String(error))
-  });
-  const deleteAccount = useMutation({
-    mutationFn: () =>
-      apiFetch<{ status: string }>("/api/v1/auth/account/delete-request", {
-        method: "POST",
-        body: JSON.stringify({ current_password: deletePassword, confirmation: deleteConfirmation })
-      }),
-    onSuccess: () => {
-      setDeletePassword("");
-      setDeleteConfirmation("");
-      setStatus("Account deletion request recorded for manual review.");
     },
     onError: (error) => setStatus(String(error))
   });
@@ -279,8 +265,6 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
             <View style={styles.divider} />
             {accountAction !== "overview" ? <View style={styles.sectionHeader}>
               <Button label="Back" icon="arrow-back" variant="quiet" onPress={() => {
-                setDeletePassword("");
-                setDeleteConfirmation("");
                 setAccountAction(accountAction === "delete" ? "data" : "overview");
               }} />
             </View> : null}
@@ -314,11 +298,7 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
             ) : null}
             {accountAction === "delete" ? (
               <View style={styles.deleteBox}>
-                <Text style={styles.deleteTitle}>Delete account request</Text>
-                <Text style={styles.meta}>This records a request for manual review. It does not immediately remove recipes or household data.</Text>
-                <TextInput accessibilityLabel="Password for account deletion request" secureTextEntry value={deletePassword} onChangeText={setDeletePassword} placeholder="Current password" style={styles.input} />
-                <TextInput accessibilityLabel="Type DELETE to request account deletion" value={deleteConfirmation} onChangeText={setDeleteConfirmation} placeholder="Type DELETE" autoCapitalize="characters" style={styles.input} />
-                <Button label="Request deletion" icon="trash" variant="danger" onPress={() => deleteAccount.mutate()} disabled={deleteConfirmation !== "DELETE" || deleteAccount.isPending} />
+                <AccountDeletionPanel />
               </View>
             ) : null}
           </View>
