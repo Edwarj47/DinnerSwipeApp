@@ -233,7 +233,7 @@ export function UserSettingsPanel({ initialSection, initialFocus, initialResetTo
       {status ? <Text style={styles.status}>{status}</Text> : null}
       <SettingsSection title="Account" icon="person-outline" expanded={section === "account"} onToggle={() => setSection(section === "account" ? null : "account")}>
           <SettingsSection title="Subscription" icon="card-outline" initiallyOpen={initialFocus === "subscription"}><SubscriptionPanel /></SettingsSection>
-          <SettingsSection title="Account details" icon="person-circle-outline" initiallyOpen={!initialFocus}>
+          <SettingsSection title="Account details" icon="person-circle-outline" initiallyOpen={Boolean(initialResetToken)}>
           <View style={styles.panel}>
             {authStatus.data ? (
               <View style={styles.securityBox}>

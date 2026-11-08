@@ -1,8 +1,9 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import * as Linking from "expo-linking";
-import { useMemo, useState } from "react";
-import { Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, ViewStyle } from "react-native";
+import { useFocusEffect } from "expo-router";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { AppState, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, ViewStyle } from "react-native";
 
 import { Button } from "@/components/Button";
 import { useTransientMessage } from "@/components/useTransientMessage";
@@ -27,6 +28,7 @@ import { HistoricalWeek } from "@/features/planner/HistoricalWeek";
 import { monday, WeekNavigator } from "@/features/planner/WeekNavigator";
 import { WorkoutWeek } from "@/features/workouts/WorkoutWeek";
 import { useIsWorkoutMode } from "@/features/workouts/WorkoutRuntime";
+import { useAuthSession } from "@/services/session";
 
 type WeeklySlot = WeeklyPlan["slots"][number];
 type SlotPatch = Partial<Omit<WeeklySlot, "id" | "recipe_name" | "recipe_photo_url" | "recipe_total_minutes" | "recipe_difficulty">>;
@@ -42,19 +44,51 @@ function NutritionWeekScreen() {
 }
 
 function WeekSelection() {
-  const [selected, setSelected] = useState<string | null>(null);
-  const [current, setCurrent] = useState(monday(todayISO()));
+  const space = useSpace(), session = useAuthSession();
+  const client = useQueryClient();
+  const scope = `${session.userId ?? session.email ?? "session"}:${space.key}:nutrition`;
+  const selected = usePlannerStore(state => state.viewedWeeks[scope]);
+  const viewWeek = usePlannerStore(state => state.viewWeek);
+  const [current, setCurrent] = useState(() => client.getQueryData<WeeklyPlan>(space.queryKey("weekly-plan"))?.week_start ?? monday(todayISO()));
   function navigate(week: string, currentWeek = current) {
-    setCurrent(currentWeek); setSelected(week >= currentWeek ? null : week);
+    setCurrent(currentWeek); viewWeek(scope, week);
   }
-  return selected ? <HistoricalWeek week={selected} currentWeek={current} onChange={navigate} /> : <WeekContent onNavigate={navigate} />;
+  return selected && selected < current ? <HistoricalWeek week={selected} currentWeek={current} onChange={navigate} />
+    : <WeekContent key={selected ?? "current"} selectedWeek={selected} onCurrentWeek={setCurrent} onNavigate={navigate} />;
 }
 
-function WeekContent({ onNavigate }: { onNavigate: (week: string, current: string) => void }) {
+function WeekContent({ selectedWeek, onCurrentWeek, onNavigate }: { selectedWeek?: string; onCurrentWeek: (week: string) => void; onNavigate: (week: string, current: string) => void }) {
   const styles = useThemedStyles(createStyles);
   const Colors = useThemeColors();
   const space = useSpace();
-  const apiFetch = <T,>(path: string, init?: RequestInit) => init ? remoteFetch<T>(space.path(path), init) : remoteFetch<T>(space.path(path));
+  const currentQuery = useCurrentWeek();
+  const currentWeek = currentQuery.data?.week_start ?? monday(todayISO());
+  const week = selectedWeek ?? currentWeek;
+  const future = week > currentWeek;
+  const currentPlanStart = currentQuery.data?.week_start;
+  useEffect(() => { if (currentPlanStart) onCurrentWeek(currentPlanStart); }, [currentPlanStart, onCurrentWeek]);
+  const futureQuery = useQuery<Omit<WeeklyPlan, "id"> & { id: string | null }>({
+    queryKey: [...space.queryKey("weekly-plan"), "week", week],
+    queryFn: () => remoteFetch(space.path(`/api/v1/weekly-plans/current?week_start=${week}`)),
+    enabled: future && !space.isLoading && !space.isError, retry: false
+  });
+  const { refetch: refreshFuture } = futureQuery;
+  useFocusEffect(useCallback(() => {
+    if (!future || space.isLoading || space.isError) return;
+    void refreshFuture();
+    const subscription = AppState.addEventListener("change", state => { if (state === "active") void refreshFuture(); });
+    const timer = setInterval(() => { if (AppState.currentState === "active") void refreshFuture(); }, 30_000);
+    return () => { subscription.remove(); clearInterval(timer); };
+  }, [future, refreshFuture, space.isLoading, space.isError]));
+  const selectedQuery = future ? futureQuery : currentQuery;
+  const data = !space.isLoading && !space.isError && selectedQuery.data?.week_start === week ? selectedQuery.data : undefined;
+  const isLoading = space.isLoading || selectedQuery.isLoading;
+  const error = space.error ?? selectedQuery.error;
+  const refetch = space.isError ? space.refetch : selectedQuery.refetch;
+  const apiFetch = <T,>(path: string, init?: RequestInit) => {
+    const targeted = init && path.startsWith("/api/v1/weekly-plans/current") ? `${path}?week_start=${week}` : path;
+    return init ? remoteFetch<T>(space.path(targeted), init) : remoteFetch<T>(space.path(targeted));
+  };
   const [portion, setPortion] = useState(1);
   const { width, fontScale } = useWindowDimensions();
   const compact = width < 360 || (width < 480 && fontScale > 1.2);
@@ -65,7 +99,6 @@ function WeekContent({ onNavigate }: { onNavigate: (week: string, current: strin
   const [resetScope, setResetScope] = useState<{ date: string | null; label: string } | null>(null);
   const [addDay, setAddDay] = useState<{ iso: string; label: string } | null>(null);
   const [duplicateSlot, setDuplicateSlot] = useState<WeeklySlot | null>(null);
-  const { data, isLoading, error, refetch } = useCurrentWeek();
   const profile = useQuery({ queryKey: ["profile"], queryFn: () => apiFetch<UserProfile>("/api/v1/profile"), retry: false });
   const subscription = useQuery({ queryKey: ["subscription-status"], queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status"), retry: false });
   const sortedSlots = useMemo(() => [...(data?.slots ?? [])].sort((a, b) => a.sort_order - b.sort_order), [data?.slots]);
@@ -82,7 +115,7 @@ function WeekContent({ onNavigate }: { onNavigate: (week: string, current: strin
       method: "POST", body: JSON.stringify({ recipe_id: recipeId, slot_date: date })
     }),
     onSuccess: async plan => {
-      queryClient.setQueryData(plan.household_id ? ["weekly-plan", plan.household_id] : ["weekly-plan"], plan);
+      cachePlan(queryClient, plan);
       setAddDay(null);
       setStatusIsError(false);
       setStatus("Meal added.");
@@ -95,7 +128,7 @@ function WeekContent({ onNavigate }: { onNavigate: (week: string, current: strin
       method: "POST", body: JSON.stringify({ recipe_id: slot.recipe_id, slot_date: date, servings: slot.servings })
     }),
     onSuccess: async (plan, { date }) => {
-      queryClient.setQueryData(plan.household_id ? ["weekly-plan", plan.household_id] : ["weekly-plan"], plan);
+      cachePlan(queryClient, plan);
       setDuplicateSlot(null);
       setExpandedSlotId(null);
       setStatusIsError(false);
@@ -112,7 +145,7 @@ function WeekContent({ onNavigate }: { onNavigate: (week: string, current: strin
     onSuccess: async (plan, scope) => {
       const returnedIds = (data?.slots ?? []).filter((slot: WeeklySlot) => !scope.date || slot.slot_date === scope.date).flatMap((slot: WeeklySlot) => slot.recipe_id ? [slot.recipe_id] : []);
       usePlannerStore.getState().returnToDiscover(returnedIds, plannerContextKey(plan));
-      queryClient.setQueryData(plan.household_id ? ["weekly-plan", plan.household_id] : ["weekly-plan"], plan);
+      cachePlan(queryClient, plan);
       setResetScope(null);
       setExpandedSlotId(null);
       setStatusIsError(false);
@@ -126,7 +159,7 @@ function WeekContent({ onNavigate }: { onNavigate: (week: string, current: strin
     onSuccess: async (plan, id) => {
       const recipeId = data?.slots.find((slot: WeeklySlot) => slot.id === id)?.recipe_id;
       if (recipeId) usePlannerStore.getState().returnToDiscover([recipeId], plannerContextKey(plan));
-      queryClient.setQueryData(plan.household_id ? ["weekly-plan", plan.household_id] : ["weekly-plan"], plan);
+      cachePlan(queryClient, plan);
       setExpandedSlotId(null);
       setStatusIsError(false);
       setStatus("Meal removed.");
@@ -138,7 +171,7 @@ function WeekContent({ onNavigate }: { onNavigate: (week: string, current: strin
     mutationFn: ({ slot, patch }: { slot: WeeklySlot; patch: SlotPatch }) =>
       apiFetch<WeeklyPlan>(`/api/v1/weekly-plans/current/slots/${slot.id}`, { method: "PUT", body: JSON.stringify(patch) }),
     onSuccess: async (plan) => {
-      queryClient.setQueryData(plan.household_id ? ["weekly-plan", plan.household_id] : ["weekly-plan"], plan);
+      cachePlan(queryClient, plan);
       setStatusIsError(false);
       setStatus("Plan updated.");
       await invalidatePlan(queryClient);
@@ -193,7 +226,7 @@ function WeekContent({ onNavigate }: { onNavigate: (week: string, current: strin
       method: "POST", body: JSON.stringify({ ordered_slot_ids: ids })
     }),
     onSuccess: async plan => {
-      queryClient.setQueryData(plan.household_id ? ["weekly-plan", plan.household_id] : ["weekly-plan"], plan);
+      cachePlan(queryClient, plan);
       setStatusIsError(false); setStatus("Meal order updated.");
       await invalidatePlan(queryClient);
     },
@@ -211,13 +244,13 @@ function WeekContent({ onNavigate }: { onNavigate: (week: string, current: strin
     <Screen scroll={false} contentWidth={960} header={
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>This Week</Text>
+          <Text style={styles.title}>{future ? "Upcoming Week" : "This Week"}</Text>
           <Text style={styles.subtitle}>{isLoading ? "Loading plan..." : `${plannedCount} ${plannedCount === 1 ? "meal" : "meals"} planned`}</Text>
         </View>
-        {space.canManage ? <Button label="" accessibilityLabel="Reset week" icon="refresh" disabled={!data || busy} onPress={() => requestReset({ date: null, label: "This week" })} /> : null}
+        {space.canManage ? <Button label="" accessibilityLabel="Reset week" icon="refresh" disabled={!data || busy} onPress={() => requestReset({ date: null, label: future ? "Selected week" : "This week" })} /> : null}
       </View>}>
       <SpaceSelector />
-      {data ? <WeekNavigator week={data.week_start} currentWeek={data.week_start} onChange={week => onNavigate(week, data.week_start)} /> : null}
+      <WeekNavigator week={week} currentWeek={currentWeek} allowFuture onChange={value => onNavigate(value, currentWeek)} />
       {status ? <Text accessibilityLiveRegion="polite" accessibilityRole={statusIsError ? "alert" : undefined} style={[styles.status, statusIsError && styles.error]}>{status}</Text> : null}
       {error ? <Button label="Retry loading week" icon="refresh" onPress={() => { void refetch(); }} /> : null}
       {!premiumActive ? (
@@ -308,9 +341,9 @@ function WeekContent({ onNavigate }: { onNavigate: (week: string, current: strin
                       onPress={() => { duplicateMeal.reset(); setDuplicateSlot(slot); }} /> : null}
                   </View>
                   </> : null}
-                  {space.groupId && premiumActive ? <View style={styles.controls}><Text style={styles.meta}>Your portion</Text><Button label="" icon="remove" accessibilityLabel="Decrease your portion" disabled={busy || portion <= 1} onPress={() => setPortion(portion - 1)} /><Text style={styles.servings}>{portion}</Text><Button label="" icon="add" accessibilityLabel="Increase your portion" disabled={busy || portion >= 30} onPress={() => setPortion(portion + 1)} /></View> : null}
+                  {space.groupId && premiumActive && !future ? <View style={styles.controls}><Text style={styles.meta}>Your portion</Text><Button label="" icon="remove" accessibilityLabel="Decrease your portion" disabled={busy || portion <= 1} onPress={() => setPortion(portion - 1)} /><Text style={styles.servings}>{portion}</Text><Button label="" icon="add" accessibilityLabel="Increase your portion" disabled={busy || portion >= 30} onPress={() => setPortion(portion + 1)} /></View> : null}
                   <View style={styles.actions}>
-                    {slot.recipe_id && premiumActive ? (
+                    {slot.recipe_id && premiumActive && !future ? (
                       <>
                         <Button label="Ate" icon="checkmark-circle" variant="primary" disabled={busy} onPress={() => confirmMeal.mutate({ slot, mealStatus: "ate" })} />
                         <Button label="Skipped" icon="close-circle" variant="quiet" disabled={busy} onPress={() => confirmMeal.mutate({ slot, mealStatus: "skipped" })} />
@@ -327,7 +360,7 @@ function WeekContent({ onNavigate }: { onNavigate: (week: string, current: strin
           </WeekDropDay>
         ))}
       </WeekDrag>
-      <RecipePicker weeklyChoices={!space.groupId} householdId={space.groupId} title={`Add to ${addDay?.label ?? "day"}`} visible={!!addDay} busy={addMeal.isPending} error={addMeal.error instanceof Error ? addMeal.error.message : undefined}
+      <RecipePicker weeklyChoices={!space.groupId && !future} householdId={space.groupId} title={`Add to ${addDay?.label ?? "day"}`} visible={!!addDay} busy={addMeal.isPending} error={addMeal.error instanceof Error ? addMeal.error.message : undefined}
         onClose={() => setAddDay(null)} onSelect={recipe => { if (addDay) addMeal.mutate({ recipeId: recipe.id, date: addDay.iso || null }); }} />
       <Modal visible={!!duplicateSlot} transparent animationType="fade" onRequestClose={() => { if (!duplicateMeal.isPending) setDuplicateSlot(null); }}>
         <View style={styles.modalBackdrop}>
@@ -372,6 +405,12 @@ async function invalidatePlan(queryClient: ReturnType<typeof useQueryClient>) {
     queryClient.invalidateQueries({ queryKey: ["recipes", "picker"] }),
     queryClient.invalidateQueries({ queryKey: ["grocery"] })
   ]);
+}
+
+function cachePlan(client: ReturnType<typeof useQueryClient>, plan: WeeklyPlan) {
+  const key = plan.household_id ? ["weekly-plan", plan.household_id] : ["weekly-plan"];
+  client.setQueryData([...key, "week", plan.week_start], plan);
+  client.setQueryData<WeeklyPlan>(key, current => current?.week_start === plan.week_start ? plan : current);
 }
 
 function weekDates(weekStart: string) {

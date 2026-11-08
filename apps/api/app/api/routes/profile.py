@@ -20,6 +20,7 @@ from app.services.discovery import DISCOVER_KEY
 from app.services.discovery import preferences as discover_preferences
 from app.services.planning import (
     CURSOR_KEY,
+    PREPLANNED_KEY,
     SETTINGS_KEY,
     planning_settings,
     update_planning_settings,
@@ -97,6 +98,7 @@ def update_profile(
                 COMPLETED_FEEDBACK_KEY,
                 SETTINGS_KEY,
                 CURSOR_KEY,
+                PREPLANNED_KEY,
                 DEFAULT_GROUP_KEY,
                 DISPLAY_NAME_KEY,
                 DISCOVER_KEY,

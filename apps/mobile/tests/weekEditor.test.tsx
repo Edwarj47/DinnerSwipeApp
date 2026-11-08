@@ -7,6 +7,7 @@ import GroceryScreen from "@/app/(tabs)/grocery";
 import { Button } from "@/components/Button";
 import { apiFetch } from "@/services/api";
 import { todayISO } from "@/features/premium/macroDates";
+import { usePlannerStore } from "@/stores/plannerStore";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: ({ name }: { name: string }) => {
   const { View } = jest.requireActual("react-native");
@@ -14,7 +15,7 @@ jest.mock("@expo/vector-icons", () => ({ Ionicons: ({ name }: { name: string }) 
 } }));
 jest.mock("expo-image", () => ({ Image: () => null }));
 jest.mock("expo-linking", () => ({ openURL: jest.fn() }));
-jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn() }), useLocalSearchParams: () => ({}) }));
+jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn() }), useLocalSearchParams: () => ({}), useFocusEffect: () => undefined }));
 jest.mock("@/components/Screen", () => ({ Screen: ({ header, children }: { header: React.ReactNode; children: React.ReactNode }) => <>{header}{children}</> }));
 jest.mock("@/features/planner/WeekDrag", () => ({
   WeekDrag: jest.requireActual("react-native").View,
@@ -41,6 +42,7 @@ let removed = false;
 const plan = () => ({ id: "week", week_start: "2026-09-28", slots: [...(removed ? [] : [{ ...slot }]), ...extraSlots] });
 
 beforeEach(() => {
+  usePlannerStore.getState().resetSession();
   slot = { ...initialSlot };
   quantity = 1;
   failUpdate = false;
@@ -48,16 +50,17 @@ beforeEach(() => {
   extraSlots = [];
   removed = false;
   request.mockReset().mockImplementation(async (path, options) => {
-    if (path === "/api/v1/weekly-plans/current/slots/slot" && options?.method === "PUT") {
+    const pathname = path.split("?")[0];
+    if (pathname === "/api/v1/weekly-plans/current/slots/slot" && options?.method === "PUT") {
       if (failUpdate) throw new Error("Unable to save day. Try again.");
       Object.assign(slot, JSON.parse(String(options.body)));
     }
-    if (path === "/api/v1/weekly-plans/current/slots" && options?.method === "POST") {
+    if (pathname === "/api/v1/weekly-plans/current/slots" && options?.method === "POST") {
       if (failAction) throw new Error("Unable to duplicate meal. Try again.");
       const body = JSON.parse(String(options.body));
       extraSlots.push({ ...slot, ...body, id: "copy", sort_order: 1 });
     }
-    if (path === "/api/v1/weekly-plans/current/slots/slot" && options?.method === "DELETE") {
+    if (pathname === "/api/v1/weekly-plans/current/slots/slot" && options?.method === "DELETE") {
       if (failAction) throw new Error("Unable to remove meal. Try again.");
       removed = true;
     }
@@ -115,7 +118,7 @@ test.each([["Sunday, 10/4", "2026-10-04"], ["Any day", null]])("assigns %s and s
   try {
     await openEditor(screen);
     fireEvent.press(screen.getByRole("radio", { name: label! }));
-    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/weekly-plans/current/slots/slot", {
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/weekly-plans/current/slots/slot?week_start=2026-09-28", {
       method: "PUT", body: JSON.stringify({ slot_date: date })
     }));
     await screen.findByLabelText(`Day selection: ${label}`);
@@ -220,7 +223,7 @@ test.each([["Sunday, 10/4", "2026-10-04", "Sunday"], ["Monday, 9/28", "2026-09-2
     expect(screen.getAllByRole("button", { name: /^Duplicate meal to / })).toHaveLength(8);
     fireEvent.press(screen.getByLabelText(`Duplicate meal to ${label}`));
     await screen.findByText(`Meal duplicated to ${day}.`);
-    expect(request).toHaveBeenCalledWith("/api/v1/weekly-plans/current/slots", {
+    expect(request).toHaveBeenCalledWith("/api/v1/weekly-plans/current/slots?week_start=2026-09-28", {
       method: "POST", body: JSON.stringify({ recipe_id: "beef", slot_date: date, servings: 2 })
     });
     expect(slot).toEqual(initialSlot);
@@ -318,7 +321,7 @@ test("Remove clears the planned card without calling the nutrition deletion endp
     await screen.findByText("Meal removed.");
     expect(screen.queryByText("Ground Beef")).toBeNull();
     expect(screen.queryByLabelText("Done")).toBeNull();
-    expect(request).toHaveBeenCalledWith("/api/v1/weekly-plans/current/slots/slot", { method: "DELETE" });
+    expect(request).toHaveBeenCalledWith("/api/v1/weekly-plans/current/slots/slot?week_start=2026-09-28", { method: "DELETE" });
     expect(request.mock.calls.some(([path]) => path.startsWith("/api/v1/macros/"))).toBe(false);
   } finally { screen.close(); }
 });

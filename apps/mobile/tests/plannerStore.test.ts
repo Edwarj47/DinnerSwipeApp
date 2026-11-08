@@ -18,6 +18,19 @@ const recipe = {
   is_hidden: false
 };
 
+test("viewed weeks stay scoped to account/group and never change the Discover context", () => {
+  const store = usePlannerStore.getState();
+  store.resetSession();
+  store.syncWeek("personal:2026-11-02");
+  store.viewWeek("owner-a:personal:nutrition", "2026-11-09");
+  store.viewWeek("owner-a:family:nutrition", "2026-11-16");
+  expect(usePlannerStore.getState().weekStart).toBe("personal:2026-11-02");
+  expect(usePlannerStore.getState().viewedWeeks["owner-a:personal:nutrition"]).toBe("2026-11-09");
+  expect(usePlannerStore.getState().viewedWeeks["owner-b:personal:nutrition"]).toBeUndefined();
+  store.resetSession();
+  expect(usePlannerStore.getState().viewedWeeks).toEqual({});
+});
+
 test("records swipe and undo restores local selection", () => {
   usePlannerStore.setState({ selectedRecipes: [], history: [], offlineQueue: [] });
   usePlannerStore.getState().addSwipe({ recipe, action: "add" });

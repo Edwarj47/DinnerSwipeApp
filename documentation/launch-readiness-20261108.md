@@ -4,6 +4,74 @@
 a passing web build, or a recorded deletion request does not prove store readiness.
 Garmin and personal Garmin-key entry remain deferred.
 
+## Confirmed Owner Decisions
+
+Confirmed November 8, 2026:
+
+- Initial store availability is the United States and European Union member
+  states only. Configure those territories after store enrollment; do not infer
+  worldwide, UK, or all-EEA distribution. This is not a request to geoblock the
+  existing web service, and no store territory settings have been changed yet.
+- Deliberately shared content is retained after account deletion, preserving
+  existing visibility, group access and required attribution. Retention must not
+  turn private shared records into public/global content or keep unnecessary
+  personal identifiers attached.
+- A user who owns any non-personal group must transfer that group's ownership
+  before the account can be erased. Personal spaces do not require a transfer.
+  The deletion preflight and execution must both enforce this rule against
+  concurrent ownership changes; do not silently delete the group or appoint an
+  arbitrary replacement owner.
+- The owner will enroll in the developer programs. Enrollment is not yet
+  confirmed; prices/trials and backup/legal retention periods remain undecided.
+
+These decisions define the pending erasure implementation; this release still
+provides deletion request intake, not account erasure or subscription cancellation.
+
+## Next Actions And Ownership
+
+The next owner action is developer enrollment; engineering can continue in
+parallel. No enrollment, purchase, provider configuration, or public submission
+has been performed on the owner's behalf.
+
+### Owner
+
+1. Confirm the publishing legal entity. If the company is the publisher, enroll
+   organization accounts, complete identity/company verification, and gather
+   D-U-N-S, domain email and legal-authority information. Apple currently lists
+   USD 99 per year (regional pricing varies); Google lists USD 25 once.
+   [Apple enrollment](https://developer.apple.com/programs/enroll/),
+   [Google enrollment](https://support.google.com/googleplay/android-developer/answer/6112435?hl=en).
+2. Complete required agreements, fees, merchant/tax/bank details personally.
+   Configure the approved US/EU territories and confirm Basic/Premium prices
+   and trial policy.
+3. Confirm backup/legal retention periods before production erasure is enabled.
+   Shared-content retention and non-personal-group ownership transfer are
+   approved above. A recorded deletion request is not a completed deletion.
+4. Invite limited-permission developer access through the store consoles when
+   available. Do not send passwords, two-factor codes or private signing keys
+   in chat. Arrange physical Android/iOS testing and sandbox purchase accounts.
+   New personal Google accounts also need at least 12 continuously opted-in
+   testers for 14 days before applying for production access; this specific
+   requirement does not apply to organization accounts.
+   [Google personal-account testing](https://support.google.com/googleplay/android-developer/answer/14151465?hl=en).
+
+### Engineering
+
+- Implement resumable deletion, media cleanup, access revocation and isolation
+  tests in disposable databases; obtain owner approval for retention decisions
+  and any destructive production execution.
+- Build native purchase/restore and server verification with mocked failure,
+  replay and account-switch tests. Live products, receipts and sandbox purchase
+  acceptance depend on enrolled accounts and actual device testing. This needs
+  a new native runtime/binary, not just an EAS Update.
+- Prepare privacy/data-safety drafts, health/AI/audio disclosures, store assets,
+  reviewer instructions and the final regression checklist. Owner review and
+  legal declarations remain required.
+- Prepare release artifacts and internal testing after store configuration:
+  Android store bundle (AAB) and iOS archive/TestFlight, not only the preview APK.
+  Release approval, push/deploy, paid builds and public submission are separate
+  explicit actions.
+
 ## Released Polish
 
 Source `5ea46f2` was pushed, deployed to the web, and published to the Android
@@ -52,9 +120,9 @@ fulfillment requirements complete on the strength of intake tests.
 
 ### Fulfillment Still Needed
 
-1. Confirm retention of deliberately shared recipe/workout copies versus removal,
-   ownership transfer for populated groups, and a documented backup/legal
-   retention policy. Preserve other members' plans, grocery lists and history.
+1. Implement the approved shared-content retention and mandatory ownership
+   transfer for every non-personal group, preserving other members' plans,
+   groceries and history. Confirm the outstanding backup/legal retention policy.
 2. Add durable, resumable deletion state and retryable media cleanup, with fresh
    password confirmation and a clear preflight summary. Fence concurrent account
    writers, uploads, AI/ingestion jobs and late billing webhooks.
@@ -86,8 +154,9 @@ fulfilled flow and disclosures before submission.
 
 **Not implemented.** Current native preview purchase/coupon/portal actions still
 use Stripe. They must not be submitted unchanged as a globally compliant native
-purchase flow. Web Stripe billing can remain. Developer enrollments and launch
-countries have been requested but are not currently confirmed.
+purchase flow. Web Stripe billing can remain. The owner has approved US/EU
+availability, but developer enrollments and store product configuration are
+not yet confirmed.
 
 Native store work requires a new runtime and binary, not an update to APK 28:
 

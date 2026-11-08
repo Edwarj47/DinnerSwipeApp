@@ -167,6 +167,7 @@ test.each([false, undefined])("settings with automation flag %s hide Daily addit
     expect(screen.queryByLabelText("Expand Daily additions")).toBeNull();
     expect(screen.queryByLabelText("Collapse Daily additions")).toBeNull();
     fireEvent.press(screen.getByLabelText("Expand Account"));
+    fireEvent.press(screen.getByLabelText("Expand Account details"));
     await screen.findByText("daily@example.test");
     expect(screen.getByLabelText("Save name")).toBeTruthy();
     expect(screen.getByLabelText("Expand Subscription")).toBeTruthy();

@@ -96,13 +96,48 @@ def settings(group: Household) -> dict[str, Any]:
     )
 
 
-def current_plan(db: Session, user: User, household_id: str, *, owner: bool = False) -> WeeklyPlan:
+def current_plan(
+    db: Session,
+    user: User,
+    household_id: str,
+    *,
+    owner: bool = False,
+    week_start: date | None = None,
+    create_future: bool = True,
+) -> WeeklyPlan:
     from app.services.recipes import regenerate_grocery_list
 
     group = authorize(db, user, household_id, owner=owner)
     config = settings(group)
     today = planning.now_utc().astimezone(ZoneInfo(config["time_zone"])).date()
     week = today - timedelta(days=today.weekday())
+    if week_start is not None:
+        planning.validate_planning_week(week_start, week)
+        if week_start > week:
+            future = db.scalar(
+                select(WeeklyPlan).where(
+                    WeeklyPlan.household_id == group.id, WeeklyPlan.week_start == week_start
+                )
+            )
+            if future is None:
+                future = WeeklyPlan(household_id=group.id, week_start=week_start, meal_target=0)
+                if create_future:
+                    db.add(future)
+                    db.flush()
+            if create_future:
+                values = dict(group.planning_settings or {})
+                values[planning.PREPLANNED_KEY] = sorted(
+                    {
+                        *(
+                            value
+                            for value in planning.preplanned_weeks(values)
+                            if value >= week.isoformat()
+                        ),
+                        week_start.isoformat(),
+                    }
+                )
+                group.planning_settings = values
+            return future
     cycle = (today - timedelta(days=(today.weekday() - config["reset_day"]) % 7)).isoformat()
     due = (
         config["mode"] == "automatic"
@@ -113,6 +148,13 @@ def current_plan(db: Session, user: User, household_id: str, *, owner: bool = Fa
         select(WeeklyPlan).where(WeeklyPlan.household_id == group.id, WeeklyPlan.week_start == week)
     )
     changed = False
+    prepared = plan is not None and week.isoformat() in planning.preplanned_weeks(config)
+    if prepared:
+        config[planning.PREPLANNED_KEY] = [
+            value for value in planning.preplanned_weeks(config) if value > week.isoformat()
+        ]
+        group.planning_settings = config
+        changed = True
     if not plan:
         previous = db.scalar(
             select(WeeklyPlan)
@@ -144,7 +186,8 @@ def current_plan(db: Session, user: User, household_id: str, *, owner: bool = Fa
                 )
         changed = True
     if due:
-        clear_slots(db, plan)
+        if not prepared:
+            clear_slots(db, plan)
         changed = True
     if due or (config["mode"] == "automatic" and not config.get("cursor")):
         group.planning_settings = config | {"cursor": cycle}

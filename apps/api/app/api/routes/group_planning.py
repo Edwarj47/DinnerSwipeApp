@@ -375,18 +375,26 @@ def decide(
 
 
 @router.get("/weekly-plans/current")
-def calendar(household_id: str, db: DbDep, current_user: BasicUser) -> dict[str, Any]:
-    plan = service.current_plan(db, current_user, household_id)
+def calendar(
+    household_id: str, db: DbDep, current_user: BasicUser, week_start: date | None = None
+) -> dict[str, Any]:
+    plan = service.current_plan(
+        db, current_user, household_id, week_start=week_start, create_future=False
+    )
     db.commit()
     return serialize_plan(db, plan)
 
 
 @router.post("/weekly-plans/current/slots")
 def add_meal(
-    household_id: str, payload: WeeklySlotCreate, db: DbDep, current_user: BasicUser
+    household_id: str,
+    payload: WeeklySlotCreate,
+    db: DbDep,
+    current_user: BasicUser,
+    week_start: date | None = None,
 ) -> dict[str, Any]:
     group = service.authorize(db, current_user, household_id, owner=True)
-    plan = service.current_plan(db, current_user, household_id)
+    plan = service.current_plan(db, current_user, household_id, owner=True, week_start=week_start)
     service.require_recipe(db, group, payload.recipe_id)
     service.add_slot(db, plan, payload.recipe_id, payload.slot_date, payload.servings or 1)
     regenerate_grocery_list(db, current_user, plan, preserve_edits=True)
@@ -395,10 +403,15 @@ def add_meal(
 
 @router.put("/weekly-plans/current/slots/{slot_id}")
 def update_meal(
-    household_id: str, slot_id: str, payload: WeeklySlotUpdate, db: DbDep, current_user: BasicUser
+    household_id: str,
+    slot_id: str,
+    payload: WeeklySlotUpdate,
+    db: DbDep,
+    current_user: BasicUser,
+    week_start: date | None = None,
 ) -> dict[str, Any]:
     service.authorize(db, current_user, household_id, owner=True)
-    plan = service.current_plan(db, current_user, household_id)
+    plan = service.current_plan(db, current_user, household_id, owner=True, week_start=week_start)
     slot = db.get(WeeklyPlanSlot, slot_id)
     if not slot or slot.weekly_plan_id != plan.id:
         raise HTTPException(404, "Meal not found")
@@ -417,9 +430,13 @@ def update_meal(
 
 @router.delete("/weekly-plans/current/slots/{slot_id}")
 def remove_meal(
-    household_id: str, slot_id: str, db: DbDep, current_user: BasicUser
+    household_id: str,
+    slot_id: str,
+    db: DbDep,
+    current_user: BasicUser,
+    week_start: date | None = None,
 ) -> dict[str, Any]:
-    plan = service.current_plan(db, current_user, household_id, owner=True)
+    plan = service.current_plan(db, current_user, household_id, owner=True, week_start=week_start)
     slot = db.get(WeeklyPlanSlot, slot_id)
     if not slot or slot.weekly_plan_id != plan.id:
         raise HTTPException(404, "Meal not found")
@@ -430,9 +447,13 @@ def remove_meal(
 
 @router.post("/weekly-plans/current/reset")
 def reset(
-    household_id: str, payload: WeeklyPlanReset, db: DbDep, current_user: BasicUser
+    household_id: str,
+    payload: WeeklyPlanReset,
+    db: DbDep,
+    current_user: BasicUser,
+    week_start: date | None = None,
 ) -> dict[str, Any]:
-    plan = service.current_plan(db, current_user, household_id, owner=True)
+    plan = service.current_plan(db, current_user, household_id, owner=True, week_start=week_start)
     if payload.slot_date and not plan.week_start <= payload.slot_date < plan.week_start + timedelta(
         days=7
     ):
@@ -444,9 +465,13 @@ def reset(
 
 @router.post("/weekly-plans/current/reorder")
 def reorder(
-    household_id: str, payload: WeeklyPlanReorder, db: DbDep, current_user: BasicUser
+    household_id: str,
+    payload: WeeklyPlanReorder,
+    db: DbDep,
+    current_user: BasicUser,
+    week_start: date | None = None,
 ) -> dict[str, Any]:
-    plan = service.current_plan(db, current_user, household_id, owner=True)
+    plan = service.current_plan(db, current_user, household_id, owner=True, week_start=week_start)
     slots = db.scalars(select(WeeklyPlanSlot).where(WeeklyPlanSlot.weekly_plan_id == plan.id)).all()
     if len(payload.ordered_slot_ids) != len(slots) or set(payload.ordered_slot_ids) != {
         row.id for row in slots
@@ -477,7 +502,8 @@ def save_settings(
     group = service.authorize(db, current_user, household_id, owner=True)
     today = planning.now_utc().astimezone(ZoneInfo(payload.time_zone)).date()
     group.planning_settings = payload.model_dump(exclude={"initialize_only"}) | {
-        "cursor": (today - timedelta(days=(today.weekday() - payload.reset_day) % 7)).isoformat()
+        planning.PREPLANNED_KEY: planning.preplanned_weeks(group.planning_settings or {}),
+        "cursor": (today - timedelta(days=(today.weekday() - payload.reset_day) % 7)).isoformat(),
     }
     db.commit()
     return service.settings(group)

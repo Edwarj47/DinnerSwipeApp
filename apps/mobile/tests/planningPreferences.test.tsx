@@ -8,7 +8,7 @@ import { apiFetch } from "@/services/api";
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-image", () => ({ Image: () => null }));
 jest.mock("expo-linking", () => ({ openURL: jest.fn() }));
-jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn() }), useLocalSearchParams: () => ({}) }));
+jest.mock("expo-router", () => ({ useRouter: () => ({ push: jest.fn() }), useLocalSearchParams: () => ({}), useFocusEffect: () => undefined }));
 jest.mock("@/components/BrandLogo", () => ({ BrandLogo: () => null }));
 jest.mock("@/components/Screen", () => ({ Screen: ({ header, children }: { header: React.ReactNode; children: React.ReactNode }) => <>{header}{children}</> }));
 jest.mock("@/features/planner/WeekDrag", () => ({
@@ -68,7 +68,7 @@ test.each([['Reset Monday', '2026-09-28'], ['Reset week', null]])("disabled warn
   try {
     await waitFor(() => expect(screen.client.getQueryData(["profile"])).toEqual({ notification_preferences: { confirm_plan_reset: false } }));
     fireEvent.press(screen.getByLabelText(button));
-    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/weekly-plans/current/reset", {
+    await waitFor(() => expect(request).toHaveBeenCalledWith("/api/v1/weekly-plans/current/reset?week_start=2026-09-28", {
       method: "POST", body: JSON.stringify({ slot_date: date })
     }));
     expect(screen.queryByText("Confirm reset")).toBeNull();

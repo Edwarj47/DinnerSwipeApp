@@ -11,6 +11,72 @@ from app.models.entities import MealMacroConfirmation, User, UserProfile, Weekly
 
 SETTINGS_KEY = "weekly_planning"
 CURSOR_KEY = "weekly_planning_cursor"
+PREPLANNED_KEY = "weekly_planning_preplanned_weeks"
+MAX_WEEKS_AHEAD = 52
+
+
+def validate_planning_week(week: date, current: date) -> None:
+    from fastapi import HTTPException
+
+    if week.weekday() != 0:
+        raise HTTPException(422, "Choose a week starting on Monday.")
+    if week < current:
+        raise HTTPException(409, "Past weeks are read-only.")
+    if week > current + timedelta(weeks=MAX_WEEKS_AHEAD):
+        raise HTTPException(422, "Plan up to 52 weeks ahead.")
+
+
+def preplanned_weeks(values: dict[str, Any]) -> list[str]:
+    stored = values.get(PREPLANNED_KEY, [])
+    return [value for value in stored if isinstance(value, str)] if isinstance(stored, list) else []
+
+
+def lock_profile(db: Session, user: User) -> UserProfile:
+    db.execute(select(User.id).where(User.id == user.id).with_for_update()).one()
+    profile = db.scalar(
+        select(UserProfile)
+        .where(UserProfile.user_id == user.id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if profile is None:
+        profile = UserProfile(user_id=user.id)
+        db.add(profile)
+        db.flush()
+    user.profile = profile
+    return profile
+
+
+def selected_plan(
+    db: Session, user: User, week: date | None, *, create: bool = True, lock: bool = False
+) -> WeeklyPlan:
+    if week is None:
+        return reconcile_current_plan(db, user, lock=lock)
+    profile = lock_profile(db, user)
+    instant = now_utc()
+    current = week_start_for(user, instant)
+    validate_planning_week(week, current)
+    if week == current:
+        return reconcile_current_plan(db, user, lock=lock, instant=instant)
+    plan = db.scalar(
+        select(WeeklyPlan).where(WeeklyPlan.user_id == user.id, WeeklyPlan.week_start == week)
+    )
+    if plan is None:
+        plan = WeeklyPlan(user_id=user.id, week_start=week, meal_target=profile.weekly_meal_target)
+        if create:
+            db.add(plan)
+            db.flush()
+            reset_plan_slots(db, user, plan)
+    if create:
+        preferences = dict(profile.notification_preferences or {})
+        preferences[PREPLANNED_KEY] = sorted(
+            {
+                *(value for value in preplanned_weeks(preferences) if value >= current.isoformat()),
+                week.isoformat(),
+            }
+        )
+        profile.notification_preferences = preferences
+    return plan
 
 
 def now_utc() -> datetime:
@@ -103,23 +169,14 @@ def reset_plan_slots(
     db.flush()
 
 
-def reconcile_current_plan(db: Session, user: User, *, lock: bool = False) -> WeeklyPlan:
+def reconcile_current_plan(
+    db: Session, user: User, *, lock: bool = False, instant: datetime | None = None
+) -> WeeklyPlan:
     from app.services.recipes import accessible_recipes_query, regenerate_grocery_list
 
     # Every planner mutation and settings change locks the account first.
-    db.execute(select(User.id).where(User.id == user.id).with_for_update()).one()
-    profile = db.scalar(
-        select(UserProfile)
-        .where(UserProfile.user_id == user.id)
-        .with_for_update()
-        .execution_options(populate_existing=True)
-    )
-    if profile is None:
-        profile = UserProfile(user_id=user.id)
-        db.add(profile)
-        db.flush()
-    user.profile = profile
-    instant = now_utc()
+    lock_profile(db, user)
+    instant = instant or now_utc()
     week = week_start_for(user, instant)
     preferences = dict(user.profile.notification_preferences or {})
     automatic = planning_settings(user)["mode"] == "automatic"
@@ -133,6 +190,12 @@ def reconcile_current_plan(db: Session, user: User, *, lock: bool = False) -> We
     plan = db.scalar(
         select(WeeklyPlan).where(WeeklyPlan.user_id == user.id, WeeklyPlan.week_start == week)
     )
+    prepared = plan is not None and week.isoformat() in preplanned_weeks(preferences)
+    if prepared:
+        preferences[PREPLANNED_KEY] = [
+            value for value in preplanned_weeks(preferences) if value > week.isoformat()
+        ]
+        changed = True
     if plan is None:
         previous = db.scalar(
             select(WeeklyPlan)
@@ -172,7 +235,8 @@ def reconcile_current_plan(db: Session, user: User, *, lock: bool = False) -> We
         db.flush()
         changed = True
     if due:
-        reset_plan_slots(db, user, plan)
+        if not prepared:
+            reset_plan_slots(db, user, plan)
         preferences[CURSOR_KEY] = cycle
         changed = True
     if changed:

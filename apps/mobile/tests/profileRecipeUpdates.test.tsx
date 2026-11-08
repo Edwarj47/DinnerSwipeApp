@@ -50,6 +50,10 @@ test("Account settings retain subscription, coupon codes, and collapsed settings
     expect(screen.queryByText("tester@example.com")).toBeNull();
     expect(screen.queryByLabelText("Default servings")).toBeNull();
     fireEvent.press(screen.getByLabelText("Expand Account"));
+    expect(screen.queryByText("tester@example.com")).toBeNull();
+    expect(screen.getByLabelText("Expand Account details")).toBeTruthy();
+    expect(screen.getByLabelText("Expand Subscription")).toBeTruthy();
+    fireEvent.press(screen.getByLabelText("Expand Account details"));
     await screen.findByText("tester@example.com");
     expect(screen.getByText("Subscription")).toBeTruthy();
     fireEvent.press(screen.getByLabelText("Expand Subscription"));
@@ -77,12 +81,37 @@ test("an optional account name saves independently and refreshes owner metadata"
   });
   const screen = mount(<UserSettingsPanel initialSection="account" />);
   try {
+    fireEvent.press(screen.getByLabelText("Expand Account details"));
     const input = await screen.findByLabelText("Display name");
     fireEvent.changeText(input, " Alex ");
     fireEvent.press(screen.getByLabelText("Save name"));
     await screen.findByText("Name saved.");
     expect(request).toHaveBeenCalledWith("/api/v1/profile/identity", { method: "PATCH", body: JSON.stringify({ display_name: "Alex" }) });
     expect(screen.getByLabelText("Display name").props.value).toBe("Alex");
+  } finally { screen.close(); }
+});
+
+test("reopening Account leaves every child collapsed until selected", async () => {
+  const screen = mount(<UserSettingsPanel initialSection="account" />);
+  try {
+    fireEvent.press(screen.getByLabelText("Expand Account details"));
+    await screen.findByText("tester@example.com");
+    fireEvent.press(screen.getByLabelText("Collapse Account"));
+    fireEvent.press(screen.getByLabelText("Expand Account"));
+    for (const name of ["Account details", "Subscription", "Planning", "Measurements", "Device security"]) {
+      expect(screen.getByLabelText(`Expand ${name}`)).toBeTruthy();
+    }
+    expect(screen.queryByLabelText("Display name")).toBeNull();
+    expect(screen.queryByText("Coupon code")).toBeNull();
+  } finally { screen.close(); }
+});
+
+test("an explicit password reset link still opens the password reset form", async () => {
+  const screen = mount(<UserSettingsPanel initialResetToken="fixture-reset-token" />);
+  try {
+    await waitFor(() => expect(screen.getByLabelText("Reset token").props.value).toBe("fixture-reset-token"));
+    expect(screen.getByLabelText("Collapse Account details")).toBeTruthy();
+    expect(screen.getByLabelText("Expand Subscription")).toBeTruthy();
   } finally { screen.close(); }
 });
 test("Manual form has no prefilled samples and camera permission is handled", async () => {

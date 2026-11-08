@@ -13,6 +13,8 @@ type PlannerState = {
   offlineQueue: SwipeAction[];
   shuffleVersion: number;
   weekStart: string | null;
+  viewedWeeks: Record<string, string>;
+  viewWeek: (scope: string, week: string) => void;
   syncWeek: (weekStart: string) => void;
   removeChoice: (requestId: string) => void;
   addSwipe: (action: SwipeAction) => string;
@@ -31,7 +33,9 @@ export const usePlannerStore = create<PlannerState>((set, get) => ({
   offlineQueue: [],
   shuffleVersion: 0,
   weekStart: null,
-  resetSession: () => set({ contexts: {}, sessionId: Math.random().toString(36).slice(2), weekStart: null, selectedRecipes: [], history: [], offlineQueue: [] }),
+  viewedWeeks: {},
+  viewWeek: (scope, week) => set(state => ({ viewedWeeks: { ...state.viewedWeeks, [scope]: week } })),
+  resetSession: () => set({ contexts: {}, viewedWeeks: {}, sessionId: Math.random().toString(36).slice(2), weekStart: null, selectedRecipes: [], history: [], offlineQueue: [] }),
   syncWeek: (weekStart) => {
     if (get().weekStart === weekStart) return;
     const state = get();

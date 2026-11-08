@@ -17,7 +17,7 @@ export function HistoricalWeek({ week, currentWeek, onChange }: { week: string; 
   const plan = query.data as WeeklyPlanHistory | undefined;
   const days = [...Array.from({ length: 7 }, (_, offset) => shiftDate(week, offset)), ""];
   return <Screen contentWidth={960} header={<View><Text style={styles.title}>Week History</Text><Text style={styles.meta}>Read-only</Text></View>}>
-    <SpaceSelector /><WeekNavigator week={week} currentWeek={currentWeek} onChange={onChange} />
+    <SpaceSelector /><WeekNavigator week={week} currentWeek={currentWeek} onChange={onChange} allowFuture />
     {query.isLoading ? <Text style={styles.meta}>Loading week...</Text> : query.error ? <View><Text accessibilityRole="alert" style={styles.error}>{query.error.message}</Text><Button label="Retry week" icon="refresh" onPress={() => { void query.refetch(); }} /></View> : !(plan?.slots.some(slot => slot.recipe_id)) ? <Text style={styles.meta}>No saved plan for this week.</Text> : days.map(day => {
       const slots = plan?.slots.filter(slot => (slot.slot_date ?? "") === day && slot.recipe_id).sort((a, b) => a.sort_order - b.sort_order) ?? [];
       return <View key={day || "unscheduled"} style={styles.day}>

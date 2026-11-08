@@ -293,17 +293,20 @@ def update_recipe(
         totals, _ = resolve(calculation, scale=1 / payload.servings)
         save_recipe_nutrition(db, recipe, RecipeNutrition.model_validate(totals))
     db.flush()
-    # Refresh materialized grocery lists only for plans using this recipe this week.
+    # Keep current/future groceries accurate without rewriting historical plans.
     plans = db.scalars(
         select(WeeklyPlan).where(
             WeeklyPlan.week_start >= current_week_start() - timedelta(days=7),
-            WeeklyPlan.week_start <= current_week_start() + timedelta(days=7),
             WeeklyPlan.id.in_(
                 select(WeeklyPlanSlot.weekly_plan_id).where(WeeklyPlanSlot.recipe_id == recipe.id)
             ),
         )
     ).all()
     for plan in plans:
+        from app.services.week_history import current_week
+
+        if plan.week_start < current_week(db, plan):
+            continue
         if plan.household_id:
             from app.models.entities import HouseholdMember
 
@@ -318,7 +321,7 @@ def update_recipe(
                 regenerate_grocery_list(db, user, plan, preserve_edits=True, commit=False)
             continue
         user = db.get(User, plan.user_id)
-        if user and plan.week_start == current_week_start(user):
+        if user:
             regenerate_grocery_list(db, user, plan, preserve_edits=True, commit=False)
     db.commit() if commit else db.flush()
     db.refresh(recipe)

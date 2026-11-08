@@ -14,8 +14,8 @@ const createCalendarTheme = (Colors: ThemeColors) => ({
   "stylesheet.day.basic": { base: { width: "100%", minHeight: 44, paddingVertical: 4, alignItems: "center", justifyContent: "center" } }
 });
 
-export function MacroDatePicker({ value, onChange, maxDate, label = "Choose macro date", title = "Choose date", todayLabel = "Today", disabled = false }: {
-  value: string; onChange: (value: string) => void; maxDate?: string; label?: string; title?: string; todayLabel?: string; disabled?: boolean;
+export function MacroDatePicker({ value, onChange, maxDate, label = "Choose macro date", title = "Choose date", todayLabel = "Today", todayValue, disabled = false }: {
+  value: string; onChange: (value: string) => void; maxDate?: string; label?: string; title?: string; todayLabel?: string; todayValue?: string; disabled?: boolean;
 }) {
   const styles = useThemedStyles(createStyles);
   const Colors = useThemeColors();
@@ -42,7 +42,7 @@ export function MacroDatePicker({ value, onChange, maxDate, label = "Choose macr
               onDayPress={day => { if (!maxDate || day.dateString <= maxDate) choose(day.dateString); }}
               theme={calendarTheme} /> : null}
           </ScrollView>
-          <Button label={todayLabel} icon="today-outline" onPress={() => choose(maxDate && todayISO() > maxDate ? maxDate : todayISO())} />
+          <Button label={todayLabel} icon="today-outline" onPress={() => { const day = todayValue ?? todayISO(); choose(maxDate && day > maxDate ? maxDate : day); }} />
         </View>
       </View>
     </Modal>
