@@ -30,7 +30,7 @@ from app.services.recipes import COMPLETED_FEEDBACK_KEY, IGNORED_FEEDBACK_KEY
 router = APIRouter(prefix="/profile", tags=["profile"])
 
 APPEARANCE_KEY = "appearance_preferences"
-AccentColor = Literal["red", "blue", "green", "teal", "purple", "orange"]
+AccentColor = Literal["black", "red", "blue", "green", "teal", "purple", "orange"]
 
 
 class AppearanceUpdate(BaseModel):
@@ -43,8 +43,8 @@ def appearance_preferences(profile: UserProfile) -> dict[str, str]:
     accent = stored.get("accent") if isinstance(stored, dict) else None
     return {
         "accent": accent
-        if accent in ("red", "blue", "green", "teal", "purple", "orange")
-        else "red"
+        if accent in ("black", "red", "blue", "green", "teal", "purple", "orange")
+        else "black"
     }
 
 

@@ -31,8 +31,10 @@ beforeEach(async () => {
 afterEach(async () => { client.clear(); setOfflineOwner(null); await syncAppearanceIcon(); });
 
 test("preset parsing is allowlisted and contrast is readable", () => {
-  expect(parseAppearance({ accent: "#fff" })).toEqual({ accent: "red" });
-  expect(parseAppearance(null)).toEqual({ accent: "red" });
+  expect(parseAppearance({ accent: "#fff" })).toEqual({ accent: "black" });
+  expect(parseAppearance(null)).toEqual({ accent: "black" });
+  expect(parseAppearance({ accent: "black" })).toEqual({ accent: "black" });
+  expect(parseAppearance({ accent: "red" })).toEqual({ accent: "red" });
   const luminance = (hex: string) => [1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16) / 255).map(c => c <= .04045 ? c / 12.92 : ((c + .055) / 1.055) ** 2.4).reduce((sum, c, index) => sum + c * [.2126, .7152, .0722][index], 0);
   for (const option of ACCENT_OPTIONS) {
     const colors = themeColors(option.value);
@@ -84,7 +86,7 @@ test("cached preferences are account scoped and an older restore cannot override
   await updateAppearance("purple", client);
   resetAppearance("owner-a"); await restoreAppearance("owner-a");
   expect(useAppearance.getState().accent).toBe("purple");
-  setOfflineOwner("owner-b"); await restoreAppearance("owner-b"); expect(useAppearance.getState().accent).toBe("red");
+  setOfflineOwner("owner-b"); await restoreAppearance("owner-b"); expect(useAppearance.getState().accent).toBe("black");
   let resolve!: (value: string) => void;
   jest.spyOn(AsyncStorage, "getItem").mockImplementationOnce(() => new Promise(done => { resolve = done; }));
   const restore = restoreAppearance("owner-b");
@@ -100,8 +102,8 @@ test("offline color changes are not queued or sent", async () => {
 
 test("logout clears the theme and resets the native icon", async () => {
   await updateAppearance("teal", client); setOfflineOwner(null); await syncAppearanceIcon();
-  expect(useAppearance.getState()).toMatchObject({ owner: null, accent: "red", savedAccent: "red" });
-  expect(icon).toHaveBeenLastCalledWith("red");
+  expect(useAppearance.getState()).toMatchObject({ owner: null, accent: "black", savedAccent: "black" });
+  expect(icon).toHaveBeenLastCalledWith("black");
 });
 
 async function coldStart(owner = "owner-a", accent = "green") {
@@ -112,38 +114,38 @@ async function coldStart(owner = "owner-a", accent = "green") {
   jest.mocked(getStoredSessionIdentity).mockResolvedValue({ owner, isCurrent: () => true });
 }
 
-test("startup restores only the saved color before authentication without an owner, API call or icon change", async () => {
-  await coldStart();
+test.each(["green", "black", "red"])("startup restores saved %s before authentication without an owner, API call or icon change", async accent => {
+  await coldStart("owner-a", accent);
   await restoreStartupAppearance();
-  expect(useAppearance.getState()).toMatchObject({ owner: null, accent: "green", savedAccent: "green", ready: false });
+  expect(useAppearance.getState()).toMatchObject({ owner: null, accent, savedAccent: accent, ready: false });
   expect(request).not.toHaveBeenCalled(); expect(icon).not.toHaveBeenCalled();
   setOfflineOwner("owner-a");
-  expect(useAppearance.getState()).toMatchObject({ owner: "owner-a", accent: "green", ready: false });
+  expect(useAppearance.getState()).toMatchObject({ owner: "owner-a", accent, ready: false });
   await restoreAppearance("owner-a");
-  expect(useAppearance.getState()).toMatchObject({ accent: "green", ready: true });
+  expect(useAppearance.getState()).toMatchObject({ accent, ready: true });
 });
 
 test("startup color cannot carry into a different account or survive sign-out", async () => {
   await coldStart(); await restoreStartupAppearance();
   setOfflineOwner("owner-b");
-  expect(useAppearance.getState()).toMatchObject({ owner: "owner-b", accent: "red", savedAccent: "red" });
+  expect(useAppearance.getState()).toMatchObject({ owner: "owner-b", accent: "black", savedAccent: "black" });
   await coldStart(); await restoreStartupAppearance(); resetAppearance(null);
   await syncAppearanceIcon();
-  expect(useAppearance.getState()).toMatchObject({ owner: null, accent: "red", savedAccent: "red" });
-  expect(icon).toHaveBeenLastCalledWith("red");
+  expect(useAppearance.getState()).toMatchObject({ owner: null, accent: "black", savedAccent: "black" });
+  expect(icon).toHaveBeenLastCalledWith("black");
 });
 
 test("startup never uses an orphaned account color without a saved session", async () => {
   await coldStart(); jest.mocked(getStoredSessionIdentity).mockResolvedValue(null);
   await restoreStartupAppearance();
-  expect(useAppearance.getState().accent).toBe("red");
+  expect(useAppearance.getState().accent).toBe("black");
 });
 
 test.each(["corrupt", "unreadable", "invalid"])("startup tolerates a %s cache", async kind => {
   await coldStart();
   if (kind === "unreadable") jest.spyOn(AsyncStorage, "getItem").mockRejectedValueOnce(new Error("Unavailable"));
   else await AsyncStorage.setItem("dinnerSwipe.appearance.v1.owner-a", kind === "corrupt" ? "{" : JSON.stringify({ accent: "#ffffff" }));
-  try { await restoreStartupAppearance(); expect(useAppearance.getState().accent).toBe("red"); }
+  try { await restoreStartupAppearance(); expect(useAppearance.getState().accent).toBe("black"); }
   finally { jest.restoreAllMocks(); }
 });
 
@@ -162,7 +164,7 @@ test.each(["logout", "switch", "server", "expired"])("late startup cache cannot 
   }
   if (reason === "expired") current = false;
   resolve(JSON.stringify({ accent: "green" })); await task;
-  expect(useAppearance.getState().accent).toBe(reason === "switch" || reason === "server" ? "blue" : "red");
+  expect(useAppearance.getState().accent).toBe(reason === "switch" || reason === "server" ? "blue" : "black");
   spy.mockRestore();
 });
 
@@ -186,7 +188,11 @@ test("Appearance swatches select, save and reset without a Premium requirement",
     fireEvent.press(screen.getByLabelText("Teal accent"));
     await waitFor(() => expect(screen.getByLabelText("Teal accent").props.accessibilityState).toMatchObject({ checked: true, disabled: false }));
     fireEvent.press(screen.getByLabelText("Reset to default"));
-    await waitFor(() => expect(screen.getByLabelText("Red accent").props.accessibilityState.checked).toBe(true));
+    await waitFor(() => expect(screen.getByLabelText("Black accent").props.accessibilityState.checked).toBe(true));
     await waitFor(() => expect(useAppearance.getState().pending).toBe(false));
+    expect(screen.getByLabelText("Reset to default").props.accessibilityState.disabled).toBe(true);
+    fireEvent.press(screen.getByLabelText("Red accent"));
+    await waitFor(() => expect(screen.getByLabelText("Red accent").props.accessibilityState).toMatchObject({ checked: true, disabled: false }));
+    expect(screen.getByLabelText("Reset to default").props.accessibilityState.disabled).toBe(false);
   } finally { screen.unmount(); }
 });

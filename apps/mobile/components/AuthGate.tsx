@@ -1,5 +1,6 @@
 import { useQueryClient } from "@tanstack/react-query";
 import { Link, usePathname } from "expo-router";
+import { StatusBar } from "expo-status-bar";
 import { ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   ActivityIndicator,
@@ -214,6 +215,7 @@ export function AuthGate({ children }: Props) {
     <AuthSessionContext.Provider value={session}>
       {children}
       <SafeAreaView style={styles.overlay}>
+        <StatusBar style="light" />
         {checking ? (
           <View style={styles.centered}>
             <ActivityIndicator color="#fff" />

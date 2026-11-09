@@ -1,4 +1,5 @@
 {
+  "black": { "label": "Black", "color": "#111111" },
   "red": { "label": "Red", "color": "#d71920" },
   "blue": { "label": "Blue", "color": "#2d6cdf" },
   "green": { "label": "Green", "color": "#2f7d59" },

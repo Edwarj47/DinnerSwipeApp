@@ -2,7 +2,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { QueryClient } from "@tanstack/react-query";
 import { AppState } from "react-native";
 import { apiFetch, getStoredSessionIdentity } from "./api";
-import { AccentColor, parseAppearance } from "./appearancePalette";
+import { AccentColor, DEFAULT_ACCENT, parseAppearance } from "./appearancePalette";
 import { applyAppIcon } from "./appIcon";
 import { deviceOffline, offlineOwner, useOfflineStatus } from "./offlineStore";
 import { UserProfile } from "./types";
@@ -19,7 +19,7 @@ let startupOwner: string | null = null;
 function current(owner: string | null, version: number) { return generation === version && offlineOwner() === owner && useAppearance.getState().owner === owner; }
 export function resetAppearance(owner: string | null) {
   const state = useAppearance.getState(), previous = state.owner ?? startupOwner;
-  const accent = owner && owner === startupOwner && !state.owner ? state.savedAccent : "red";
+  const accent = owner && owner === startupOwner && !state.owner ? state.savedAccent : DEFAULT_ACCENT;
   startupOwner = null;
   generation++; revision++; iconRequest++;
   useAppearance.setState({ owner, accent, savedAccent: accent, ready: !owner && !!previous, pending: false, error: "", iconError: "" });

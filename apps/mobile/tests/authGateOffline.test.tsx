@@ -9,6 +9,10 @@ import { usePathname } from "expo-router";
 
 jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
 jest.mock("expo-router", () => ({ usePathname: jest.fn(() => "/"), Link: () => null }));
+jest.mock("expo-status-bar", () => ({ StatusBar: ({ style }: { style: string }) => {
+  const { Text } = jest.requireActual("react-native");
+  return <Text testID="auth-status-bar">{style}</Text>;
+} }));
 jest.mock("@/components/BrandLogo", () => ({ BrandLogo: () => null }));
 jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: jest.requireActual("react-native").View }));
 jest.mock("@/services/biometrics", () => ({ getBiometricSettings: async () => ({ supported: false, enabled: false }) }));
@@ -26,12 +30,14 @@ test("connection failure offers retry without clearing credentials or exposing p
   const screen = render(<QueryClientProvider client={client}><AuthGate><Protected /></AuthGate></QueryClientProvider>);
   try {
     await screen.findByText("Reconnect to verify access.");
+    expect(screen.getByTestId("auth-status-bar").props.children).toBe("light");
     expect(screen.queryByText("Private content")).toBeNull();
     expect(clearAuthTokens).not.toHaveBeenCalled();
     jest.mocked(apiFetch).mockResolvedValue({ user_id: "user-a", email: "a@example.com" });
     fireEvent.press(screen.getByLabelText("Try again"));
     await waitFor(() => expect(reconnectOffline).toHaveBeenCalled());
     await screen.findByText("Private content");
+    expect(screen.queryByTestId("auth-status-bar")).toBeNull();
     expect(clearAuthTokens).not.toHaveBeenCalled();
   } finally { screen.unmount(); client.clear(); }
 }, 20_000);

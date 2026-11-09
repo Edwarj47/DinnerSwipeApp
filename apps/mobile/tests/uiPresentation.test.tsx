@@ -32,7 +32,7 @@ test("settings stays in the fixed header outside scrolling content", () => {
 
 test.each([
   ["secondary", Colors.ink, Colors.surface],
-  ["primary", "#fff", Colors.tomato],
+  ["primary", "#fff", "#111111"],
   ["danger", "#fff", Colors.danger],
   ["quiet", Colors.ink, "transparent"],
   ["quiet-danger", Colors.danger, "transparent"]

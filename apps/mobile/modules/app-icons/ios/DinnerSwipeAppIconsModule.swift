@@ -2,7 +2,7 @@ import ExpoModulesCore
 import UIKit
 
 public class DinnerSwipeAppIconsModule: Module {
-  private let names = ["blue": "DSIconBlue", "green": "DSIconGreen", "teal": "DSIconTeal", "purple": "DSIconPurple", "orange": "DSIconOrange"]
+  private let names = ["red": "DSIconRed", "blue": "DSIconBlue", "green": "DSIconGreen", "teal": "DSIconTeal", "purple": "DSIconPurple", "orange": "DSIconOrange"]
 
   public func definition() -> ModuleDefinition {
     Name("DinnerSwipeAppIcons")
@@ -11,11 +11,11 @@ public class DinnerSwipeAppIconsModule: Module {
       return DispatchQueue.main.sync { UIApplication.shared.supportsAlternateIcons }
     }
     AsyncFunction("getCurrentIcon") { () -> String in
-      guard let name = UIApplication.shared.alternateIconName else { return "red" }
+      guard let name = UIApplication.shared.alternateIconName else { return "black" }
       return self.names.first(where: { $0.value == name })?.key ?? ""
     }.runOnQueue(.main)
     AsyncFunction("setIcon") { (accent: String, promise: Promise) in
-      guard accent == "red" || self.names[accent] != nil else {
+      guard accent == "black" || self.names[accent] != nil else {
         promise.reject("INVALID_ACCENT", "Unknown accent")
         return
       }

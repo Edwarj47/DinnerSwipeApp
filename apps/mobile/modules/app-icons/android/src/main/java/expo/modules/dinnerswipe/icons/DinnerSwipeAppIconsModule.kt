@@ -7,11 +7,18 @@ import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
 
 class DinnerSwipeAppIconsModule : Module() {
-  private val presets = listOf("red", "blue", "green", "teal", "purple", "orange")
+  private val presets = listOf("black", "red", "blue", "green", "teal", "purple", "orange")
 
   private fun context() = requireNotNull(appContext.reactContext) { "App context unavailable" }
-  private fun alias(accent: String) = ComponentName(context().packageName,
-    context().packageName + ".DSIcon" + accent.replaceFirstChar { it.uppercaseChar() })
+  private fun alias(accent: String): ComponentName {
+    // Reuse the old default alias so upgrades keep exactly one enabled launcher.
+    val name = when (accent) {
+      "black" -> "DSIconRed"
+      "red" -> "DSIconRedSelected"
+      else -> "DSIcon" + accent.replaceFirstChar { it.uppercaseChar() }
+    }
+    return ComponentName(context().packageName, context().packageName + "." + name)
+  }
 
   @Suppress("DEPRECATION")
   private fun enabled(accent: String): Boolean {

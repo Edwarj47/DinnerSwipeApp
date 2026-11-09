@@ -6,6 +6,8 @@ const { PNG } = require("pngjs");
 const root = path.resolve(__dirname, "../..");
 const source = fs.readFileSync(path.join(root, "apps/mobile/assets/brand-logo.svg"), "utf8");
 const presets = require(path.join(root, "apps/mobile/services/appearancePresets.json"));
+const requested = process.argv.slice(2);
+if (requested.some(name => !Object.hasOwn(presets, name))) throw new Error("Unknown accent requested");
 (async () => {
   const browser = await chromium.launch({ headless: true });
   try {
@@ -13,7 +15,7 @@ const presets = require(path.join(root, "apps/mobile/services/appearancePresets.
     const directory = path.join(root, "apps/mobile/assets/appearance");
     fs.mkdirSync(directory, { recursive: true });
     for (const [name, { color }] of Object.entries(presets)) {
-      if (name === "red") continue;
+      if (name === "red" || (requested.length && !requested.includes(name))) continue;
       const result = await page.evaluate(async ({ source, color }) => {
         const document = new DOMParser().parseFromString(source, "image/svg+xml");
         const frame = "#" + [1, 3, 5].map(index => Math.round(parseInt(color.slice(index, index + 2), 16) * .16 + 255 * .84).toString(16).padStart(2, "0")).join("");

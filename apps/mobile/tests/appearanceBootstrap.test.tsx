@@ -54,6 +54,6 @@ test("explicit sign-out clears the pre-authentication color even before an offli
     await screen.findByText("Unlock");
     expect(useAppearance.getState().accent).toBe("teal");
     act(() => { jest.mocked(addAuthChangeListener).mock.calls[0][0](); });
-    await waitFor(() => expect(useAppearance.getState().accent).toBe("red"));
+    await waitFor(() => expect(useAppearance.getState().accent).toBe("black"));
   } finally { screen.unmount(); }
 });

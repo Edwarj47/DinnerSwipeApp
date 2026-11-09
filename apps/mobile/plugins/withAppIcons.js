@@ -4,7 +4,10 @@ const { withAndroidManifest, withDangerousMod, withXcodeProject, IOSConfig } = r
 const { generateImageAsync } = require("@expo/image-utils");
 const palette = require("../services/appearancePresets.json");
 const presets = Object.keys(palette);
+const defaultAccent = "black";
 const name = accent => "DSIcon" + accent[0].toUpperCase() + accent.slice(1);
+// Keep the installed default component stable when Android retains per-alias overrides.
+const androidName = accent => accent === "black" ? "DSIconRed" : accent === "red" ? "DSIconRedSelected" : name(accent);
 const source = (root, accent) => path.join(root, accent === "red" ? "assets/icon.png" : `assets/appearance/${accent}.png`);
 
 function configureAndroidManifest(manifest, packageName) {
@@ -14,11 +17,11 @@ function configureAndroidManifest(manifest, packageName) {
   const launcher = filter => filter.action?.some(entry => entry.$["android:name"] === "android.intent.action.MAIN")
     && filter.category?.some(entry => entry.$["android:name"] === "android.intent.category.LAUNCHER");
   activity["intent-filter"] = (activity["intent-filter"] || []).filter(filter => !launcher(filter));
-  const ownNames = new Set(presets.map(accent => packageName + "." + name(accent)));
+  const ownNames = new Set(presets.map(accent => packageName + "." + androidName(accent)));
   const existing = (application["activity-alias"] || []).filter(entry => !ownNames.has(entry.$["android:name"]));
   application["activity-alias"] = [...existing, ...presets.map(accent => ({
-    $: { "android:name": packageName + "." + name(accent), "android:targetActivity": activity.$["android:name"],
-      "android:enabled": accent === "red" ? "true" : "false", "android:exported": "true",
+    $: { "android:name": packageName + "." + androidName(accent), "android:targetActivity": activity.$["android:name"],
+      "android:enabled": accent === defaultAccent ? "true" : "false", "android:exported": "true",
       "android:icon": `@mipmap/ds_icon_${accent}`, "android:label": "@string/app_name" },
     "intent-filter": [{ action: [{ $: { "android:name": "android.intent.action.MAIN" } }], category: [{ $: { "android:name": "android.intent.category.LAUNCHER" } }] }]
   }))];
@@ -43,10 +46,14 @@ async function androidAssets(root, nativeRoot) {
 }
 
 async function appleAssets(root, nativeRoot, projectName) {
-  for (const accent of presets.filter(value => value !== "red")) {
+  for (const accent of presets.filter(value => value !== defaultAccent)) {
     const directory = path.join(nativeRoot, projectName, "Images.xcassets", name(accent) + ".appiconset");
     await fs.mkdir(directory, { recursive: true });
-    await fs.copyFile(source(root, accent), path.join(directory, "icon.png"));
+    const image = await generateImageAsync({ projectRoot: root, cacheType: "ds-apple-icons" }, {
+      src: source(root, accent), width: 1024, height: 1024, resizeMode: "contain",
+      backgroundColor: palette[accent].color, removeTransparency: true, name: `ds-${accent}-apple.png`
+    });
+    await fs.writeFile(path.join(directory, "icon.png"), image.source);
     await fs.writeFile(path.join(directory, "Contents.json"), JSON.stringify({ images: [{ filename: "icon.png", idiom: "universal", platform: "ios", size: "1024x1024" }], info: { version: 1, author: "xcode" } }, null, 2));
   }
 }
@@ -55,7 +62,7 @@ function configureAppleProject(project, projectName) {
   const { target } = IOSConfig.XcodeUtils.getApplicationNativeTarget({ project, projectName });
   const configurations = IOSConfig.XcodeUtils.getBuildConfigurationsForListId(project, target.buildConfigurationList);
   for (const [, configuration] of configurations) {
-    configuration.buildSettings.ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = presets.filter(accent => accent !== "red").map(name);
+    configuration.buildSettings.ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = presets.filter(accent => accent !== defaultAccent).map(name);
     configuration.buildSettings.ASSETCATALOG_COMPILER_INCLUDE_ALL_APPICON_ASSETS = "YES";
   }
   return project;

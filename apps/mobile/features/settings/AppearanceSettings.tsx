@@ -6,7 +6,7 @@ import { Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-na
 import { Button } from "@/components/Button";
 import { ThemeColors, useThemedStyles } from "@/components/theme";
 import { syncAppearanceIcon, updateAppearance, useAppearance } from "@/services/appearance";
-import { ACCENT_OPTIONS, AccentColor } from "@/services/appearancePalette";
+import { ACCENT_OPTIONS, AccentColor, DEFAULT_ACCENT } from "@/services/appearancePalette";
 import { appearanceArtwork } from "@/services/appearanceArtwork";
 import { useOfflineStatus } from "@/services/offlineStore";
 
@@ -30,7 +30,7 @@ export function AppearanceSettings() {
       {ACCENT_OPTIONS.map(option => <Pressable key={option.value} accessibilityRole="radio" accessibilityLabel={`${option.label} accent`}
         aria-checked={state.accent === option.value} aria-disabled={disabled}
         accessibilityState={{ checked: state.accent === option.value, disabled }} disabled={disabled} onPress={() => choose(option.value)}
-        style={[styles.option, { flexBasis: width >= 768 ? "14%" : "30%" }, state.accent === option.value && styles.selected]}>
+        style={[styles.option, { flexBasis: width >= 768 ? "12%" : "30%" }, state.accent === option.value && styles.selected]}>
         <View style={[styles.swatch, { backgroundColor: option.color }]}>{state.accent === option.value ? <Ionicons name="checkmark" size={22} color="#ffffff" /> : null}</View>
         <Text style={styles.label}>{option.label}</Text>
       </Pressable>)}
@@ -39,7 +39,7 @@ export function AppearanceSettings() {
     {offline ? <Text style={styles.muted}>Offline</Text> : null}
     {state.error || error ? <View style={styles.status}><Text accessibilityRole="alert" style={styles.error}>{state.error || error}</Text><Button label="Retry" icon="refresh" disabled={disabled} onPress={() => choose(attempted)} /></View> : null}
     {state.iconError ? <View style={styles.status}><Text accessibilityRole="alert" style={styles.error}>{state.iconError}</Text><Button label="Retry icon" icon="refresh" onPress={() => { void syncAppearanceIcon(); }} /></View> : null}
-    <Button label="Reset to default" icon="refresh" disabled={disabled || state.accent === "red"} onPress={() => choose("red")} />
+    <Button label="Reset to default" icon="refresh" disabled={disabled || state.accent === DEFAULT_ACCENT} onPress={() => choose(DEFAULT_ACCENT)} />
   </View>;
 }
 const createStyles = (colors: ThemeColors) => StyleSheet.create({

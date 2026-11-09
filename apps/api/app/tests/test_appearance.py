@@ -9,9 +9,9 @@ from app.models.entities import User
 
 def test_default_and_all_presets(client: TestClient, auth_headers: dict[str, str]) -> None:
     assert client.get("/api/v1/profile", headers=auth_headers).json()["appearance_preferences"] == {
-        "accent": "red"
+        "accent": "black"
     }
-    for accent in ("blue", "green", "teal", "purple", "orange", "red"):
+    for accent in ("black", "blue", "green", "teal", "purple", "orange", "red"):
         response = client.patch(
             "/api/v1/profile/appearance", headers=auth_headers, json={"accent": accent}
         )
@@ -40,7 +40,7 @@ def test_invalid_preferences_are_rejected(
         == 422
     )
     assert client.get("/api/v1/profile", headers=auth_headers).json()["appearance_preferences"] == {
-        "accent": "red"
+        "accent": "black"
     }
 
 
@@ -93,7 +93,7 @@ def test_appearance_preserves_settings_and_isolates_accounts(
     )
     second = {"Authorization": f"Bearer {result.json()['access_token']}"}
     assert client.get("/api/v1/profile", headers=second).json()["appearance_preferences"] == {
-        "accent": "red"
+        "accent": "black"
     }
 
 
@@ -104,5 +104,17 @@ def test_invalid_stored_value_falls_back(
     user.profile.notification_preferences = {"appearance_preferences": ["invalid"]}
     db_session.commit()
     assert client.get("/api/v1/profile", headers=auth_headers).json()["appearance_preferences"] == {
+        "accent": "black"
+    }
+
+
+def test_an_explicit_red_choice_is_not_migrated_to_the_new_default(
+    client: TestClient, auth_headers: dict[str, str], db_session: Session
+) -> None:
+    user = db_session.query(User).filter_by(email="owner@example.com").one()
+    user.profile.notification_preferences = {"appearance_preferences": {"accent": "red"}}
+    db_session.commit()
+    assert client.get("/api/v1/profile", headers=auth_headers).json()["appearance_preferences"] == {
         "accent": "red"
     }
+    assert user.profile.notification_preferences == {"appearance_preferences": {"accent": "red"}}

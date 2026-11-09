@@ -15,6 +15,7 @@ test.each(["android", "ios"] as const)("supported %s builds select only a differ
   await applyAppIcon("blue"); expect(module.setIcon).toHaveBeenCalledWith("blue");
   module.getCurrentIcon.mockResolvedValue("blue"); module.setIcon.mockClear();
   await applyAppIcon("blue"); expect(module.setIcon).not.toHaveBeenCalled();
+  await applyAppIcon("black"); expect(module.setIcon).toHaveBeenCalledWith("black");
 });
 
 test("web and older native builds safely skip unavailable icon APIs", async () => {

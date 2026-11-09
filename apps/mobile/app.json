@@ -4,7 +4,7 @@
     "owner": "data-centric-software-solutions",
     "slug": "dinner-swipe",
     "scheme": "dinnerswipe",
-    "version": "0.2.0",
+    "version": "0.2.1",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -15,7 +15,7 @@
       "fallbackToCacheTimeout": 0
     },
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
+    "icon": "./assets/appearance/black.png",
     "userInterfaceStyle": "light",
     "assetBundlePatterns": [
       "**/*"
@@ -30,23 +30,23 @@
     "android": {
       "package": "dev.dcss.dinnerswipe",
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#d71920"
+        "foregroundImage": "./assets/appearance/black.png",
+        "backgroundColor": "#111111"
       },
-      "versionCode": 28
+      "versionCode": 29
     },
     "web": {
       "bundler": "metro",
       "output": "single",
-      "favicon": "./assets/favicon.png",
+      "favicon": "./assets/appearance/black.png",
       "name": "Dinner Swipe",
       "shortName": "DinnerSwipe",
-      "themeColor": "#d71920",
+      "themeColor": "#111111",
       "backgroundColor": "#fff6f3"
     },
     "plugins": [
       "expo-router",
-      ["expo-splash-screen", { "image": "./assets/splash.png", "resizeMode": "contain", "backgroundColor": "#d71920", "imageWidth": 200 }],
+      ["expo-splash-screen", { "image": "./assets/appearance/black.png", "resizeMode": "contain", "backgroundColor": "#111111", "imageWidth": 200 }],
       "expo-secure-store",
       "expo-notifications",
       [
