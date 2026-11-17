@@ -140,7 +140,7 @@ jobs:
           import psycopg
           from psycopg import sql
           with psycopg.connect(host="127.0.0.1",port=15413,user="ci_owner",password="ci_disposable_only",dbname="postgres",autocommit=True) as db:
-              for name in ("migration_test","security_test","offline_test","workout_test","calculator_test"):
+              for name in ("migration_test","security_test","offline_test","offline_migration_test","workout_test","calculator_test"):
                   db.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
           PY
       - name: Verify real migration upgrades and rollback
@@ -155,9 +155,29 @@ jobs:
         env:
           SECURITY_TEST_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15413/security_test
           OFFLINE_TEST_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15413/offline_test
+          OFFLINE_MIGRATION_TEST_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15413/offline_migration_test
           WORKOUT_TEST_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15413/workout_test
           CALCULATOR_TEST_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15414/calculator_test
         run: pytest app/tests/*postgres.py --junitxml=postgres-results.xml
+      - name: Annotate PostgreSQL test failures
+        if: failure()
+        working-directory: apps/api
+        run: |
+          python <<'PY'
+          from pathlib import Path
+          import xml.etree.ElementTree as ET
+          report = Path("postgres-results.xml")
+          if report.exists():
+              for case in ET.parse(report).iter("testcase"):
+                  for failure in case:
+                      if failure.tag not in {"failure", "error"}:
+                          continue
+                      message = f"{case.get('classname')}.{case.get('name')}\n{failure.text or failure.get('message', '')}"
+                      if len(message) > 6000:
+                          message = message[:3000] + "\n...\n" + message[-3000:]
+                      message = message.replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+                      print(f"::error title=PostgreSQL test failure::{message}")
+          PY
       - name: Verify the isolated staging runtime role
         working-directory: apps/api
         env:

@@ -22,18 +22,29 @@ from app.models.entities import MealMacroConfirmation, OfflineReceipt, UserSubsc
 
 
 @pytest.mark.skipif(
-    not os.environ.get("OFFLINE_TEST_DATABASE_URL"), reason="Disposable PostgreSQL only"
+    not (
+        os.environ.get("OFFLINE_MIGRATION_TEST_DATABASE_URL")
+        or os.environ.get("OFFLINE_TEST_DATABASE_URL")
+    ),
+    reason="Disposable PostgreSQL only",
 )
 def test_postgres_migration_concurrent_retry_and_atomic_rollback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    url = os.environ["OFFLINE_TEST_DATABASE_URL"]
+    url = (
+        os.environ.get("OFFLINE_MIGRATION_TEST_DATABASE_URL")
+        or os.environ["OFFLINE_TEST_DATABASE_URL"]
+    )
     parsed = make_url(url)
-    assert parsed.host == "127.0.0.1" and parsed.port == 15413 and parsed.database == "offline_test"
+    assert parsed.host == "127.0.0.1" and parsed.port == 15413
+    assert parsed.database in {"offline_test", "offline_migration_test"}
     monkeypatch.setattr(settings, "database_url", url)
     config = Config("alembic.ini")
-    command.upgrade(config, "d8126c4ab391")
     engine = create_engine(url)
+    assert not inspect(engine).has_table("users"), (
+        "Legacy rollback checks require a fresh isolated database"
+    )
+    command.upgrade(config, "d8126c4ab391")
     legacy_users = Table("users", MetaData(), autoload_with=engine)
     with Session(engine) as db:
         user_id = str(uuid4())

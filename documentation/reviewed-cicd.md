@@ -22,6 +22,9 @@ host manifest and short-lived, exact-scope operator approval are also required.
 - Real PostgreSQL migrations, preservation of existing paid records, repeat
   upgrades and disposable rollback; concurrent/permission tests must execute,
   not skip. The real staging initializer proves runtime DML and denied DDL.
+  Legacy offline rollback checks use their own fresh database, separate from
+  current-schema group/nutrition tests, so file order cannot downgrade shared
+  fixtures or cross the intentional production data-preservation guards.
 - Browser smoke against the built nginx image at desktop and small-phone sizes,
   synthetic accounts only, with nonlocal traffic blocked. Settings, real brand
   pixels, tutorial controls and welcome verification copy are checked.
