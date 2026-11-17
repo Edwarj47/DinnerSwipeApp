@@ -14,7 +14,7 @@ from app.ingestion.ai_provider import _strict_json_schema
 from app.ingestion.openai_responses import create_response
 from app.models.entities import IngestionJob, User
 from app.schemas.common import RecipeNutrition
-from app.services.billing import is_premium_active, subscription_for_user
+from app.services.billing import is_premium_access_active
 
 JOB_TYPE = "ai_recipe"
 BASIC_LIMIT = 3
@@ -70,7 +70,7 @@ def usage(db: Session, user: User) -> dict[str, Any]:
         )
         or 0
     )
-    premium = is_premium_active(subscription_for_user(db, user))
+    premium = is_premium_access_active(db, user)
     return {
         "used": used,
         "limit": None if premium else BASIC_LIMIT,

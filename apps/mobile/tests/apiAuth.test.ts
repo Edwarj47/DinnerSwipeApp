@@ -15,6 +15,7 @@ jest.mock("expo-secure-store", () => ({
 }));
 
 import { apiFetch, clearAuthTokens, getRefreshToken, getStoredSessionIdentity, getToken, reconnectOffline, setAuthTokens } from "@/services/api";
+import * as SecureStore from "expo-secure-store";
 import { deviceOffline, offlineOwner, setDeviceOffline, setOfflineOwner } from "@/services/offlineStore";
 
 function jsonResponse(body: unknown, status = 200) {
@@ -59,6 +60,17 @@ test("stores and clears access and refresh tokens", async () => {
   await clearAuthTokens();
   expect(await getToken()).toBeNull();
   expect(await getRefreshToken()).toBeNull();
+});
+test("an account change during token retrieval cannot send the previous account's write", async () => {
+  await setAuthTokens({ access_token: "account-a", refresh_token: "refresh-a" });
+  setOfflineOwner("account-a");
+  jest.mocked(SecureStore.getItemAsync).mockImplementationOnce(async () => {
+    await setAuthTokens({ access_token: "account-b", refresh_token: "refresh-b" });
+    setOfflineOwner("account-b");
+    return "account-b";
+  });
+  await expect(apiFetch("/api/v1/profile/experience", { method: "PATCH", body: JSON.stringify({ mode: "workouts" }) })).rejects.toMatchObject({ status: 409 });
+  expect(fetch).not.toHaveBeenCalled();
 });
 
 test.each(["GET", "POST"])("account deletion %s preserves the form's account binding after another session switches", async (method) => {

@@ -1,8 +1,8 @@
 {
-  "version": "0.2.1",
-  "hash": "92e39c35fbb79cbf9e85876024b9b3e6ac7799da1547676428ba0512c02905da",
+  "version": "0.2.2",
+  "hash": "6b73c94ff94b5023fceb850f662c4848655755acd46408204df7175b9eef0940",
   "inputs": {
-    "apps/mobile/app.json": "68cd8558ce0553de97196c1dcab91c649abb294c2d508158a3b61f4206507644",
+    "apps/mobile/app.json": "658b409f18f045fe7056df758054a86f3c4a9e61dd51735521df2051ee044962",
     "apps/mobile/assets/adaptive-icon.png": "594cfd430ff1b1782ab470b32f241c7883e678ee2fd664cdbe3f689fc6e6c1e8",
     "apps/mobile/assets/appearance/black.png": "39b65625dae12a2e7ebfe2596b7dbea98c62953e447e4c19800ad868342b67fc",
     "apps/mobile/assets/appearance/black.svg": "741a3545f979d3c28dfc1964edfb7b7cd7c6cc9d1d1f93c6a75ed220f4ed787c",
@@ -21,7 +21,7 @@
     "apps/mobile/assets/icon.png": "594cfd430ff1b1782ab470b32f241c7883e678ee2fd664cdbe3f689fc6e6c1e8",
     "apps/mobile/assets/splash.png": "f379f5720f9474fd1d65ebe58f3cd44a184e1b6e27552c37a639b8eb1298a3bf",
     "apps/mobile/babel.config.js": "19f80f7fc6708639071e93bc75ccc2929dda85ac4081bd3334ef0ed1a106eeba",
-    "apps/mobile/eas.json": "edded9a1311433b12ce75d5585aa4f2b65ffa11a9908b50a5c7f792fff62ec84",
+    "apps/mobile/eas.json": "1e8063717cd37d462e85d9e7f90f11d73f31c7e17dc1c082c16a256fca97d0bc",
     "apps/mobile/metro.config.js": "1eea3502de8f499a337fb51b3961e90057eba1e6b444875c8eda6185be8a5990",
     "apps/mobile/modules/app-icons/android/build.gradle": "8d3972beccf3cad49983e0426d0d362f8130af6bd1bf0ec0236ed12d51616914",
     "apps/mobile/modules/app-icons/android/src/main/AndroidManifest.xml": "343d5be1ac17cdd45d1a2f2ddc616c509290e655869125a9422a96d88aa66066",
@@ -30,12 +30,12 @@
     "apps/mobile/modules/app-icons/ios/DinnerSwipeAppIcons.podspec": "398027d8127a7dd26a4ea5cc6a6e72989c4b0d9461ac67b72cbd88f74d15aac1",
     "apps/mobile/modules/app-icons/ios/DinnerSwipeAppIconsModule.swift": "0ff6dc27ebc2f2367c5162039bf1355cc7c03c0f9b5564e3595d824fcf374bdd",
     "apps/mobile/modules/app-icons/package.json": "63513adf22b9f91ad72401679ea3bdfe3abf6f439a0f2ecec53935027c8bff48",
-    "apps/mobile/package.json": "e2fbaf08984d0991f70a13971473428527d3956622a5ec43f6f68d9bd1f6a8b7",
+    "apps/mobile/package.json": "b37e105f7e1485a53f1f58dabde0140e09ff8ab05acf9b211bc91e5cb7a8a21e",
     "apps/mobile/plugins/appIcons.test.cjs": "17824ccd2c589f5f4fd404af9d9ecc001dfcd7147452ecf3dd513face220796b",
     "apps/mobile/plugins/withAndroidMonorepoGradlePaths.js": "4c408188062d3c7a234ff3e011d9ea47407668769a23b45f1db58b163850d1b4",
     "apps/mobile/plugins/withAppIcons.js": "cae3bbce02e429b47da1fbb73dd79ffae921b859f295b095a90f64c07056eb80",
     "apps/mobile/services/appearancePresets.json": "6f59d42e792a07f92991529a82823bc285787498645620924a904428513fdfbe",
-    "package-lock.json": "1aef664a13a320f137ae6c753a58de2be76fffa890aea22940d58771d55dfa15",
+    "package-lock.json": "9bf828474168661dd20dfc18a22151e635cf86a6e2ce69fc36c18d303a481056",
     "package.json": "9cdcde8442b899761cab48a1b5a2fcc264ded688e88cdd58a784afdac69fe4b4"
   }
 }

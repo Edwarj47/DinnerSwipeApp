@@ -18,7 +18,7 @@ from app.database.session import get_db
 from app.main import app
 from app.models import entities  # noqa: F401
 from app.models.base import Base
-from app.models.entities import User, UserSubscription
+from app.models.entities import ComplimentaryPremiumAccess, User, UserSubscription
 
 
 @pytest.fixture(autouse=True)
@@ -73,6 +73,8 @@ def auth_headers(client: TestClient, db_session: Session) -> dict[str, str]:
     )
     user = db_session.query(User).filter_by(email="owner@example.com").one()
     user.email_verified = True
+    # Baseline fixtures model existing Basic customers; welcome tests create new accounts.
+    db_session.query(ComplimentaryPremiumAccess).filter_by(user_id=user.id).delete()
     db_session.add(
         UserSubscription(
             user_id=user.id,
@@ -91,6 +93,7 @@ def auth_headers(client: TestClient, db_session: Session) -> dict[str, str]:
 def grant_basic_access(db_session: Session) -> Callable[[str], UserSubscription]:
     def grant(email: str) -> UserSubscription:
         user = db_session.query(User).filter_by(email=email).one()
+        db_session.query(ComplimentaryPremiumAccess).filter_by(user_id=user.id).delete()
         subscription = UserSubscription(
             user_id=user.id,
             plan_key="basic_monthly",

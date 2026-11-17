@@ -10,8 +10,13 @@ import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme
 import { apiFetch } from "@/services/api";
 import { addTutorialListener } from "@/services/tutorial";
 import { PremiumStatus, UserProfile } from "@/services/types";
+import { useAuthSession } from "@/services/session";
+import { listenTutorialEvidence, loadTutorialProgress, saveTutorialProgress, TutorialProgress, TutorialTask } from "@/services/tutorialProgress";
+import { updateWorkoutPreferences, useWorkoutMode } from "@/services/workoutMode";
+import { useSpace } from "@/features/groups/useSpace";
+import { todayISO } from "@/features/premium/macroDates";
 import { TourContext } from "./TourContext";
-import { nextSectionIndex, TOUR_SECTIONS, tourStepsFor, TourSection, TourStep, TUTORIAL_VERSION } from "./tourSteps";
+import { nextSectionIndex, TASK_LABELS, taskStepsFor, TOUR_SECTIONS, tourStepsFor, TourSection, TourStep, TUTORIAL_VERSION } from "./tourSteps";
 
 export { TUTORIAL_VERSION } from "./tourSteps";
 type FinishAction = "complete_tutorial" | "dismiss_tutorial";
@@ -22,6 +27,17 @@ export function OnboardingGuide({ children }: { children: ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const queryClient = useQueryClient();
+  const { userId } = useAuthSession();
+  const currentOwner = useRef(userId);
+  currentOwner.current = userId;
+  const restoredOwner = useRef<string | null>(null);
+  const space = useSpace();
+  const mode = useWorkoutMode(state => state.mode), workoutsEnabled = useWorkoutMode(state => state.enabled);
+  const [fullTour, setFullTour] = useState(false);
+  const [taskChoice, setTaskChoice] = useState<TutorialTask>("meals");
+  const [progress, setProgress] = useState<TutorialProgress | null>(null);
+  const [restored, setRestored] = useState(false);
+  const [taskError, setTaskError] = useState("");
   const [welcome, setWelcome] = useState(false);
   const [suppressed, setSuppressed] = useState(false);
   const [selected, setSelected] = useState<TourSection[]>(TOUR_SECTIONS.map(section => section.id));
@@ -35,18 +51,39 @@ export function OnboardingGuide({ children }: { children: ReactNode }) {
   const profile = useQuery({ queryKey: ["profile"], queryFn: () => apiFetch<UserProfile>("/api/v1/profile"), retry: false });
   const subscription = useQuery({ queryKey: ["subscription-status"], queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status"), retry: false });
   const premium = Boolean(subscription.data?.premium_active ?? subscription.data?.active);
-  const choices = TOUR_SECTIONS.filter(section => section.id !== "macros" || premium);
-  const chosenSteps = tourStepsFor(selected, premium);
+  const choices = TOUR_SECTIONS.filter(section => (section.id !== "macros" || premium)
+    && (mode !== "workouts" || ["macros", "account", "groups"].includes(section.id)));
+  const chosenSteps = tourStepsFor(selected.filter(id => choices.some(choice => choice.id === id)), premium);
   const step = steps[index];
+  const expectedMode = progress?.task === "workouts" ? "workouts" : progress?.task === "meals" ? "nutrition" : mode;
+  const contextChanged = Boolean(progress && (expectedMode !== mode || (progress.task === "meals" && progress.scope !== space.key)));
+  useEffect(() => {
+    let current = true;
+    restoredOwner.current = null;
+    setRestored(false);
+    if (!userId) { setRestored(true); return; }
+    void loadTutorialProgress(userId).then(value => { if (current) { restoredOwner.current = userId; setProgress(value); setRestored(true); } });
+    return () => { current = false; };
+  }, [userId]);
+  useEffect(() => {
+    if (userId && restored && restoredOwner.current === userId && progress) void saveTutorialProgress(userId, progress).catch(() => {
+      if (currentOwner.current === userId) setTaskError("Walkthrough progress could not be saved on this device.");
+    });
+  }, [userId, restored, progress]);
+  useEffect(() => listenTutorialEvidence(event => {
+    if (!userId || restoredOwner.current !== userId || event.owner !== userId || !step?.action || event.action !== step.action || contextChanged) return;
+    setProgress(current => current?.status === "active" && (current.task === "macros" || current.scope === event.scope)
+      ? { ...current, completed: [...new Set([...current.completed, step.id])], skipped: current.skipped.filter(id => id !== step.id) } : current);
+  }), [userId, step?.action, step?.id, contextChanged]);
 
   useEffect(() => {
-    if (profile.data && !suppressed && !profile.data.tutorial_completed_at && !profile.data.tutorial_dismissed_at && profile.data.tutorial_version_seen !== TUTORIAL_VERSION) {
+    if (restored && profile.data && !suppressed && !profile.data.tutorial_completed_at && !profile.data.tutorial_dismissed_at && profile.data.tutorial_version_seen !== TUTORIAL_VERSION) {
       setWelcome(true); setSuppressed(true);
     }
-  }, [profile.data, suppressed]);
+  }, [profile.data, suppressed, restored]);
   useEffect(() => addTutorialListener(() => {
     generation.current += 1;
-    setSteps([]); setSaveError(null); setSaving(false); setSuppressed(true); setWelcome(true);
+    setSteps([]); setSaveError(null); setSaving(false); setSuppressed(true); setWelcome(true); setFullTour(false);
     setSelected(TOUR_SECTIONS.map(section => section.id));
   }), []);
   useEffect(() => () => { generation.current += 1; }, []);
@@ -66,6 +103,8 @@ export function OnboardingGuide({ children }: { children: ReactNode }) {
     }
   }
   function finish(action: FinishAction) {
+    setProgress(current => current && steps.length ? { ...current, index,
+      status: action === "dismiss_tutorial" ? "paused" : steps.every(item => current.completed.includes(item.id)) ? "complete" : "skipped" } : current);
     Keyboard.dismiss(); setSteps([]); setWelcome(false); setSuppressed(true);
     void save(action);
   }
@@ -74,12 +113,29 @@ export function OnboardingGuide({ children }: { children: ReactNode }) {
     router.navigate({ pathname: target.path, params: { ...target.params, tour: `${Date.now()}-${target.id}` } });
   }
   function move(position: number) {
+    if (progress) setProgress(current => current ? { ...current, index: Math.min(position, steps.length - 1),
+      skipped: step && !current.completed.includes(step.id) ? [...new Set([...current.skipped, step.id])] : current.skipped } : current);
     if (position >= steps.length) { finish("complete_tutorial"); return; }
     setIndex(position); showStep(steps[position]);
   }
   function start() {
     if (!chosenSteps.length) return;
-    setWelcome(false); setSteps(chosenSteps); setIndex(0); showStep(chosenSteps[0]);
+    setProgress(null); setWelcome(false); setSteps(chosenSteps); setIndex(0); showStep(chosenSteps[0]);
+  }
+  async function startTask(resume = false) {
+    const attempt = ++generation.current, owner = userId;
+    const task = resume && progress ? progress.task : taskChoice;
+    const requiredMode = task === "workouts" ? "workouts" : task === "meals" ? "nutrition" : mode;
+    setTaskError("");
+    try {
+      if (requiredMode !== mode) await updateWorkoutPreferences({ mode: requiredMode });
+      if (attempt !== generation.current || owner !== currentOwner.current) return;
+      const next = taskStepsFor(task, todayISO());
+      const position = resume && progress ? Math.min(progress.index, next.length - 1) : 0;
+      setProgress(resume && progress ? { ...progress, status: "active" }
+        : { version: 1, task, index: 0, scope: task === "meals" ? space.key : "personal", completed: [], skipped: [], status: "active" });
+      setWelcome(false); setSteps(next); setIndex(position); showStep(next[position]);
+    } catch (error) { if (attempt === generation.current && owner === currentOwner.current) setTaskError(error instanceof Error ? error.message : "Unable to open this walkthrough."); }
   }
   useEffect(() => {
     if (!step) return;
@@ -91,7 +147,7 @@ export function OnboardingGuide({ children }: { children: ReactNode }) {
     return () => listener.remove();
   });
 
-  const value = step ? { step, index, total: steps.length, visit, expanded: expanded && pathname === step.path,
+  const value = step ? { step, index, total: steps.length, visit, expanded: expanded && pathname === step.path && !contextChanged,
     expand: () => showStep(step), collapse: () => setExpanded(false), next: () => move(index + 1),
     skipSection: () => move(nextSectionIndex(steps, index)) } : null;
 
@@ -101,13 +157,16 @@ export function OnboardingGuide({ children }: { children: ReactNode }) {
         <View style={styles.bar} testID="tour-toolbar">
           <Icon label="Previous tour step" name="chevron-back" disabled={index === 0} onPress={() => move(index - 1)} />
           <Pressable accessibilityRole="button" accessibilityLabel={`Show tour step: ${step.title}`} onPress={() => showStep(step)} style={styles.barTitle}>
-            <Text style={styles.counter}>Tour {index + 1} / {steps.length}</Text><Text numberOfLines={1} style={styles.barLabel}>{step.title}</Text>
+            <Text style={styles.counter}>{progress?.completed.includes(step.id) ? "Action saved" : `Tour ${index + 1} / ${steps.length}`}</Text><Text numberOfLines={1} style={styles.barLabel}>{step.title}</Text>
           </Pressable>
           <Icon label="Skip tour section" name="play-skip-forward-outline" onPress={() => move(nextSectionIndex(steps, index))} />
           <Icon label={index === steps.length - 1 ? "Finish tour" : "Next tour step"} name={index === steps.length - 1 ? "checkmark" : "chevron-forward"} onPress={() => move(index + 1)} />
           <Icon label="End tour" name="close" onPress={() => finish("dismiss_tutorial")} />
         </View>
       </SafeAreaView> : null}
+      {step && contextChanged ? <View style={styles.saveError}><Text style={styles.error}>Your experience or group changed. Continue with the current group?</Text>
+        <Button label="Restart walkthrough here" icon="refresh" onPress={() => { setTaskChoice(progress!.task); setWelcome(true); setFullTour(false); }} />
+      </View> : null}
       {saveError ? <View style={styles.saveError} accessibilityRole="alert"><Text style={styles.error}>Tour preference not saved. You can keep using the app.</Text>
         <Button label="Retry" icon="refresh" disabled={saving} onPress={() => { void save(saveError); }} />
         <Icon label="Dismiss tour save error" name="close" onPress={() => setSaveError(null)} />
@@ -119,8 +178,22 @@ export function OnboardingGuide({ children }: { children: ReactNode }) {
         <View style={styles.welcome} accessibilityViewIsModal>
           <View style={styles.welcomeHeader}><BrandLogo size={44} /><Text accessibilityRole="header" style={styles.title}>Explore Dinner Swipe</Text>
             <Icon label="Decline tour" name="close" onPress={() => finish("dismiss_tutorial")} /></View>
-          <Text style={styles.copy}>Choose what to explore. We'll open each screen so you can try it as you go.</Text>
-          <ScrollView style={styles.sections}>
+          <Text style={styles.copy}>{fullTour ? "Choose what to explore." : "What would you like to do first?"}</Text>
+          {!fullTour ? <>
+            <View style={{ gap: 8 }}>
+              {(["meals", ...(workoutsEnabled ? ["workouts"] : []), ...(premium ? ["macros"] : [])] as TutorialTask[]).map(task => <Button key={task}
+                label={TASK_LABELS[task]} icon={task === "meals" ? "restaurant-outline" : task === "workouts" ? "barbell-outline" : "speedometer-outline"}
+                variant={taskChoice === task ? "primary" : "secondary"} onPress={() => setTaskChoice(task)} />)}
+            </View>
+            <Button label={(taskChoice === "meals" && mode === "workouts") ? "Switch to Nutrition and start" : taskChoice === "workouts" && mode !== "workouts" ? "Switch to Workouts and start" : "Start walkthrough"}
+              icon="play" variant="primary" disabled={!restored || space.isLoading || space.isError} onPress={() => { void startTask(); }} />
+            {progress && ["active", "paused"].includes(progress.status) && (progress.task !== "macros" || premium)
+              && (progress.task !== "meals" || progress.scope === space.key) ? <Button
+              label={`${progress.task === "meals" && mode !== "nutrition" ? "Switch to Nutrition and resume" : progress.task === "workouts" && mode !== "workouts" ? "Switch to Workouts and resume" : "Resume"}: ${TASK_LABELS[progress.task]}`}
+              icon="play-forward-outline" disabled={space.isLoading || space.isError}
+              onPress={() => { void startTask(true); }} /> : null}
+            <Button label="Explore all features" icon="compass-outline" onPress={() => setFullTour(true)} />
+          </> : <><ScrollView style={styles.sections}>
             {choices.map(section => <Pressable key={section.id} accessibilityRole="checkbox" accessibilityLabel={`Tour ${section.label}`}
               accessibilityState={{ checked: selected.includes(section.id) }} style={styles.section}
               onPress={() => setSelected(current => current.includes(section.id) ? current.filter(id => id !== section.id) : [...current, section.id])}>
@@ -129,6 +202,8 @@ export function OnboardingGuide({ children }: { children: ReactNode }) {
             </Pressable>)}
           </ScrollView>
           <Button label="Start tour" icon="play" variant="primary" disabled={!chosenSteps.length} onPress={start} />
+          </>}
+          {taskError ? <Text accessibilityRole="alert" style={styles.error}>{taskError}</Text> : null}
           <Button label="Not now" icon="close" onPress={() => finish("dismiss_tutorial")} />
         </View>
       </SafeAreaView>

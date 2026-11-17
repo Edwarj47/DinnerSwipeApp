@@ -5,6 +5,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: android-preview
@@ -12,26 +13,61 @@ concurrency:
 
 jobs:
   preview:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: preview
-    timeout-minutes: 30
+    timeout-minutes: 60
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - name: Require exact-commit CI and native release guards
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          node infrastructure/scripts/verify-release-ci.cjs "$GITHUB_SHA"
+          npm run test:icons -w apps/mobile
+          npm run test:release -w apps/mobile
+          node infrastructure/scripts/check-ota-runtime.cjs
       - run: npm run lint -w apps/mobile
       - run: npm run typecheck -w apps/mobile
       - run: npm test -w apps/mobile -- --runInBand
-      - name: Set up EAS
-        uses: expo/expo-github-action@v8
-        with:
-          eas-version: 27.2.0
-          token: ${{ secrets.EXPO_TOKEN }}
-      - name: Queue standalone APK build
+      - name: Locate APK verification tools before consuming a build
+        run: |
+          signer="$(find "$ANDROID_HOME/build-tools" -name apksigner -type f | sort -V | tail -n 1)"
+          test -x "$signer"
+          command -v unzip > /dev/null
+          printf 'APK_SIGNER=%s\n' "$signer" >> "$GITHUB_ENV"
+      - name: Build standalone APK and wait for completion
         working-directory: apps/mobile
         env:
           EAS_BUILD_NO_EXPO_GO_WARNING: "true"
-        run: eas build --platform android --profile preview --non-interactive --no-wait
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
+        run: |
+          test -n "$EXPO_TOKEN"
+          npx --yes eas-cli@27.2.0 build --platform android --profile preview --non-interactive --freeze-credentials --json > "$RUNNER_TEMP/eas-build.json"
+      - name: Require a finished build of this source before reporting success
+        run: |
+          node <<'NODE'
+          const fs=require('node:fs'),cp=require('node:child_process');
+          const builds=JSON.parse(fs.readFileSync(process.env.RUNNER_TEMP+'/eas-build.json'));
+          const b=builds[0],config=require('./apps/mobile/app.json').expo;
+          if(builds.length!==1||b.status!=='FINISHED'||b.gitCommitHash!==process.env.GITHUB_SHA||b.appVersion!==config.version||String(b.appBuildVersion)!==String(config.android.versionCode)||!b.artifacts?.buildUrl?.startsWith('https://'))throw Error('APK is not a finished matching-source build');
+          fs.writeFileSync(process.env.RUNNER_TEMP+'/apk-url.txt',b.artifacts.buildUrl);
+          NODE
+          curl --fail --silent --show-error --location --proto '=https' --retry 3 --max-time 600 --max-filesize 268435456 "$(cat "$RUNNER_TEMP/apk-url.txt")" --output "$RUNNER_TEMP/dinner-swipe.apk"
+          unzip -t "$RUNNER_TEMP/dinner-swipe.apk" > /dev/null
+          "$APK_SIGNER" verify --verbose --print-certs "$RUNNER_TEMP/dinner-swipe.apk" > "$RUNNER_TEMP/apk-signature.txt"
+          node <<'NODE'
+          const fs=require('node:fs');
+          const text=fs.readFileSync(process.env.RUNNER_TEMP+'/apk-signature.txt','utf8');
+          const signers=[...text.matchAll(/^Signer #\d+ certificate SHA-256 digest: ([a-f0-9]{64})$/gm)].map(match=>match[1]);
+          if(signers.length!==1||signers[0]!=='3c16a7714a35cc4ed652d89575d056002486ef28305628f81b5c79c87e3dbcef')throw Error('APK signing certificate mismatch');
+          NODE
+          sha256sum "$RUNNER_TEMP/dinner-swipe.apk"
+          printf 'Completed build and signing identity verified. Device acceptance is still required.\n' >> "$GITHUB_STEP_SUMMARY"

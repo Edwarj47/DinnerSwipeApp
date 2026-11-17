@@ -5,15 +5,14 @@ from typing import Annotated
 
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import OAuth2PasswordBearer
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 from starlette.concurrency import run_in_threadpool
 
 from app.core.actor import RequestActor, acting_as
 from app.core.security import decode_payload
 from app.database.session import get_db
-from app.models.entities import User, UserSubscription
-from app.services.billing import is_premium_active, require_basic_access
+from app.models.entities import User
+from app.services.billing import is_premium_access_active, require_basic_access
 from app.services.nutrition_consent import consent_status
 from app.services.web_sessions import ACCESS_COOKIE, cookie_mode, verify_csrf
 
@@ -46,12 +45,10 @@ async def get_current_user(
     expected = request.headers.get("x-dinner-account")
     if expected and expected != user.id:
         raise HTTPException(409, "Account changed. Reload before continuing.")
-    subscription = await run_in_threadpool(
-        db.scalar, select(UserSubscription).where(UserSubscription.user_id == user.id)
-    )
+    premium = await run_in_threadpool(is_premium_access_active, db, user)
     with acting_as(
         RequestActor(
-            user.id, is_premium_active(subscription), bool(consent_status(user)["accepted"])
+            user.id, premium, bool(consent_status(user)["accepted"])
         )
     ):
         yield user

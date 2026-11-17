@@ -30,6 +30,9 @@ export function SubscriptionGate({ children }: Props) {
   const queryClient = useQueryClient();
   const session = useAuthSession();
   const hadAccess = useRef(false);
+  const owner = session.userId ?? session.email;
+  const currentOwner = useRef(owner);
+  currentOwner.current = owner;
   const [code, setCode] = useState("");
   const [statusIsError, setStatusIsError] = useState(false);
   const [status, setStatus] = useTransientMessage(statusIsError);
@@ -49,6 +52,26 @@ export function SubscriptionGate({ children }: Props) {
     enabled: shouldCheck,
     retry: false
   });
+  const startWelcome = useMutation({
+    mutationFn: (_owner: string) => apiFetch<PremiumStatus>("/api/v1/subscription/welcome/start", { method: "POST" }),
+    onSuccess: (data, requestedOwner) => {
+      if (currentOwner.current === requestedOwner) queryClient.setQueryData(["subscription-status"], data);
+    }
+  });
+  const beginWelcome = startWelcome.mutate;
+  const resetWelcome = startWelcome.reset;
+  useEffect(() => { resetWelcome(); }, [owner, resetWelcome]);
+  useEffect(() => {
+    if (owner && shouldCheck && subscription.data?.welcome_eligible && !subscription.data.welcome_requires_verification
+      && !startWelcome.isPending && !startWelcome.isError) beginWelcome(owner);
+  }, [owner, shouldCheck, subscription.data?.welcome_eligible, subscription.data?.welcome_requires_verification,
+    startWelcome.isPending, startWelcome.isError, beginWelcome]);
+  useEffect(() => {
+    if (!subscription.data?.welcome_active || !subscription.data.welcome_ends_at) return;
+    const delay = Math.max(100, Math.min(2147483647, Date.parse(subscription.data.welcome_ends_at) - Date.now() + 100));
+    const timer = setTimeout(() => { void queryClient.invalidateQueries({ queryKey: ["subscription-status"] }); }, delay);
+    return () => clearTimeout(timer);
+  }, [subscription.data?.welcome_active, subscription.data?.welcome_ends_at, subscription.dataUpdatedAt, queryClient]);
   const canUseApp = session.authenticated && Boolean(subscription.data?.basic_active) && !subscription.isError;
 
   useEffect(() => {
@@ -138,6 +161,38 @@ export function SubscriptionGate({ children }: Props) {
         </SafeAreaView>
       </>
     );
+  }
+
+  if (subscription.data?.welcome_eligible) {
+    const needsVerification = subscription.data.welcome_requires_verification;
+    return <>{app}<SafeAreaView style={styles.overlay}><ScrollView contentContainerStyle={styles.content}>
+      <View style={styles.container}>
+        <View style={styles.hero}><BrandLogo size={72} framed /><Text style={styles.title}>30 days of Premium, on us</Text>
+          <Text style={styles.subtitle}>No card. No automatic charge.</Text></View>
+        <View style={styles.panel}>
+          <Text style={styles.accountEmail}>{session.email}</Text>
+          {needsVerification ? <>
+            <Text style={styles.nativeNote}>Verify your email to begin your 30 days.</Text>
+            <Button label="Resend verification email" icon="mail-outline" onPress={async () => {
+              const requestedOwner = owner;
+              try { await apiFetch("/api/v1/auth/resend-verification", { method: "POST" });
+                if (currentOwner.current === requestedOwner) setStatus("Verification email requested. Check your inbox."); }
+              catch (error) { if (currentOwner.current === requestedOwner) setStatus(error instanceof Error ? error.message : "Unable to send verification."); }
+            }} />
+            <Button label="I've verified my email" icon="checkmark" variant="primary" disabled={subscription.isFetching}
+              onPress={() => { void subscription.refetch(); }} />
+          </> : <>
+            {startWelcome.isPending ? <ActivityIndicator accessibilityLabel="Starting complimentary Premium" color={Colors.accent} /> : null}
+            {startWelcome.isError ? <Text accessibilityRole="alert" style={styles.nativeNote}>Unable to start your welcome access. Please try again.</Text> : null}
+            <Button label="Start complimentary Premium" icon="sparkles-outline" variant="primary"
+              disabled={startWelcome.isPending || !owner} onPress={() => { if (owner) beginWelcome(owner); }} />
+          </>}
+          {status ? <Text accessibilityLiveRegion="polite" style={styles.nativeNote}>{status}</Text> : null}
+          <Button label="Switch account" icon="swap-horizontal" onPress={() => { void switchAccount(); }} />
+          <Link href="/delete-account" style={styles.nativeNote}>Account deletion</Link>
+        </View>
+      </View>
+    </ScrollView></SafeAreaView></>;
   }
 
   return (

@@ -48,6 +48,7 @@ from app.services.macros import (
     update_macro_entry,
     update_targets,
 )
+from app.services.welcome_access import start_welcome
 
 
 def private_response(response: Response) -> None:
@@ -76,10 +77,19 @@ def subscription_status(db: DbDep, current_user: CurrentUser) -> dict[str, objec
     period_end = status.get("current_period_end")
     if isinstance(period_end, datetime):
         until = min(until, period_end.replace(tzinfo=None))
+    welcome_end = status.get("welcome_ends_at")
+    if status.get("welcome_active") and isinstance(welcome_end, datetime):
+        until = min(until, welcome_end.replace(tzinfo=None))
     return status | {
         "offline_until": until.replace(tzinfo=UTC) if status.get("basic_active") else None,
         "offline_sync_version": 1,
     }
+
+
+@router.post("/subscription/welcome/start", response_model=PremiumStatus)
+def begin_welcome(db: DbDep, current_user: CurrentUser) -> dict[str, object]:
+    start_welcome(db, current_user)
+    return subscription_status(db, current_user)
 
 
 @router.post("/subscription/waiver-code", response_model=PremiumStatus)

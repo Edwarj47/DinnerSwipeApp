@@ -111,6 +111,23 @@ class UserSubscription(Base, TimestampMixin):
     metadata_json: Mapped[dict[str, object]] = mapped_column(JSON, default=dict)
 
 
+class ComplimentaryPremiumAccess(Base, TimestampMixin):
+    __tablename__ = "complimentary_premium_access"
+    __table_args__ = (
+        CheckConstraint(
+            "(started_at IS NULL AND ends_at IS NULL) OR "
+            "(started_at IS NOT NULL AND ends_at IS NOT NULL AND ends_at > started_at)",
+            name="ck_complimentary_access_dates",
+        ),
+    )
+    user_id: Mapped[str] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), primary_key=True
+    )
+    offer_key: Mapped[str] = mapped_column(String(64), nullable=False)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    ends_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+
 class MacroProfileTarget(Base, TimestampMixin):
     __tablename__ = "macro_profile_targets"
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)

@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.database.session import SessionLocal
-from app.models.entities import User, UserSubscription
+from app.models.entities import User
 from app.models.nutrition import (
     NutritionFood,
     NutritionProviderState,
@@ -19,7 +19,7 @@ from app.models.nutrition import (
     NutritionServing,
     NutritionUsage,
 )
-from app.services.billing import is_premium_active
+from app.services.billing import is_premium_access_active
 from app.services.fatsecret import FatSecretClient
 from app.services.nutrition_budget import NutritionBudget, NutritionError, utcnow
 from app.services.nutrition_consent import consent_status
@@ -116,12 +116,18 @@ def refresh_used_foods(client: FatSecretClient = nutrition_client) -> dict[str, 
                     NutritionUsage.user_id.in_(
                         [
                             user.id
-                            for user, subscription in db.execute(
-                                select(User, UserSubscription)
-                                .join(UserSubscription, UserSubscription.user_id == User.id)
-                                .where(User.is_active.is_(True))
+                            for user in db.scalars(
+                                select(User).where(
+                                    User.is_active.is_(True),
+                                    User.id.in_(
+                                        select(NutritionUsage.user_id).where(
+                                            NutritionUsage.used_at >= now - timedelta(days=30)
+                                        )
+                                    ),
+                                )
                             )
-                            if is_premium_active(subscription) and consent_status(user)["accepted"]
+                            if is_premium_access_active(db, user)
+                            and consent_status(user)["accepted"]
                         ]
                     ),
                     NutritionUsage.used_at >= now - timedelta(days=30),

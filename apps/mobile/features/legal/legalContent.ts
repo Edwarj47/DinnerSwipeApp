@@ -133,7 +133,7 @@ export const termsSections = [
   {
     title: "Subscriptions",
     body:
-      "Dinner Swipe may offer a Basic subscription for app access with a card-on-file trial and a Premium subscription for macro tracking. Paid subscriptions are authorized through the billing checkout flow, renew until cancelled, and are subject to the price and trial terms shown at checkout. App terms acceptance alone does not authorize a card charge."
+      "Eligible new verified accounts may receive 30 days of complimentary Premium without a payment card. This welcome access expires without an automatic charge; continuing requires choosing a paid plan. Existing subscriptions keep their current terms. Usage limits apply to AI, voice, and database requests. Paid subscriptions are authorized through checkout, renew until cancelled, and are subject to the price and terms shown at checkout. Accepting app terms does not authorize a charge."
   },
   {
     title: "Third-Party Links And Retailers",

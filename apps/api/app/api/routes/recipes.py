@@ -291,11 +291,19 @@ def swipe(payload: SwipeRequest, db: DbDep, current_user: BasicUser) -> dict[str
             payload.request_id,
             payload.household_id,
         )
-        return {"status": "recorded", "swipe_id": event.id}
+        return {
+            "status": "recorded",
+            "swipe_id": event.id,
+            "planned_slot_id": event.planned_slot_id or "",
+        }
     event = record_swipe(
         db, current_user, payload.recipe_id, payload.action, payload.session_id, payload.request_id
     )
-    return {"status": "recorded", "swipe_id": event.id}
+    return {
+        "status": "recorded",
+        "swipe_id": event.id,
+        "planned_slot_id": event.planned_slot_id or "",
+    }
 
 
 @router.get("/swipes/summary")

@@ -1,5 +1,10 @@
 # Production Billing Readiness
 
+The release-12 record below is historical. The undeployed November 17 welcome
+offer gives eligible new verified accounts 30 days of Premium without a card or
+automatic charge, separately from paid subscriptions. See
+[launch polish](launch-polish-20261117.md) for exact eligibility and release order.
+
 ## Release 12 Scope
 
 API and web deployed on 2026-10-01. Both live Checkout sessions were created, verified,

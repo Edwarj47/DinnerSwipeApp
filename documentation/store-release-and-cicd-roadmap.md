@@ -4,8 +4,11 @@ This roadmap keeps Dinner Swipe easy to edit, test, deploy, and eventually submi
 
 ## Current State
 
-For the current verified state and remaining release blockers, use
-[Launch Readiness: November 8, 2026](launch-readiness-20261108.md).
+For the November 17 implementation and activation status, use
+[Launch Polish](launch-polish-20261117.md) and [Reviewed CI/CD](reviewed-cicd.md).
+The store blockers in [Launch Readiness: November 8, 2026](launch-readiness-20261108.md)
+still apply. This roadmap's CI/CD and card-backed trial sections below are historical;
+do not use their broad Compose/automatic database-restore examples as release commands.
 Expo SDK/native voice/EAS Update have since been integrated. The inventory and
 milestones below are the **historical September 26 baseline**, not a claim that
 those SDK/update steps are still outstanding or that store readiness is complete.

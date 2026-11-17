@@ -8,6 +8,8 @@ import { useGuidedTour } from "@/features/onboarding/TourContext";
 import { nextSectionIndex, TOUR_SECTIONS, tourStepsFor, TUTORIAL_VERSION } from "@/features/onboarding/tourSteps";
 import { apiFetch } from "@/services/api";
 import { openTutorial } from "@/services/tutorial";
+import { AuthSessionContext } from "@/services/session";
+import { observeTutorialResponse } from "@/services/tutorialProgress";
 
 const mockNavigate = jest.fn();
 jest.mock("expo-router", () => ({ useRouter: () => ({ navigate: mockNavigate }), usePathname: () => "/recipes" }));
@@ -37,15 +39,16 @@ function Exercise() {
     <Text>{tried ? "Control used" : "Ready"}</Text>
   </Pressable></TourTarget>;
 }
-function mount(gcTime = 0) {
+function mount(gcTime = 0, owner: string | null = null) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime }, mutations: { gcTime: 0 } } });
-  const screen = render(<QueryClientProvider client={client}><OnboardingGuide><Exercise /></OnboardingGuide></QueryClientProvider>);
+  const screen = render(<QueryClientProvider client={client}><AuthSessionContext.Provider value={{ authenticated: true, email: "fixture@example.com", userId: owner }}><OnboardingGuide><Exercise /></OnboardingGuide></AuthSessionContext.Provider></QueryClientProvider>);
   return { ...screen, client, close: () => { screen.unmount(); client.clear(); } };
 }
 test("first tour navigates to real controls, can collapse, and skips whole sections", async () => {
   const screen = mount();
   try {
     await screen.findByText("Explore Dinner Swipe");
+    fireEvent.press(screen.getByLabelText("Explore all features"));
     fireEvent.press(screen.getByLabelText("Start tour"));
     expect(mockNavigate).toHaveBeenLastCalledWith({ pathname: "/recipes", params: { mode: "library", tour: expect.any(String) } });
     fireEvent.press(screen.getByLabelText("Try it"));
@@ -71,6 +74,7 @@ test("completed accounts are not nagged; replay allows selecting sections and fi
     await waitFor(() => expect(screen.client.getQueryData(["profile"])).toBeDefined());
     expect(screen.queryByText("Explore Dinner Swipe")).toBeNull();
     act(() => openTutorial());
+    fireEvent.press(screen.getByLabelText("Explore all features"));
     expect(screen.queryByLabelText("Tour Premium macros")).toBeNull();
     for (const section of TOUR_SECTIONS.filter(item => !["recipes", "macros"].includes(item.id))) fireEvent.press(screen.getByLabelText(`Tour ${section.label}`));
     fireEvent.press(screen.getByLabelText("Start tour"));
@@ -129,4 +133,23 @@ test("section selection honors Premium access and skips sibling steps", () => {
   const steps = tourStepsFor(["recipes", "grocery"], true);
   expect(nextSectionIndex(steps, 0)).toBe(2);
   expect(nextSectionIndex(steps, 2)).toBe(steps.length);
+});
+
+test("default walkthrough recognizes only the current account's confirmed task action", async () => {
+  const screen = mount(0, "tutorial-owner");
+  try {
+    await screen.findByText("What would you like to do first?");
+    fireEvent.press(screen.getByLabelText("Start walkthrough"));
+    expect(mockNavigate).toHaveBeenLastCalledWith({ pathname: "/", params: { replace_slot_id: "", replace_name: "", tour: expect.any(String) } });
+    act(() => observeTutorialResponse("another-owner", "/api/v1/recipes/swipes", { method: "POST", body: JSON.stringify({ action: "add" }) }, { planned_slot_id: "slot" }));
+    expect(screen.queryByText("Action saved")).toBeNull();
+    act(() => observeTutorialResponse("tutorial-owner", "/api/v1/recipes/swipes", { method: "POST", body: JSON.stringify({ action: "add" }) }, { planned_slot_id: "slot" }));
+    await screen.findByText("Action saved");
+    fireEvent.press(screen.getByLabelText("Next tour step"));
+    expect(mockNavigate).toHaveBeenLastCalledWith({ pathname: "/week", params: { tour: expect.any(String) } });
+    fireEvent.press(screen.getByLabelText("End tour"));
+    await waitFor(() => expect(screen.queryByTestId("tour-toolbar")).toBeNull());
+    act(() => openTutorial());
+    expect(screen.getByLabelText("Resume: Plan meals")).toBeTruthy();
+  } finally { screen.close(); }
 });

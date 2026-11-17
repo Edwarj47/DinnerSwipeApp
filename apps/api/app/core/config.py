@@ -72,6 +72,7 @@ class Settings(BaseSettings):
     stripe_api_version: str = "2026-08-26.dahlia"
     basic_monthly_price_cents: int = 599
     basic_free_trial_days: int = 30
+    complimentary_premium_enabled: bool = True
     premium_monthly_price_cents: int = 999
     basic_waiver_codes: str = ""
     premium_waiver_codes: str = ""

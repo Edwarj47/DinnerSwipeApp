@@ -41,7 +41,7 @@ SDK 51 build stability.
 - Email verification and password reset foundation with branded HTML email templates
 - Household invite codes, majority-based group voting, owner-visible vote counts, percentages, and voter detail
 - User profile max-cook-time filtering and per-user allergen/disliked ingredient storage
-- Basic and Premium subscription foundation with server-side entitlements, private waiver-code unlocks, card-on-file Basic trial checkout, macro targets, meal confirmations, manual macro entries, analytics export, and Stripe-ready Checkout/webhook adapters
+- Basic and Premium subscriptions with server-side entitlements, verified-account 30-day no-card Premium welcome access, private waiver-code unlocks, macro targets, meal confirmations, manual macro entries, analytics export, and Stripe-ready Checkout/webhook adapters
 - Dinner Swipe privacy and terms pages adapted from DCSS legal language
 - Alembic database migration and Docker Compose stack with isolated PostgreSQL
 
@@ -50,7 +50,7 @@ SDK 51 build stability.
 - The initial web deployment is hosted behind a future reverse proxy route such as `dinner.dcss.dev`.
 - PostgreSQL for Dinner Swipe is separate from existing VPS databases.
 - OpenAI ingestion is disabled unless `AI_INGESTION_ENABLED=true` and `OPENAI_API_KEY` are configured in the ignored local `.env`.
-- Stripe billing is disabled unless the Stripe account is verified and `STRIPE_ENABLED=true` plus Stripe secrets and price IDs are configured in the ignored local `.env`. Basic trials start through Stripe Checkout with a card on file.
+- New eligible accounts start complimentary Premium after email verification, with no card or automatic charge. Existing subscriptions and legacy Basic trials keep their terms. Stripe billing requires a verified account, `STRIPE_ENABLED=true`, secrets and price IDs in the ignored local `.env`. See [launch polish and offer behavior](documentation/launch-polish-20261117.md) and [reviewed CI/CD activation](documentation/reviewed-cicd.md); source configuration does not imply a live release.
 - Retailer MVP support is search-link generation only. No login, cart automation, checkout, or scraping is implemented.
 - Placeholder recipe images are development-only and should be replaced or copied into controlled storage before production.
 

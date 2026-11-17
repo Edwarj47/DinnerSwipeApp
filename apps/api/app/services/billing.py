@@ -3,7 +3,7 @@ from __future__ import annotations
 import hashlib
 import math
 import secrets
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal, cast
 
 import structlog
@@ -13,7 +13,8 @@ from sqlalchemy.orm import Session
 
 from app.core.config import settings
 from app.core.rate_limit import auth_rate_limiter
-from app.models.entities import AuditEvent, User, UserSubscription
+from app.models.entities import AuditEvent, ComplimentaryPremiumAccess, User, UserSubscription
+from app.services.welcome_access import paid_history, welcome_active, welcome_for_user
 
 stripe_client: Any | None
 try:  # pragma: no cover - exercised only when Stripe is configured.
@@ -94,14 +95,22 @@ def subscription_days_remaining(
 
 def is_basic_access_active(db: Session, user: User) -> bool:
     subscription = subscription_for_user(db, user)
-    return subscription_plan_rank(subscription) >= PLAN_RANK[BASIC_PLAN_KEY]
+    return subscription_plan_rank(subscription) >= PLAN_RANK[BASIC_PLAN_KEY] or welcome_active(
+        user, welcome_for_user(db, user)
+    )
+
+
+def is_premium_access_active(db: Session, user: User) -> bool:
+    return is_premium_active(subscription_for_user(db, user)) or welcome_active(
+        user, welcome_for_user(db, user)
+    )
 
 
 def require_basic_access(db: Session, user: User) -> User:
     if not is_basic_access_active(db, user):
         raise HTTPException(
             status_code=402,
-            detail="Start Basic with a card on file to keep using Dinner Swipe.",
+            detail="Choose a subscription to continue. Your saved data is unchanged.",
         )
     return user
 
@@ -112,17 +121,28 @@ def serialize_premium_status(db: Session, user: User) -> dict[str, Any]:
 
 def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
     subscription = subscription_for_user(db, user)
+    welcome = welcome_for_user(db, user)
+    complimentary = welcome_active(user, welcome)
     plan_rank = subscription_plan_rank(subscription)
-    premium_active = plan_rank >= PLAN_RANK[PREMIUM_PLAN_KEY]
+    premium_active = plan_rank >= PLAN_RANK[PREMIUM_PLAN_KEY] or complimentary
     subscribed_basic = plan_rank >= PLAN_RANK[BASIC_PLAN_KEY]
     trial_active = bool(
         subscription
         and subscription.status == "trialing"
         and plan_rank >= PLAN_RANK[BASIC_PLAN_KEY]
     )
+    welcome_end = welcome.ends_at if welcome else None
+    welcome_days = (
+        max(0, math.ceil((welcome_end - datetime.utcnow()).total_seconds() / 86400))
+        if welcome_end
+        else 0
+    )
     trial_end = subscription.current_period_end if trial_active and subscription else None
     remaining_trial_days = subscription_days_remaining(subscription) if trial_active else 0
-    basic_active = subscribed_basic
+    if complimentary:
+        trial_end = welcome_end.replace(tzinfo=UTC) if welcome_end else None
+        remaining_trial_days = welcome_days
+    basic_active = subscribed_basic or complimentary
     current_tier: CurrentTier = (
         "premium"
         if premium_active
@@ -136,9 +156,14 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
     return {
         # Backward compatible fields for the existing premium macro UI.
         "active": premium_active,
-        "plan_key": active_plan_key or (BASIC_PLAN_KEY if trial_active else ""),
-        "status": subscription.status if subscription else "inactive",
-        "source": subscription.source if subscription else None,
+        "plan_key": active_plan_key
+        or (PREMIUM_PLAN_KEY if complimentary else BASIC_PLAN_KEY if trial_active else ""),
+        "status": subscription.status
+        if subscription
+        else ("complimentary" if complimentary else "inactive"),
+        "source": subscription.source
+        if subscription
+        else ("complimentary" if complimentary else None),
         "monthly_price_cents": settings.premium_monthly_price_cents,
         "stripe_configured": settings.stripe_premium_configured,
         "billing_management_available": bool(
@@ -154,10 +179,21 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
         "basic_active": basic_active,
         "basic_subscription_active": subscribed_basic,
         "premium_active": premium_active,
-        "trial_active": trial_active,
+        "trial_active": trial_active or complimentary,
         "trial_ends_at": trial_end,
         "trial_days_remaining": remaining_trial_days,
-        "basic_trial_eligible": basic_trial_eligible(subscription),
+        "basic_trial_eligible": basic_trial_eligible(subscription) and welcome is None,
+        "welcome_active": complimentary,
+        "welcome_eligible": bool(
+            welcome and not welcome.started_at and not paid_history(subscription)
+        ),
+        "welcome_requires_verification": not user.email_verified,
+        "welcome_started_at": (
+            welcome.started_at.replace(tzinfo=UTC) if welcome and welcome.started_at else None
+        ),
+        "welcome_ends_at": welcome_end.replace(tzinfo=UTC) if welcome_end else None,
+        "welcome_days_remaining": welcome_days,
+        "welcome_no_card": True,
         "basic_monthly_price_cents": settings.basic_monthly_price_cents,
         "premium_monthly_price_cents": settings.premium_monthly_price_cents,
         "basic_stripe_configured": settings.stripe_basic_configured,
@@ -185,9 +221,13 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
     }
 
 
-def require_premium(db: Session, user: User) -> UserSubscription:
+def require_premium(db: Session, user: User) -> UserSubscription | ComplimentaryPremiumAccess:
     subscription = subscription_for_user(db, user)
     if not is_premium_active(subscription):
+        welcome = welcome_for_user(db, user)
+        if welcome_active(user, welcome):
+            assert welcome is not None
+            return welcome
         raise HTTPException(status_code=402, detail="Premium macro tracking is required")
     assert subscription is not None
     return subscription
@@ -247,9 +287,18 @@ def create_checkout_session(
 ) -> str:
     auth_rate_limiter.check(f"checkout:{user.id}", 10, 60)
     tier = _normalize_tier(tier)
-    client = _configured_stripe_client(tier)
     db.scalar(select(User).where(User.id == user.id).with_for_update())
     subscription = subscription_for_user(db, user)
+    welcome = welcome_for_user(db, user)
+    if welcome_active(user, welcome) or (
+        welcome and welcome.started_at is None and not paid_history(subscription)
+    ):
+        raise HTTPException(
+            409,
+            "Your complimentary Premium is available or active. "
+            "Choose a paid plan after it ends; no automatic charge is scheduled.",
+        )
+    client = _configured_stripe_client(tier)
     if subscription and subscription.source == "stripe" and subscription.stripe_subscription_id:
         if subscription.status not in {"canceled", "cancelled", "incomplete_expired"}:
             raise HTTPException(409, "Open Manage billing to change your existing subscription.")
@@ -275,7 +324,7 @@ def create_checkout_session(
     plan_key = PLAN_KEY_BY_TIER[tier]
     metadata = {"user_id": user.id, "plan_key": plan_key, "tier": tier}
     subscription_data: dict[str, Any] = {"metadata": metadata}
-    trial_eligible = basic_trial_eligible(subscription)
+    trial_eligible = basic_trial_eligible(subscription) and welcome is None
     if tier == BASIC_TIER and trial_eligible:
         trial_days = max(0, settings.basic_free_trial_days)
         if trial_days > 0:

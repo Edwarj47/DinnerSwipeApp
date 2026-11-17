@@ -48,3 +48,24 @@ test("account reset drops selected mode and ignores an old account's restore", a
   const restoring = restoreWorkoutPreferences("a"); setOfflineOwner("b"); resetWorkoutMode("b"); await restoring;
   expect(useWorkoutMode.getState()).toMatchObject({ owner: "b", mode: "nutrition", weight_unit: "kg", enabled: false });
 });
+test("queued mode changes never run in a different account", async () => {
+  setWorkoutsEnabled(true);
+  let release!: (value: object) => void;
+  jest.mocked(apiFetch).mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  const first = updateWorkoutPreferences({ mode: "workouts" });
+  await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(1));
+  const queued = updateWorkoutPreferences({ weight_unit: "lb" });
+  const rejection = expect(queued).rejects.toThrow("Your account changed");
+  setOfflineOwner("b"); resetWorkoutMode("b"); setWorkoutsEnabled(true);
+  release({ experience_preferences: { mode: "workouts", weight_unit: "kg" } });
+  await first; await rejection;
+  expect(apiFetch).toHaveBeenCalledTimes(1);
+  expect(useWorkoutMode.getState()).toMatchObject({ owner: "b", mode: "nutrition", weight_unit: "kg" });
+  expect(await AsyncStorage.getItem("dinnerSwipe.workouts.preferences.v1.b")).toBeNull();
+});
+test("account changes during query cancellation cannot send a preference PATCH", async () => {
+  const client = new QueryClient(); bindWorkoutModeClient(client); setWorkoutsEnabled(true);
+  jest.spyOn(client, "cancelQueries").mockImplementation(async () => { setOfflineOwner("b"); resetWorkoutMode("b"); });
+  await expect(updateWorkoutPreferences({ mode: "workouts" })).rejects.toThrow("Your account changed");
+  expect(apiFetch).not.toHaveBeenCalled(); client.clear();
+});

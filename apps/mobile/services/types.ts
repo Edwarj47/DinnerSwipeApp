@@ -175,6 +175,13 @@ export type PremiumStatus = {
   trial_ends_at?: string | null;
   trial_days_remaining: number;
   basic_trial_eligible?: boolean;
+  welcome_active?: boolean;
+  welcome_eligible?: boolean;
+  welcome_requires_verification?: boolean;
+  welcome_started_at?: string | null;
+  welcome_ends_at?: string | null;
+  welcome_days_remaining?: number;
+  welcome_no_card?: boolean;
   basic_monthly_price_cents: number;
   premium_monthly_price_cents: number;
   basic_stripe_configured: boolean;

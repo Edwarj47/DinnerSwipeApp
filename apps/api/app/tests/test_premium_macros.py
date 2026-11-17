@@ -171,7 +171,7 @@ def test_basic_access_requires_subscription_or_stripe_trial(
 
     blocked_recipes = client.get("/api/v1/recipes", headers=headers)
     assert blocked_recipes.status_code == 402
-    assert "card on file" in blocked_recipes.json()["detail"]
+    assert "Choose a subscription" in blocked_recipes.json()["detail"]
 
     user = db_session.query(User).filter_by(email="nosub@example.com").one()
     db_session.add(
@@ -280,8 +280,10 @@ def test_stripe_account_mismatch_blocks_checkout(
     assert "Stripe account mismatch" in response.text
 
 
-def test_basic_checkout_uses_basic_price_and_card_required_trial(
-    client: TestClient, auth_headers: dict[str, str], monkeypatch: pytest.MonkeyPatch
+def test_legacy_basic_checkout_uses_basic_price_and_card_required_trial(
+    client: TestClient,
+    auth_headers: dict[str, str],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: dict[str, Any] = {}
 

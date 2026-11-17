@@ -78,20 +78,27 @@ export function SubscriptionPanel() {
 
   const currentTier = subscription.data?.current_tier ?? "none";
   const trialDays = subscription.data?.trial_days_remaining ?? 0;
+  const welcome = Boolean(subscription.data?.welcome_active);
 
   return (
     <View style={styles.panel}>
       <View style={styles.header}>
         <View style={{ flex: 1 }}>
           <Text style={styles.section}>Subscription</Text>
-          <Text style={styles.meta}>{tierSummary(currentTier, trialDays)}</Text>
+          <Text style={styles.meta}>{welcome
+            ? `Complimentary Premium: ${subscription.data?.welcome_days_remaining ?? 0} days left. No card or automatic charge.`
+            : tierSummary(currentTier, trialDays)}</Text>
         </View>
         <View style={[styles.statusPill, premiumActive ? styles.activePill : styles.lockedPill]}>
           <Text style={[styles.statusText, premiumActive ? styles.activeText : styles.lockedText]}>
-            {currentTier === "none" ? "Inactive" : currentTier}
+            {welcome ? "Welcome" : currentTier === "none" ? "Inactive" : currentTier}
           </Text>
         </View>
       </View>
+
+      {welcome && subscription.data?.welcome_ends_at ? <Text style={styles.meta}>
+        Ends {new Date(subscription.data.welcome_ends_at).toLocaleDateString()}. Choose Basic or Premium afterwards to continue. Your saved data stays intact.
+      </Text> : null}
 
       <View style={styles.planList}>
         <PlanCard
@@ -111,13 +118,13 @@ export function SubscriptionPanel() {
           fallbackPriceCents={subscription.data?.premium_monthly_price_cents ?? 999}
           fallbackDescription="Everything in Basic plus daily macros, planned-meal logging, analytics, and exports."
           active={premiumActive}
-          badge="Macro tracking"
+          badge={welcome ? "Complimentary access" : "Macro tracking"}
           actionLabel={premiumActive ? "Current" : "Upgrade"}
           disabled={premiumActive || !subscription.data?.premium_stripe_configured || startCheckout.isPending}
           onPress={() => startCheckout.mutate("premium")}
         />
       </View>
-      <Text style={styles.meta}>Basic includes a private kitchen and one shared group. Premium includes unlimited shared groups.</Text>
+      <Text style={styles.meta}>Basic includes Personal and one shared group. Premium includes unlimited shared groups.</Text>
 
       <View style={styles.codeBox}>
         <Text style={styles.codeTitle}>Coupon code</Text>
@@ -208,7 +215,7 @@ function tierSummary(currentTier: string, trialDays: number) {
   if (currentTier === "trial") {
     return `Basic trial is active. ${trialDays} day${trialDays === 1 ? "" : "s"} left.`;
   }
-  return "Start Basic with a card on file or choose Premium for macro tracking.";
+  return "Choose Basic or Premium to continue. Your saved data is unchanged.";
 }
 
 const createStyles = (Colors: ThemeColors) => (StyleSheet.create({

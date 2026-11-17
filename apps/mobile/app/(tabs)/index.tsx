@@ -46,7 +46,7 @@ function DiscoverContent() {
   const cardHeight = viewportHeight - selectorHeight - statusHeight - 42;
   const accessibleLayout = height < 720 || fontScale > 1.2 || cardBodyHeight + 120 > cardHeight;
   const tour = useGuidedTour();
-  const scroll = Platform.OS === "web" || accessibleLayout || Boolean(tour?.expanded && tour.step.id === "discover");
+  const scroll = Platform.OS === "web" || accessibleLayout || Boolean(tour?.expanded && (tour.step.targetId ?? tour.step.id) === "discover");
   const router = useRouter();
   const params = useLocalSearchParams<{ replace_slot_id?: string; replace_name?: string }>();
   const queryClient = useQueryClient();
@@ -180,7 +180,11 @@ function DiscoverContent() {
         ) : null}
       </View>}>
       {status ? <Text style={styles.status} onLayout={event => setStatusHeight(event.nativeEvent.layout.height)}>{status}</Text> : null}
-      <TourTarget id="discover" fill>
+      <TourTarget id="discover" fill body={data?.recipes.length === 0
+        ? !space.groupId ? "Add your first recipe below, then return here to plan it once it is approved for Discover."
+          : space.canManage ? "This group has no Discover choices yet. Choose recipes in Group settings before planning a meal."
+            : "The group owner needs to choose Discover recipes. You can switch to Personal and restart this walkthrough."
+        : undefined}>
       {space.isLoading || isLoading || plan.isLoading ? (
         <View style={styles.empty}>
           <ActivityIndicator color={Colors.accent} />

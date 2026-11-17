@@ -8,12 +8,12 @@ import { apiErrorDetails } from "./apiErrors";
 import { cacheable, changeOffline, deviceOffline, findMacro, loadOffline, macroAfter, offlineAccess, offlineOwner,
   OfflineEdit, overlay, readOffline, setDeviceOffline, setOfflineOwner, useOfflineStatus } from "./offlineStore";
 import { forgetOfflineSession } from "./offlineStore";
+import { observeTutorialResponse } from "./tutorialProgress";
 
 export const API_URL =
-  process.env.EXPO_PUBLIC_API_URL ??
   (Platform.OS === "web" && typeof window !== "undefined"
-    ? window.location.origin
-    : "http://127.0.0.1:8108");
+    ? (__DEV__ ? process.env.EXPO_PUBLIC_API_URL ?? window.location.origin : window.location.origin)
+    : process.env.EXPO_PUBLIC_API_URL ?? "http://127.0.0.1:8108");
 const ACCESS_TOKEN_KEY = "dinnerSwipeAccessToken";
 const REFRESH_TOKEN_KEY = "dinnerSwipeRefreshToken";
 const OFFLINE_OWNER_KEY = "dinnerSwipeOfflineOwner";
@@ -213,6 +213,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   // An unrelated service outage must not prevent an online account-deletion request.
   const accountControl = path === "/api/v1/auth/account/deletion-request" || path === "/api/v1/auth/account/delete-request";
   const stored = owner ? await loadOffline(owner).catch(() => undefined) : undefined;
+  if (epoch !== sessionEpoch) throw new ApiError("Account changed. Try again.", 409);
   if (owner && stored?.subscription?.offline_sync_version === 1 && method !== "GET") {
     let edit = makeOfflineEdit(path, init, stored);
     if (edit) {
@@ -295,6 +296,7 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
 async function authorizedFetch<T>(path: string, init: RequestInit, canRefresh: boolean): Promise<T> {
   const epoch = sessionEpoch;
   const token = await getToken();
+  if (epoch !== sessionEpoch) throw new ApiError("Account changed. Try again.", 409);
   const headers = new Headers(init.headers);
   if (!headers.has("Content-Type") && shouldSetJsonContentType(init)) {
     headers.set("Content-Type", "application/json");
@@ -315,7 +317,10 @@ async function authorizedFetch<T>(path: string, init: RequestInit, canRefresh: b
     if (response.status === 401 && !path.startsWith("/api/v1/auth/")) await clearAuthTokens();
     throw await responseError(response);
   }
-  return response.json() as Promise<T>;
+  const result = await response.json() as T;
+  if (epoch !== sessionEpoch) throw new ApiError("Account changed. Try again.", 409);
+  if (owner && owner === offlineOwner()) observeTutorialResponse(owner, path, init, result);
+  return result;
 }
 
 async function request(path: string, init: RequestInit): Promise<Response> {

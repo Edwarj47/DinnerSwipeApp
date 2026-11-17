@@ -4,7 +4,7 @@
     "owner": "data-centric-software-solutions",
     "slug": "dinner-swipe",
     "scheme": "dinnerswipe",
-    "version": "0.2.1",
+    "version": "0.2.2",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -22,6 +22,7 @@
     ],
     "ios": {
       "bundleIdentifier": "dev.dcss.dinnerswipe",
+      "buildNumber": "30",
       "supportsTablet": false,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Dinner Swipe lets you choose recipe photos from your library."
@@ -33,7 +34,7 @@
         "foregroundImage": "./assets/appearance/black.png",
         "backgroundColor": "#111111"
       },
-      "versionCode": 29
+      "versionCode": 30
     },
     "web": {
       "bundler": "metro",

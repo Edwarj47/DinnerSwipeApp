@@ -2,18 +2,19 @@ import { Ionicons } from "@expo/vector-icons";
 import { ReactNode, useContext, useEffect, useRef } from "react";
 import { AccessibilityInfo, StyleSheet, Text, View, ViewInstance } from "react-native";
 import { Button } from "@/components/Button";
-import { Colors, shadow } from "@/components/theme";
+import { useThemeColors, useThemedStyles, ThemeColors, shadow } from "@/components/theme";
 import { TourScrollContext, useGuidedTour } from "./TourContext";
 
 // In-flow callouts never cover a control or capture its gestures.
-export function TourTarget({ id, children, fill = false }: { id: string; children: ReactNode; fill?: boolean }) {
+export function TourTarget({ id, children, fill = false, body }: { id: string; children: ReactNode; fill?: boolean; body?: string }) {
   const tour = useGuidedTour();
+  const Colors = useThemeColors(), styles = useThemedStyles(createStyles);
   const reveal = useContext(TourScrollContext);
   const node = useRef<ViewInstance>(null);
-  const active = tour?.step.id === id;
+  const active = (tour?.step.targetId ?? tour?.step.id) === id;
   const expanded = active && tour?.expanded;
   useEffect(() => {
-    if (!active) return;
+    if (!active || !tour) return;
     AccessibilityInfo.announceForAccessibility(tour.step.title);
     const timer = setTimeout(() => { if (node.current) reveal?.(node.current); }, 100);
     return () => clearTimeout(timer);
@@ -22,7 +23,7 @@ export function TourTarget({ id, children, fill = false }: { id: string; childre
     {expanded ? <View style={styles.callout} testID="tour-callout">
       <View style={styles.heading}><Ionicons name="compass-outline" size={20} color={Colors.basil} />
         <Text accessibilityRole="header" style={styles.title}>{tour.step.title}</Text></View>
-      <Text style={styles.body}>{tour.step.body}</Text>
+      <Text style={styles.body}>{body ?? tour.step.body}</Text>
       <View style={styles.actions}>
         <Button label="Try it" icon="hand-left-outline" variant="primary" onPress={tour.collapse} />
         <Button label="Skip section" icon="play-skip-forward-outline" onPress={tour.skipSection} />
@@ -32,7 +33,7 @@ export function TourTarget({ id, children, fill = false }: { id: string; childre
     <View style={fill ? styles.fill : undefined}>{children}{active ? <View testID="tour-highlight" pointerEvents="none" style={styles.highlight} /> : null}</View>
   </View>;
 }
-const styles = StyleSheet.create({
+const createStyles = (Colors: ThemeColors) => StyleSheet.create({
   fill: { flexGrow: 1 },
   callout: { marginVertical: 10, backgroundColor: Colors.surface, padding: 14, borderRadius: 8, borderColor: Colors.basil, borderWidth: 1, gap: 10, ...shadow },
   heading: { flexDirection: "row", alignItems: "center", gap: 8 },

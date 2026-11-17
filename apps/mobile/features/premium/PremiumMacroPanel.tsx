@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { ReactNode, useEffect, useMemo, useState } from "react";
+import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, Share, StyleSheet, Text, TextInput, useWindowDimensions, View, ViewStyle } from "react-native";
 
 import { Button } from "@/components/Button";
@@ -39,7 +39,7 @@ import {
 
 type MacroView = "day" | "grid" | "calendar" | "analytics";
 
-export function PremiumMacroPanel() {
+export function PremiumMacroPanel({ tutorial }: { tutorial?: { visit?: string; date?: string } } = {}) {
   const styles = useThemedStyles(createStyles);
   const units = useMeasurementUnits();
   const unit = units.protein_g;
@@ -55,6 +55,13 @@ export function PremiumMacroPanel() {
   const [selectedDate, setSelectedDate] = useState(todayISO());
   const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
   const [entryName, setEntryName] = useState("");
+  const lastTutorial = useRef<string | undefined>(undefined);
+  useEffect(() => {
+    if (!tutorial?.visit || lastTutorial.current === tutorial.visit) return;
+    lastTutorial.current = tutorial.visit;
+    setMacroView("day");
+    if (!editingEntryId && !entryName.trim() && tutorial.date && isISODate(tutorial.date)) setSelectedDate(tutorial.date);
+  }, [tutorial?.visit, tutorial?.date, editingEntryId, entryName]);
   const [mealLabel, setMealLabel] = useState("dinner");
   const [entryCalories, setEntryCalories] = useState("");
   const [entryProtein, setEntryProtein] = useState("");
@@ -282,7 +289,7 @@ export function PremiumMacroPanel() {
 
           {macroView !== "day" && (macroView === "analytics" ? analytics.data : calendarAnalytics.data)?.nutrition_unavailable_count ? <NutritionPendingNotice refreshing={activeQuery.isFetching} onRefresh={() => { void activeQuery.refetch(); }} /> : null}
           {macroView === "day" ? (
-            <><Button label="Log a saved recipe" icon="restaurant-outline" onPress={() => setRecipeLog("new")} />
+            <TourTarget id="macro-entry"><Button label="Log a saved recipe" icon="restaurant-outline" onPress={() => setRecipeLog("new")} />
             {assistantStatus.data?.enabled ? <Button label="Describe a meal" icon="sparkles-outline" disabled={offline} onPress={() => setMealAssistant(true)} /> : null}
             <DayMacroView
               selectedDate={selectedDate}
@@ -318,7 +325,7 @@ export function PremiumMacroPanel() {
               onDelete={() => editingEntryId ? deleteEntry.mutate(editingEntryId) : undefined}
               onEdit={beginEdit}
               onCalculator={() => setCalculator("new")}
-            /></>
+            /></TourTarget>
           ) : null}
           {recipeLog ? <RecipeMacroLogger entry={recipeLog === "new" ? undefined : recipeLog} date={selectedDate}
             onClose={() => setRecipeLog(null)} /> : null}

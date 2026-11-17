@@ -1181,9 +1181,13 @@ def test_approval_keeps_new_items_private_and_existing_user_data_unchanged(
     response = decide(client, auth_headers, batch.id, [recipe_candidate.id, workout_candidate.id])
     assert response.status_code == 200, response.text
     for table in tables:
-        after = {row["id"]: dict(row) for row in db_session.execute(select(table)).mappings()}
+        keys = [column.name for column in table.primary_key.columns]
+        after = {
+            tuple(row[key] for key in keys): dict(row)
+            for row in db_session.execute(select(table)).mappings()
+        }
         for row in before[table.name]:
-            assert after[row["id"]] == row, table.name
+            assert after[tuple(row[key] for key in keys)] == row, table.name
     recipe = db_session.get(Recipe, recipe_candidate.recipe_id)
     template = db_session.get(WorkoutTemplate, workout_candidate.workout_template_id)
     assert recipe and recipe.owner_user_id == owner.id and recipe.household_id is None

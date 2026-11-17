@@ -139,3 +139,47 @@ test("deletion route does not require subscription access or load protected scre
     expect(screen.queryByText("Waiting for recipes")).toBeNull();
   } finally { screen.unmount(); client.clear(); jest.mocked(usePathname).mockReturnValue("/"); }
 });
+
+test("welcome access verifies first, unlocks Premium once and never opens checkout", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } });
+  const request = jest.mocked(apiFetch);
+  request.mockReset();
+  let verified = false, started = false;
+  const status = () => ({ basic_active: started, premium_active: started, welcome_active: started,
+    welcome_eligible: !started, welcome_requires_verification: !verified });
+  request.mockImplementation(async path => {
+    if (path.endsWith("welcome/start")) { started = true; return status(); }
+    if (path.endsWith("subscription/status")) return status();
+    if (path.endsWith("recipes")) return ["Saved dinner"];
+    return {};
+  });
+  const screen = render(<QueryClientProvider client={client}><AuthSessionContext.Provider value={{ authenticated: true, email: "new@example.com", userId: "new-user" }}>
+    <SubscriptionGate><AppScreens /></SubscriptionGate>
+  </AuthSessionContext.Provider></QueryClientProvider>);
+  try {
+    await screen.findByText("No card. No automatic charge.");
+    expect(request.mock.calls.some(([path]) => path.endsWith("welcome/start"))).toBe(false);
+    verified = true;
+    fireEvent.press(screen.getByLabelText("I've verified my email"));
+    await screen.findByText("Saved dinner");
+    expect(request.mock.calls.filter(([path]) => path.endsWith("welcome/start"))).toHaveLength(1);
+    expect(request.mock.calls.some(([path]) => path.endsWith("checkout-session"))).toBe(false);
+  } finally { screen.unmount(); client.clear(); }
+});
+
+test("failed welcome start offers a retry without falling back to a paid checkout", async () => {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } });
+  const request = jest.mocked(apiFetch);request.mockReset();
+  request.mockImplementation(async path => {
+    if (path.endsWith("welcome/start")) throw new Error("Temporarily unavailable");
+    return { basic_active: false, welcome_eligible: true, welcome_requires_verification: false };
+  });
+  const screen = render(<QueryClientProvider client={client}><AuthSessionContext.Provider value={{ authenticated: true, email: "new@example.com", userId: "new-user" }}>
+    <SubscriptionGate><AppScreens /></SubscriptionGate>
+  </AuthSessionContext.Provider></QueryClientProvider>);
+  try {
+    await screen.findByText("Unable to start your welcome access. Please try again.");
+    expect(request.mock.calls.filter(([path]) => path.endsWith("welcome/start"))).toHaveLength(1);
+    expect(screen.queryByText("Choose your plan")).toBeNull();
+  } finally { screen.unmount(); client.clear(); }
+});

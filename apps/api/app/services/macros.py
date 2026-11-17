@@ -16,7 +16,6 @@ from app.models.entities import (
     Recipe,
     RecipeMacroProfile,
     User,
-    UserSubscription,
     WeeklyPlan,
     WeeklyPlanSlot,
 )
@@ -26,7 +25,7 @@ from app.schemas.common import (
     MealMacroConfirmationIn,
     RecipeNutrition,
 )
-from app.services.billing import is_premium_active, require_premium, serialize_premium_status
+from app.services.billing import is_premium_access_active, require_premium, serialize_premium_status
 from app.services.recipes import accessible_recipes_query
 
 MAX_SUMMARY_DAYS = 3650
@@ -249,9 +248,7 @@ def delete_macro_entry(db: Session, user: User, entry_id: str, *, commit: bool =
 def macro_summary(
     db: Session, user: User, days: int, end_date: date | None = None
 ) -> dict[str, Any]:
-    active = is_premium_active(
-        db.scalar(select(UserSubscription).where(UserSubscription.user_id == user.id))
-    )
+    active = is_premium_access_active(db, user)
     end_date = end_date or date.today()
     bounded_days = max(1, min(days, MAX_SUMMARY_DAYS))
     try:

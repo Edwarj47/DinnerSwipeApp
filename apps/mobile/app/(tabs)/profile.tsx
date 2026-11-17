@@ -16,7 +16,7 @@ import { PremiumStatus } from "@/services/types";
 
 // Keep the route name for existing password-reset, tour, and subscription links.
 export default function MacrosScreen() {
-  const params = useLocalSearchParams<{ section?: string; reset_token?: string; group_view?: string; tour?: string }>();
+  const params = useLocalSearchParams<{ section?: string; reset_token?: string; group_view?: string; tour?: string; macro_date?: string }>();
   const focused = useIsFocused();
   const settings = useSettingsMenu();
   const [view, setView] = useState<"tracking" | "analytics">("tracking");
@@ -58,7 +58,7 @@ export default function MacrosScreen() {
         { label: "Macro tracking", value: "tracking", icon: "speedometer-outline" },
         { label: "Analytics", value: "analytics", icon: "stats-chart-outline" }
       ]} />
-      <View style={styles.content}>{view === "tracking" ? <PremiumMacroPanel /> : <MacroAnalyticsPanel />}</View>
+      <View style={styles.content}>{view === "tracking" ? <PremiumMacroPanel tutorial={{ visit: params.tour, date: params.macro_date }} /> : <MacroAnalyticsPanel />}</View>
     </>}
   </Screen>;
 }

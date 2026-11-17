@@ -23,7 +23,7 @@ from app.services.account_preferences import (
     configured_default_group,
     display_name,
 )
-from app.services.billing import is_premium_active, subscription_for_user
+from app.services.billing import is_premium_access_active
 from app.services.parsing import normalize_name
 from app.services.recipes import (
     accessible_recipes_query,
@@ -123,7 +123,7 @@ def require_group_capacity(db: Session, user: User) -> None:
         )
         or 0
     )
-    if count and not is_premium_active(subscription_for_user(db, user)):
+    if count and not is_premium_access_active(db, user):
         raise HTTPException(
             status_code=403,
             detail=(

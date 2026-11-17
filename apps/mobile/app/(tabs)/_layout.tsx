@@ -25,11 +25,11 @@ const icons = {
 
 export default function TabLayout() {
   const canUseApp = useAppAccess();
-  const { email } = useAuthSession();
+  const { userId, email } = useAuthSession();
   // Keep the root Stack mounted for public routes; defer protected screens and queries here.
   if (!canUseApp) return null;
   return (
-    <OnboardingGuide key={email}>
+    <OnboardingGuide key={userId ?? email}>
       <SettingsMenuProvider><WorkoutRuntime /><NavigationTabs /></SettingsMenuProvider>
     </OnboardingGuide>
   );

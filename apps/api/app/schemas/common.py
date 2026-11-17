@@ -51,7 +51,7 @@ class RegisterRequest(ApiModel):
     password: str = Field(min_length=8, max_length=128)
     terms_accepted: bool = False
     privacy_accepted: bool = False
-    legal_document_version: str = Field(default="2026-10-14", min_length=1, max_length=40)
+    legal_document_version: str = Field(default="2026-11-17", min_length=1, max_length=40)
 
 
 class LoginRequest(ApiModel):
@@ -128,6 +128,13 @@ class PremiumStatus(ApiModel):
     trial_ends_at: datetime | None = None
     trial_days_remaining: int = 0
     basic_trial_eligible: bool = True
+    welcome_active: bool = False
+    welcome_eligible: bool = False
+    welcome_requires_verification: bool = False
+    welcome_started_at: datetime | None = None
+    welcome_ends_at: datetime | None = None
+    welcome_days_remaining: int = 0
+    welcome_no_card: bool = True
     basic_monthly_price_cents: int = 599
     premium_monthly_price_cents: int = 999
     basic_stripe_configured: bool = False

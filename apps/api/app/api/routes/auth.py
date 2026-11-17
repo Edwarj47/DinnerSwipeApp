@@ -18,6 +18,7 @@ from app.core.security import (
 )
 from app.models.entities import (
     AuditEvent,
+    ComplimentaryPremiumAccess,
     GroceryList,
     GroceryListItem,
     Household,
@@ -98,6 +99,10 @@ def register(
     household = Household(name="My kitchen", is_personal=True)
     db.add_all([user, household])
     db.flush()
+    if settings.complimentary_premium_enabled:
+        from app.services.welcome_access import WELCOME_OFFER
+
+        db.add(ComplimentaryPremiumAccess(user_id=user.id, offer_key=WELCOME_OFFER))
     db.add(HouseholdMember(household_id=household.id, user_id=user.id, role="owner"))
     db.add(UserProfile(user_id=user.id, household_id=household.id))
     db.add(

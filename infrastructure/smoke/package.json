@@ -1,0 +1,12 @@
+{
+  "name": "dinner-swipe-release-smoke",
+  "private": true,
+  "version": "1.0.0",
+  "scripts": {
+    "test": "node run.cjs"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1",
+    "pngjs": "7.0.0"
+  }
+}

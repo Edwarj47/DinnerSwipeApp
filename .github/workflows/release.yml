@@ -1,0 +1,148 @@
+name: Reviewed Web API Release
+on:
+  workflow_dispatch:
+    inputs:
+      sha:
+        description: Exact reviewed main commit SHA (40 lowercase hex characters)
+        required: true
+      target:
+        type: choice
+        options: [staging, production]
+        default: staging
+      scope:
+        type: choice
+        options: [api-web, web, api, api-worker-web]
+        default: api-web
+      manifest_digest:
+        description: Production only - SHA256 of the exact manifest verified on staging
+        required: false
+permissions:
+  contents: read
+  actions: read
+concurrency:
+  group: dinner-swipe-release
+  cancel-in-progress: false
+jobs:
+  candidate:
+    if: github.ref == 'refs/heads/main' && inputs.target == 'staging'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    permissions:
+      contents: read
+      actions: read
+      packages: write
+    outputs:
+      manifest: ${{ steps.manifest.outputs.digest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - name: Verify trusted exact-commit CI before building
+        env:
+          SOURCE_SHA: ${{ inputs.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node infrastructure/scripts/verify-release-ci.cjs "$SOURCE_SHA"
+      - name: Check out the validated source
+        env:
+          SOURCE_SHA: ${{ inputs.sha }}
+        run: git checkout --detach "$SOURCE_SHA"
+      - run: npm ci --prefix infrastructure/smoke
+      - run: cd infrastructure/smoke && npx playwright install --with-deps chromium
+      - name: Build immutable candidate images
+        env:
+          SOURCE_SHA: ${{ inputs.sha }}
+        run: |
+          docker build --label org.opencontainers.image.revision="$SOURCE_SHA" -f infrastructure/docker/api.Dockerfile -t "ghcr.io/edwarj47/dinnerswipeapp/api:$SOURCE_SHA" .
+          docker build --label org.opencontainers.image.revision="$SOURCE_SHA" -f infrastructure/docker/web.Dockerfile -t "ghcr.io/edwarj47/dinnerswipeapp/web:$SOURCE_SHA" .
+          docker run -d --name dinner-release-candidate --read-only --cap-drop ALL --security-opt no-new-privileges:true --tmpfs /tmp:size=64m -p 127.0.0.1:19233:8080 "ghcr.io/edwarj47/dinnerswipeapp/web:$SOURCE_SHA"
+      - run: npm test --prefix infrastructure/smoke
+        env:
+          SMOKE_ORIGIN: http://127.0.0.1:19233
+      - name: Authenticate registry
+        env:
+          REGISTRY_TOKEN: ${{ github.token }}
+          REGISTRY_USER: ${{ github.actor }}
+        run: printf '%s' "$REGISTRY_TOKEN" | docker login ghcr.io --username "$REGISTRY_USER" --password-stdin
+      - name: Publish reviewed candidate and manifest
+        id: manifest
+        env:
+          SOURCE_SHA: ${{ inputs.sha }}
+        run: |
+          docker push "ghcr.io/edwarj47/dinnerswipeapp/api:$SOURCE_SHA"
+          docker push "ghcr.io/edwarj47/dinnerswipeapp/web:$SOURCE_SHA"
+          node <<'NODE'
+          const fs=require('node:fs'),cp=require('node:child_process'),crypto=require('node:crypto');
+          const sha=process.env.SOURCE_SHA,root='ghcr.io/edwarj47/dinnerswipeapp';
+          const digest=component=>JSON.parse(cp.execFileSync('docker',['image','inspect',`${root}/${component}:${sha}`,'--format','{{json .RepoDigests}}'],{encoding:'utf8'})).find(value=>value.startsWith(`${root}/${component}@sha256:`));
+          const schema=cp.execFileSync('docker',['run','--rm','--network','none',`${root}/api:${sha}`,'alembic','heads'],{encoding:'utf8'}).trim().split(' ')[0];
+          if(!/^[a-f0-9]{12}$/.test(schema))throw Error('One concrete schema revision is required');
+          const value={version:1,sha,ciRun:fs.readFileSync('verified-ci-run.txt','utf8').trim(),schema,api:digest('api'),web:digest('web')};
+          if(!value.api||!value.web)throw Error('Registry digests are required');
+          const bytes=Buffer.from(JSON.stringify(value,null,2)+'\n');fs.writeFileSync('release-manifest.json',bytes);
+          fs.appendFileSync(process.env.GITHUB_OUTPUT,`digest=${crypto.createHash('sha256').update(bytes).digest('hex')}\n`);
+          NODE
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: reviewed-release-manifest
+          path: release-manifest.json
+          if-no-files-found: error
+          retention-days: 30
+  promote:
+    if: github.ref == 'refs/heads/main' && inputs.target == 'production'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      manifest: ${{ steps.existing.outputs.digest }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - name: Recheck trusted CI without rebuilding or republishing
+        env:
+          SOURCE_SHA: ${{ inputs.sha }}
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node infrastructure/scripts/verify-release-ci.cjs "$SOURCE_SHA"
+      - id: existing
+        env:
+          DIGEST: ${{ inputs.manifest_digest }}
+        run: |
+          [[ "$DIGEST" =~ ^[a-f0-9]{64}$ ]]
+          printf 'digest=%s\n' "$DIGEST" >> "$GITHUB_OUTPUT"
+  deploy:
+    needs: [candidate, promote]
+    if: always() && (needs.candidate.result == 'success' || needs.promote.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: ${{ inputs.target }}
+    steps:
+      - name: Require activated protected environment
+        env:
+          ENABLED: ${{ vars.DINNER_RELEASE_ENABLED }}
+        run: test "$ENABLED" = reviewed-v1
+      - name: Call the restricted host control plane
+        env:
+          DEPLOY_KEY: ${{ secrets.DINNER_DEPLOY_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DINNER_DEPLOY_KNOWN_HOSTS }}
+          DEPLOY_HOST: ${{ vars.DINNER_DEPLOY_HOST }}
+          DEPLOY_USER: ${{ vars.DINNER_DEPLOY_USER }}
+          TARGET: ${{ inputs.target }}
+          SOURCE_SHA: ${{ inputs.sha }}
+          MANIFEST_DIGEST: ${{ needs.candidate.outputs.manifest || needs.promote.outputs.manifest }}
+          SCOPE: ${{ inputs.scope }}
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_HOST" =~ ^[A-Za-z0-9.-]+$ && "$DEPLOY_USER" =~ ^[a-z_][a-z0-9_-]*$ ]]
+          [[ "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ && "$MANIFEST_DIGEST" =~ ^[a-f0-9]{64}$ ]]
+          [[ "$TARGET" =~ ^(staging|production)$ && "$SCOPE" =~ ^(api-web|web|api|api-worker-web)$ ]]
+          install -d -m 700 "$RUNNER_TEMP/dinner-ssh"
+          printf '%s\n' "$DEPLOY_KEY" > "$RUNNER_TEMP/dinner-ssh/key"
+          printf '%s\n' "$KNOWN_HOSTS" > "$RUNNER_TEMP/dinner-ssh/known_hosts"
+          chmod 600 "$RUNNER_TEMP/dinner-ssh/key" "$RUNNER_TEMP/dinner-ssh/known_hosts"
+          trap 'rm -f "$RUNNER_TEMP/dinner-ssh/key" "$RUNNER_TEMP/dinner-ssh/known_hosts"' EXIT
+          ssh -o BatchMode=yes -o StrictHostKeyChecking=yes -o UserKnownHostsFile="$RUNNER_TEMP/dinner-ssh/known_hosts" -i "$RUNNER_TEMP/dinner-ssh/key" "$DEPLOY_USER@$DEPLOY_HOST" "release-v1 $TARGET $SOURCE_SHA $MANIFEST_DIGEST $SCOPE"

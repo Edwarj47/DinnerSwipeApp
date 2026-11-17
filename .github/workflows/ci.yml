@@ -5,12 +5,20 @@ on:
   push:
     branches: [main]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   backend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
         with:
           python-version: "3.12"
       - run: python -m pip install -U pip
@@ -48,9 +56,10 @@ jobs:
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: "22"
           cache: npm
@@ -87,9 +96,98 @@ jobs:
 
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - run: docker compose --profile production build
         env:
           DINNER_SWIPE_RUNTIME_DATABASE_URL: postgresql+psycopg://dinner_swipe_runtime:ci-placeholder@dinner-swipe-postgres:5432/dinner_swipe
           DINNER_SWIPE_TRUSTED_PROXY_IPS: 127.0.0.1
+
+  release-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - run: node --test infrastructure/tests/*.test.cjs
+
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci_owner
+          POSTGRES_PASSWORD: ci_disposable_only
+          POSTGRES_DB: postgres
+        ports:
+          - 15413:5432
+          - 15414:5432
+        options: --health-cmd "pg_isready -U ci_owner" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e "apps/api[dev]"
+      - name: Provision disposable databases
+        run: |
+          python <<'PY'
+          import psycopg
+          from psycopg import sql
+          with psycopg.connect(host="127.0.0.1",port=15413,user="ci_owner",password="ci_disposable_only",dbname="postgres",autocommit=True) as db:
+              for name in ("migration_test","security_test","offline_test","workout_test","calculator_test"):
+                  db.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
+          PY
+      - name: Verify real migration upgrades and rollback
+        working-directory: apps/api
+        env:
+          CI_MIGRATION_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15413/migration_test
+          DATABASE_URL: "sqlite:///:memory:"
+          JWT_SECRET: disposable-ci-secret-not-a-production-secret
+        run: PYTHONPATH=. python ../../infrastructure/scripts/verify-postgres-migrations.py
+      - name: Run PostgreSQL concurrency and permission regressions
+        working-directory: apps/api
+        env:
+          SECURITY_TEST_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15413/security_test
+          OFFLINE_TEST_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15413/offline_test
+          WORKOUT_TEST_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15413/workout_test
+          CALCULATOR_TEST_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15414/calculator_test
+        run: pytest app/tests/*postgres.py --junitxml=postgres-results.xml
+      - name: Verify the isolated staging runtime role
+        working-directory: apps/api
+        env:
+          CI_STAGING_ADMIN_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15413/postgres
+          CI_STAGING_POSTGRES_CONTAINER: ${{ job.services.postgres.id }}
+          DATABASE_URL: "sqlite:///:memory:"
+          JWT_SECRET: disposable-ci-secret-not-a-production-secret
+        run: PYTHONPATH=. python ../../infrastructure/scripts/verify-staging-roles.py
+      - name: Require integration coverage instead of skipped tests
+        working-directory: apps/api
+        run: |
+          python <<'PY'
+          import xml.etree.ElementTree as ET
+          root=ET.parse("postgres-results.xml").getroot()
+          assert len(root.findall(".//testcase")) >= 10
+          assert not root.findall(".//skipped"), "PostgreSQL tests must execute"
+          PY
+
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: "22"
+      - run: npm ci --prefix infrastructure/smoke
+      - run: cd infrastructure/smoke && npx playwright install --with-deps chromium
+      - run: docker build -f infrastructure/docker/web.Dockerfile -t dinner-swipe-web:ci .
+      - run: docker run -d --name dinner-swipe-smoke --read-only --cap-drop ALL --security-opt no-new-privileges:true --tmpfs /tmp:size=64m -p 127.0.0.1:19233:8080 dinner-swipe-web:ci
+      - run: npm test --prefix infrastructure/smoke
+        env:
+          SMOKE_ORIGIN: http://127.0.0.1:19233

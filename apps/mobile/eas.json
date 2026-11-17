@@ -35,7 +35,10 @@
     "production": {
       "channel": "production",
       "environment": "production",
-      "autoIncrement": true,
+      "autoIncrement": false,
+      "android": {
+        "buildType": "app-bundle"
+      },
       "env": {
         "EXPO_PUBLIC_APP_NAME": "Dinner Swipe",
         "EXPO_PUBLIC_API_URL": "https://dinner.dcss.dev",

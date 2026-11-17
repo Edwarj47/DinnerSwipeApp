@@ -38,13 +38,20 @@ export function setWorkoutsEnabled(enabled: boolean) {
   useWorkoutMode.setState({ enabled, ...(!enabled ? { mode: "nutrition" as const } : {}) });
 }
 export async function updateWorkoutPreferences(patch: Partial<ExperiencePreferences>) {
+  const owner = offlineOwner(), version = generation, requested = { ...patch };
+  const assertOwner = () => {
+    if (!owner || version !== generation || offlineOwner() !== owner || useWorkoutMode.getState().owner !== owner) {
+      throw new Error("Your account changed. Try again in the current account.");
+    }
+  };
   const task = async () => {
-    const owner = offlineOwner(), state = useWorkoutMode.getState(), version = generation;
-    if (!owner || state.owner !== owner) throw new Error("Sign in before changing your experience.");
-    const next = parseExperiencePreferences({ mode: state.mode, weight_unit: state.weight_unit, ...patch });
+    assertOwner();
+    const state = useWorkoutMode.getState();
+    const next = parseExperiencePreferences({ mode: state.mode, weight_unit: state.weight_unit, ...requested });
     if (next.mode === "workouts" && !state.enabled) throw new Error("Workouts are not available.");
     const client = queryClient;
     await client?.cancelQueries({ queryKey: ["profile"] });
+    assertOwner();
     const response = await apiFetch<{ experience_preferences?: ExperiencePreferences }>("/api/v1/profile/experience", { method: "PATCH", body: JSON.stringify(next) });
     if (version !== generation || offlineOwner() !== owner) return;
     seeded++;
