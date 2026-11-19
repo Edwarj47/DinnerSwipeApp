@@ -17,5 +17,8 @@ if [[ -z "${EXPO_TOKEN:-}" ]]; then
 fi
 
 cd "$repo_root/apps/mobile"
+node "$repo_root/infrastructure/scripts/store-build-preflight.cjs" android
+export EAS_BUILD_NO_EXPO_GO_WARNING="${EAS_BUILD_NO_EXPO_GO_WARNING:-true}"
+npx --yes eas-cli@27.2.0 env:exec production 'node ../../infrastructure/scripts/check-ota-runtime.cjs --check-env' --non-interactive
 EAS_BUILD_NO_EXPO_GO_WARNING="${EAS_BUILD_NO_EXPO_GO_WARNING:-true}" \
-  npx --yes eas-cli@27.2.0 build --profile production --platform android --non-interactive
+  npx --yes eas-cli@27.2.0 build --profile production --platform android --non-interactive --freeze-credentials

@@ -86,7 +86,8 @@ def test_checkout_requires_confirmed_payment(
     )
     result = billing.handle_stripe_event(db_session, payload)
     assert result["status"] == ("ignored" if payment_status == "unpaid" else "processed")
-    assert billing.is_basic_access_active(db_session, account) == (payment_status != "unpaid")
+    assert billing.is_basic_access_active(db_session, account)
+    assert billing.is_premium_access_active(db_session, account) == (payment_status != "unpaid")
 
 
 def test_late_event_reads_current_status_and_invoice_failure_revokes(
@@ -97,9 +98,9 @@ def test_late_event_reads_current_status_and_invoice_failure_revokes(
     payload = event(account, "invoice.payment_failed", "evt_failed")
     payload["data"]["object"]["parent"] = {"subscription_details": {"subscription": "sub_fixture"}}
     assert billing.handle_stripe_event(db_session, payload)["status"] == "processed"
-    assert not billing.is_basic_access_active(db_session, account)
+    assert not billing.is_premium_access_active(db_session, account)
     billing.handle_stripe_event(db_session, event(account, event_id="evt_late_active"))
-    assert not billing.is_basic_access_active(db_session, account)
+    assert not billing.is_premium_access_active(db_session, account)
 
 
 def test_provider_failure_requests_retry_without_audit_ack(
@@ -141,7 +142,7 @@ def test_unrelated_subscription_cannot_grant_access(
         sub.stripe_customer_id = "cus_other"
         db_session.commit()
     assert billing.handle_stripe_event(db_session, event(account))["status"] == "ignored"
-    assert not billing.is_basic_access_active(db_session, account)
+    assert not billing.is_premium_access_active(db_session, account)
 
 
 def test_checkout_reuses_session_and_returning_account_has_no_trial(
@@ -153,8 +154,8 @@ def test_checkout_reuses_session_and_returning_account_has_no_trial(
     sub.status = "canceled"
     sub.source = "stripe"
     db_session.commit()
-    url = billing.create_checkout_session(db_session, account, "basic")
-    assert billing.create_checkout_session(db_session, account, "basic") == url
+    url = billing.create_checkout_session(db_session, account, "premium")
+    assert billing.create_checkout_session(db_session, account, "premium") == url
     assert provider.v1.checkout.sessions.create.call_count == 1
     params = provider.v1.checkout.sessions.create.call_args.args[0]
     assert "trial_period_days" not in params["subscription_data"]
@@ -167,8 +168,8 @@ def test_checkout_network_retry_reuses_idempotency_key(
     session = provider.v1.checkout.sessions.create.return_value
     provider.v1.checkout.sessions.create.side_effect = [RuntimeError("timeout"), session]
     with pytest.raises(HTTPException):
-        billing.create_checkout_session(db_session, account, "basic")
-    billing.create_checkout_session(db_session, account, "basic")
+        billing.create_checkout_session(db_session, account, "premium")
+    billing.create_checkout_session(db_session, account, "premium")
     calls = provider.v1.checkout.sessions.create.call_args_list
     assert calls[0].kwargs == calls[1].kwargs
     assert calls[0].args == calls[1].args

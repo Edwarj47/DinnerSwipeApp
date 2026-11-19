@@ -6,7 +6,7 @@ from typing import cast
 from fastapi import APIRouter, Query
 from sqlalchemy import func, select
 
-from app.api.deps import BasicUser, DbDep
+from app.api.deps import BasicUser, DbDep, VerifiedBasicUser
 from app.models.entities import UrlIngestionCandidate
 from app.schemas.common import UrlApprovalRequest, UrlIngestRequest
 from app.services.private_media import photo_url
@@ -27,7 +27,7 @@ router = APIRouter(prefix="/url-ingestion", tags=["url-ingestion"])
 
 @router.post("")
 async def submit_urls(
-    payload: UrlIngestRequest, db: DbDep, current_user: BasicUser
+    payload: UrlIngestRequest, db: DbDep, current_user: VerifiedBasicUser
 ) -> dict[str, object]:
     candidates = []
     for url in payload.urls:

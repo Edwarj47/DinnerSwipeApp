@@ -68,6 +68,11 @@ jobs:
       - run: npm run typecheck -w apps/mobile
       - run: npm run test:icons -w apps/mobile
       - run: npm run test:release -w apps/mobile
+      - name: Check Play and TestFlight build profiles
+        run: |
+          node --test infrastructure/scripts/store-build-preflight.test.cjs
+          node infrastructure/scripts/store-build-preflight.cjs android
+          node infrastructure/scripts/store-build-preflight.cjs ios
       - name: Check native runtime contract
         run: node infrastructure/scripts/check-ota-runtime.cjs
       - name: Run mobile tests with a cold transform cache
@@ -127,6 +132,7 @@ jobs:
         ports:
           - 15413:5432
           - 15414:5432
+          - 55439:5432
         options: --health-cmd "pg_isready -U ci_owner" --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -140,7 +146,7 @@ jobs:
           import psycopg
           from psycopg import sql
           with psycopg.connect(host="127.0.0.1",port=15413,user="ci_owner",password="ci_disposable_only",dbname="postgres",autocommit=True) as db:
-              for name in ("migration_test","security_test","offline_test","offline_migration_test","workout_test","calculator_test"):
+              for name in ("migration_test","security_test","offline_test","offline_migration_test","workout_test","calculator_test","erasure_test"):
                   db.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(name)))
           PY
       - name: Verify real migration upgrades and rollback
@@ -158,6 +164,7 @@ jobs:
           OFFLINE_MIGRATION_TEST_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15413/offline_migration_test
           WORKOUT_TEST_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15413/workout_test
           CALCULATOR_TEST_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:15414/calculator_test
+          ERASURE_TEST_DATABASE_URL: postgresql+psycopg://ci_owner:ci_disposable_only@127.0.0.1:55439/erasure_test
         run: pytest app/tests/*postgres.py --junitxml=postgres-results.xml
       - name: Annotate PostgreSQL test failures
         if: failure()

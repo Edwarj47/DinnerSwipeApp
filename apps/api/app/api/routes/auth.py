@@ -36,6 +36,7 @@ from app.models.entities import (
 )
 from app.schemas.common import (
     AccountDeletionRequest,
+    AccountErasureConfirm,
     AuthStatus,
     ChangePasswordRequest,
     LoginRequest,
@@ -627,3 +628,28 @@ def account_deletion_status(
         "status": "pending_manual_review" if pending else "not_requested",
         "requested_at": pending.created_at.isoformat() + "Z" if pending else None,
     }
+
+
+@router.get("/account/deletion")
+def erasure_preflight(
+    db: DbDep, current_user: CurrentUser, response: Response
+) -> dict[str, object]:
+    from app.services.account_erasure import deletion_preflight
+
+    response.headers["Cache-Control"] = "no-store"
+    return deletion_preflight(db, current_user)
+
+
+@router.post("/account/erase")
+def erase_account(
+    payload: AccountErasureConfirm,
+    request: Request,
+    response: Response,
+    db: DbDep,
+    current_user: CurrentUser,
+) -> dict[str, object]:
+    from app.services.account_erasure import confirm_erasure
+
+    response.headers["Cache-Control"] = "no-store"
+    check_auth_rate_limit(request, "account_erasure", current_user.id, subject_limit=5, ip_limit=30)
+    return confirm_erasure(db, current_user, payload.current_password, payload.billing_acknowledged)

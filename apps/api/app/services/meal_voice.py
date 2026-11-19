@@ -18,7 +18,7 @@ from starlette.concurrency import run_in_threadpool
 from app.core.actor import current_actor
 from app.core.config import settings
 from app.core.rate_limit import auth_rate_limiter
-from app.models.entities import User
+from app.models.entities import IngestionJob, User
 from app.services.meal_assistant import VOICE_JOB_TYPE, owned_job, reserve
 
 MAX_AUDIO_BYTES = 6 * 1024 * 1024
@@ -137,6 +137,7 @@ async def transcribe(
         raise HTTPException(413, "Record up to 60 seconds and 6 MB.")
     audio_format(content, mime.split(";")[0])
     job, fresh = reserve(db, user, request_id, hashlib.sha256(content).hexdigest(), VOICE_JOB_TYPE)
+    job_id = job.id
     key = f"{user.id}:{request_id}"
     for expired in [key for key, (until, _) in _transcripts.items() if until <= time.monotonic()]:
         del _transcripts[expired]
@@ -174,6 +175,8 @@ async def transcribe(
             text = str(response.json().get("text", "")).strip()
             if not text or len(text) > 4000:
                 raise ValueError("Invalid transcript")
+        job.status = "succeeded"
+        db.commit()
         if len(_transcripts) >= 100:
             _transcripts.pop(next(iter(_transcripts)))
         until = time.monotonic() + 300
@@ -184,14 +187,19 @@ async def transcribe(
                 _transcripts.pop(key, None) if _transcripts.get(key, (0, ""))[0] == until else None
             ),
         )
-        job.status = "succeeded"
-        db.commit()
         return {"text": text}
     except Exception as error:
+        _transcripts.pop(key, None)
         db.rollback()
-        job.status = "failed"
-        job.error_message = "Recording could not be transcribed."
-        db.commit()
+        remaining = db.get(IngestionJob, job_id, populate_existing=True)
+        if remaining is not None:
+            remaining.status = "failed"
+            remaining.error_message = "Recording could not be transcribed."
+            try:
+                db.commit()
+            except HTTPException as revoked:
+                db.rollback()
+                raise revoked from None
         if isinstance(error, HTTPException):
             raise
         raise HTTPException(503, "Could not transcribe. Try typing your meal.") from None

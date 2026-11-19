@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session
 from app.core.config import settings
 from app.core.rate_limit import auth_rate_limiter
 from app.models.entities import AuditEvent, ComplimentaryPremiumAccess, User, UserSubscription
+from app.models.native_billing import NativePurchase
+from app.services.native_billing import active_native_purchase, native_history
 from app.services.welcome_access import paid_history, welcome_active, welcome_for_user
 
 stripe_client: Any | None
@@ -94,15 +96,14 @@ def subscription_days_remaining(
 
 
 def is_basic_access_active(db: Session, user: User) -> bool:
-    subscription = subscription_for_user(db, user)
-    return subscription_plan_rank(subscription) >= PLAN_RANK[BASIC_PLAN_KEY] or welcome_active(
-        user, welcome_for_user(db, user)
-    )
+    return bool(user.is_active)
 
 
 def is_premium_access_active(db: Session, user: User) -> bool:
-    return is_premium_active(subscription_for_user(db, user)) or welcome_active(
-        user, welcome_for_user(db, user)
+    return bool(user.is_active) and (
+        active_native_purchase(db, user) is not None
+        or is_premium_active(subscription_for_user(db, user))
+        or welcome_active(user, welcome_for_user(db, user))
     )
 
 
@@ -123,8 +124,11 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
     subscription = subscription_for_user(db, user)
     welcome = welcome_for_user(db, user)
     complimentary = welcome_active(user, welcome)
+    native = active_native_purchase(db, user)
     plan_rank = subscription_plan_rank(subscription)
-    premium_active = plan_rank >= PLAN_RANK[PREMIUM_PLAN_KEY] or complimentary
+    premium_active = user.is_active and (
+        plan_rank >= PLAN_RANK[PREMIUM_PLAN_KEY] or complimentary or native is not None
+    )
     subscribed_basic = plan_rank >= PLAN_RANK[BASIC_PLAN_KEY]
     trial_active = bool(
         subscription
@@ -142,26 +146,32 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
     if complimentary:
         trial_end = welcome_end.replace(tzinfo=UTC) if welcome_end else None
         remaining_trial_days = welcome_days
-    basic_active = subscribed_basic or complimentary
+    basic_active = bool(user.is_active)
     current_tier: CurrentTier = (
         "premium"
         if premium_active
         else "trial"
         if trial_active
         else "basic"
-        if subscribed_basic
+        if basic_active
         else "none"
     )
     active_plan_key = subscription.plan_key if subscription else None
     return {
         # Backward compatible fields for the existing premium macro UI.
         "active": premium_active,
-        "plan_key": active_plan_key
+        "plan_key": PREMIUM_PLAN_KEY
+        if native
+        else active_plan_key
         or (PREMIUM_PLAN_KEY if complimentary else BASIC_PLAN_KEY if trial_active else ""),
-        "status": subscription.status
+        "status": native.state
+        if native
+        else subscription.status
         if subscription
-        else ("complimentary" if complimentary else "inactive"),
-        "source": subscription.source
+        else ("complimentary" if complimentary else "free"),
+        "source": native.provider
+        if native
+        else subscription.source
         if subscription
         else ("complimentary" if complimentary else None),
         "monthly_price_cents": settings.premium_monthly_price_cents,
@@ -172,8 +182,28 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
             and subscription.stripe_customer_id
             and settings.stripe_configured
         ),
-        "current_period_end": subscription.current_period_end if subscription else None,
-        "cancel_at_period_end": subscription.cancel_at_period_end if subscription else False,
+        "external_subscription_active": bool(
+            subscription
+            and subscription.source == "stripe"
+            and subscription.stripe_subscription_id
+            and subscription.status
+            in {"active", "trialing", "past_due", "unpaid", "incomplete", "paused"}
+        ),
+        "current_period_end": native.valid_until
+        if native
+        else subscription.current_period_end
+        if subscription
+        else None,
+        "cancel_at_period_end": not native.auto_renew
+        if native
+        else subscription.cancel_at_period_end
+        if subscription
+        else False,
+        "native_provider": native.provider if native else None,
+        "native_verified_at": native.verified_at.replace(tzinfo=UTC) if native else None,
+        "native_valid_until": native.valid_until.replace(tzinfo=UTC)
+        if native and native.valid_until
+        else None,
         # New tier-aware fields.
         "current_tier": current_tier,
         "basic_active": basic_active,
@@ -182,10 +212,13 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
         "trial_active": trial_active or complimentary,
         "trial_ends_at": trial_end,
         "trial_days_remaining": remaining_trial_days,
-        "basic_trial_eligible": basic_trial_eligible(subscription) and welcome is None,
+        "basic_trial_eligible": False,
         "welcome_active": complimentary,
         "welcome_eligible": bool(
-            welcome and not welcome.started_at and not paid_history(subscription)
+            welcome
+            and not welcome.started_at
+            and not paid_history(subscription)
+            and not native_history(db, user)
         ),
         "welcome_requires_verification": not user.email_verified,
         "welcome_started_at": (
@@ -194,9 +227,9 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
         "welcome_ends_at": welcome_end.replace(tzinfo=UTC) if welcome_end else None,
         "welcome_days_remaining": welcome_days,
         "welcome_no_card": True,
-        "basic_monthly_price_cents": settings.basic_monthly_price_cents,
+        "basic_monthly_price_cents": 0,
         "premium_monthly_price_cents": settings.premium_monthly_price_cents,
-        "basic_stripe_configured": settings.stripe_basic_configured,
+        "basic_stripe_configured": False,
         "premium_stripe_configured": settings.stripe_premium_configured,
         "plans": [
             {
@@ -204,8 +237,8 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
                 "plan_key": BASIC_PLAN_KEY,
                 "display_name": "Basic",
                 "description": "Meal planning, recipe saving, group voting, and grocery lists.",
-                "monthly_price_cents": settings.basic_monthly_price_cents,
-                "stripe_configured": settings.stripe_basic_configured,
+                "monthly_price_cents": 0,
+                "stripe_configured": False,
                 "active": basic_active and not premium_active,
             },
             {
@@ -221,7 +254,14 @@ def serialize_subscription_status(db: Session, user: User) -> dict[str, Any]:
     }
 
 
-def require_premium(db: Session, user: User) -> UserSubscription | ComplimentaryPremiumAccess:
+def require_premium(
+    db: Session, user: User
+) -> UserSubscription | ComplimentaryPremiumAccess | NativePurchase:
+    native = active_native_purchase(db, user)
+    if native:
+        return native
+    if not user.is_active:
+        raise HTTPException(403, "Account is inactive.")
     subscription = subscription_for_user(db, user)
     if not is_premium_active(subscription):
         welcome = welcome_for_user(db, user)
@@ -287,6 +327,8 @@ def create_checkout_session(
 ) -> str:
     auth_rate_limiter.check(f"checkout:{user.id}", 10, 60)
     tier = _normalize_tier(tier)
+    if tier == BASIC_TIER:
+        raise HTTPException(409, "Basic is free. New paid Basic subscriptions are unavailable.")
     db.scalar(select(User).where(User.id == user.id).with_for_update())
     subscription = subscription_for_user(db, user)
     welcome = welcome_for_user(db, user)
@@ -485,7 +527,7 @@ def handle_stripe_event(db: Session, event: dict[str, Any]) -> dict[str, str]:
     metadata = obj.get("metadata") or {}
     user_id = linked.user_id if linked else metadata.get("user_id")
     user = db.scalar(select(User).where(User.id == user_id).with_for_update()) if user_id else None
-    if not user:
+    if not user or not user.is_active:
         return {"status": "ignored"}
     event_hash = hashlib.sha256(str(event["id"]).encode()).hexdigest()[:32]
     if db.scalar(

@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import UTC, date, datetime, timedelta
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Header, Query, Request, Response
+from fastapi import APIRouter, Depends, Header, HTTPException, Query, Request, Response
 
 from app.api.deps import CurrentUser, DbDep
 from app.schemas.common import (
@@ -62,6 +62,8 @@ router = APIRouter(tags=["premium"], dependencies=[Depends(private_response)])
 def redeem_coupon(
     payload: CouponRequest, db: DbDep, current_user: CurrentUser
 ) -> dict[str, object]:
+    if payload.tier == "basic":
+        raise HTTPException(409, "Basic is free. New Basic coupons and checkout are unavailable.")
     return apply_coupon(db, current_user, payload.code, payload.tier)
 
 
@@ -75,11 +77,19 @@ def subscription_status(db: DbDep, current_user: CurrentUser) -> dict[str, objec
     status = serialize_subscription_status(db, current_user)
     until = datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=72)
     period_end = status.get("current_period_end")
-    if isinstance(period_end, datetime):
+    if status.get("premium_active") and isinstance(period_end, datetime):
         until = min(until, period_end.replace(tzinfo=None))
     welcome_end = status.get("welcome_ends_at")
     if status.get("welcome_active") and isinstance(welcome_end, datetime):
         until = min(until, welcome_end.replace(tzinfo=None))
+    if status.get("native_provider") and isinstance(status.get("native_verified_at"), datetime):
+        from app.core.config import settings
+
+        until = min(
+            until,
+            status["native_verified_at"].replace(tzinfo=None)
+            + timedelta(hours=settings.native_verification_lease_hours),
+        )
     return status | {
         "offline_until": until.replace(tzinfo=UTC) if status.get("basic_active") else None,
         "offline_sync_version": 1,

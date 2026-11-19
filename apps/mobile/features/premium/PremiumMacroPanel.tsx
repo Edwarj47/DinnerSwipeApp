@@ -4,6 +4,7 @@ import { ReactNode, useEffect, useMemo, useRef, useState } from "react";
 import { Platform, Pressable, Share, StyleSheet, Text, TextInput, useWindowDimensions, View, ViewStyle } from "react-native";
 
 import { Button } from "@/components/Button";
+import { PremiumPurchaseActions } from "@/features/subscription/PremiumPurchaseActions";
 import { SUCCESS_MESSAGE_MS } from "@/components/useTransientMessage";
 import { SegmentedControl } from "@/components/SegmentedControl";
 import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
@@ -248,11 +249,7 @@ export function PremiumMacroPanel({ tutorial }: { tutorial?: { visit?: string; d
           <Text style={styles.meta}>
             Premium tracks meals you confirm from This Week and manual daily entries you add here.
           </Text>
-          {Platform.OS !== "web" ? (
-            <Text style={styles.meta}>
-              Native app-store subscription flow will be added before public iOS or Android sales.
-            </Text>
-          ) : null}
+          <PremiumPurchaseActions status={subscription.data} />
         </View>
       ) : (
         <>

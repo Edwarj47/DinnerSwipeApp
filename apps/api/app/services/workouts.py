@@ -656,7 +656,8 @@ def editable_slot(db: Session, user: User, slot_id: str) -> tuple[WorkoutPlanSlo
 
 def update_slot(db: Session, user: User, slot_id: str, payload: SlotUpdateInput) -> WorkoutPlanSlot:
     slot, plan = editable_slot(db, user, slot_id)
-    require_template(db, user, slot.template_id, plan.household_id, enabled=True)
+    if slot.template_id is not None:
+        require_template(db, user, slot.template_id, plan.household_id, enabled=True)
     if "slot_date" in payload.model_fields_set:
         validate_date(plan.week_start, payload.slot_date)
         slot.slot_date = payload.slot_date
@@ -906,12 +907,14 @@ def save_log(db: Session, user: User, request_uuid: str, payload: LogInput) -> W
         .with_for_update()
         .execution_options(populate_existing=True)
     )
-    template_id = str(payload.template_id)
+    template_id = str(payload.template_id) if payload.template_id is not None else None
     if log:
         if log.template_id != template_id:
             raise HTTPException(409, "A log's routine cannot be changed. Use a new request UUID.")
         snapshot = log.snapshot
     else:
+        if template_id is None:
+            raise HTTPException(422, "Choose an existing workout before creating a session.")
         if payload.plan_slot_id:
             slot = db.get(WorkoutPlanSlot, str(payload.plan_slot_id))
             plan = db.get(WorkoutPlan, slot.plan_id) if slot else None

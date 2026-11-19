@@ -1,5 +1,12 @@
 # Expo and EAS Build Guide
 
+Working source now prepares runtime 0.3.0/code31 with native billing. See
+[launch preparation](launch/README.md) before building or enabling that candidate.
+
+For the verified SDK 58 / runtime 0.2.2 artifact, Google Play internal testing and
+iOS/TestFlight setup, use [Internal Store Testing](store-internal-testing.md).
+Older build-7 UAT details below are historical, not the current release status.
+
 ## Phone Testing Without Metro
 
 Android preview build 7 completed on 2026-09-28. Its artifact checks and pending
@@ -21,7 +28,7 @@ infrastructure/scripts/eas-build-android-preview.sh
 ```
 
 This explicitly starts a cloud build and uses the account's EAS build allowance.
-It does not submit to either store. The CLI is pinned to `21.7.0` in both this
+It does not submit to either store. The CLI is pinned to `27.2.0` in both this
 helper and the GitHub workflow; update them together after validation.
 
 1. Wait for the build to finish successfully in the
@@ -54,8 +61,8 @@ It is manual-only: pushing a commit does not queue an EAS build.
 - Limit the environment to trusted branches and require approval before builds.
 - Run the workflow on the intended commit. It runs mobile checks, then queues
   the Android preview build using existing EAS signing credentials.
-- The workflow uses `--no-wait`. A green job means the cloud build was queued,
-  **not** that the APK succeeded. Follow the printed EAS link to completion.
+- The workflow waits for a finished matching-source build and checks archive
+  integrity and signing identity. A timeout or queued cloud job is not a release.
 - A successful build still needs physical-device testing before sharing widely.
 
 This follows [Expo's CI build flow](https://docs.expo.dev/build/building-on-ci/).
@@ -122,7 +129,7 @@ To run EAS builds from the VPS, authenticate first:
 
 ```bash
 cd apps/mobile
-npx eas-cli@latest login
+npx eas-cli@27.2.0 login
 ```
 
 For non-interactive builds, use a private Expo token file on the VPS or the
@@ -153,22 +160,22 @@ infrastructure/scripts/eas-build-android-production.sh
 
 ## Store Builds
 
-The project is still on Expo SDK 51. Upgrade and validate the native toolchain
-against current store requirements before submitting. See
-[the release roadmap](store-release-and-cicd-roadmap.md).
+The project is on Expo SDK 58 / React Native 0.88.1, with native foreground voice
+and guarded EAS Update support already integrated. Store configuration is not
+proof of signed-archive or physical-device acceptance. See the current
+[internal-testing runbook](store-internal-testing.md) and
+[public-launch gates](launch-readiness-20261108.md).
 
 Android production build (AAB for Play, not a directly installable APK):
 
 ```bash
-cd apps/mobile
-npx eas build --platform android --profile production
+bash infrastructure/scripts/eas-build-android-production.sh
 ```
 
 iOS TestFlight build:
 
 ```bash
-cd apps/mobile
-npx eas build --platform ios --profile production
+DINNER_SWIPE_IOS_SIGNING_READY=1 bash infrastructure/scripts/eas-build-ios-production.sh
 ```
 
 Web export:
@@ -178,10 +185,16 @@ npm run build:web -w apps/mobile
 ```
 
 Package identifiers are set in `app.json`; avoid changing them after store listings are created.
+Confirm Apple activation and complete separately authorized signing setup before
+asserting the iOS readiness flag. Both helpers build only, freeze existing
+credentials and do not upload to a store or publish a release.
 
-Over-the-air updates are **not configured** yet: there is no `expo-updates`
-dependency, runtime version policy, or update URL. Until that work and a new
-binary are complete, distribute another preview APK for client code changes.
+EAS Update is configured with `expo-updates`, an `appVersion` runtime policy
+and the project's update URL. Compatible JavaScript/assets can be delivered to
+the matching channel/runtime after verification; native dependencies, permissions,
+plugins, icons or SDK changes still require a new sealed runtime/binary. A preview
+update does not update production-channel Play/TestFlight builds. Preserve the
+embedded offline fallback and never weaken the runtime guard to ship an update.
 
 Native manual recipe photos use `expo-image-picker`; iOS includes a photo-library usage description in `app.json`.
 

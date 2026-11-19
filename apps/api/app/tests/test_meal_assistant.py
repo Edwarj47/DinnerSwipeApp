@@ -683,8 +683,11 @@ def test_unrelated_search_results_leave_user_text_without_recommendation_or_deta
     ("name", "search", "fallback", "matched_name", "brand"),
     [
         (
-            "cheeseburger with pickles", "cheeseburger pickles", "cheeseburger",
-            "Cheese Burger", None,
+            "cheeseburger with pickles",
+            "cheeseburger pickles",
+            "cheeseburger",
+            "Cheese Burger",
+            None,
         ),
         ("waffle fries with ketchup", "ketchup", "waffle fries", "Waffle Fries", None),
         (
@@ -745,8 +748,10 @@ def test_fallback_searches_are_limited_per_draft_and_never_choose_only_toppings(
 ) -> None:
     mentions = [
         {
-            "name": f"{food} with ketchup", "search_term": f"{food} ketchup",
-            "quantity": 1, "unit": "each",
+            "name": f"{food} with ketchup",
+            "search_term": f"{food} ketchup",
+            "quantity": 1,
+            "unit": "each",
         }
         for food in ["cheeseburger", "waffle fries", "chicken", "fish", "potatoes"]
     ]
@@ -762,8 +767,14 @@ def test_fallback_searches_are_limited_per_draft_and_never_choose_only_toppings(
     assert len(searches) == len(mentions) + 3
     assert all(call.args[0] == "foods.search" for call in searches)
     assert [call.args[1]["search_expression"] for call in searches] == [
-        "cheeseburger ketchup", "cheeseburger", "waffle fries ketchup", "waffle fries",
-        "chicken ketchup", "chicken", "fish ketchup", "potatoes ketchup",
+        "cheeseburger ketchup",
+        "cheeseburger",
+        "waffle fries ketchup",
+        "waffle fries",
+        "chicken ketchup",
+        "chicken",
+        "fish ketchup",
+        "potatoes ketchup",
     ]
     assert_no_saved_meal(db_session)
 
@@ -775,12 +786,19 @@ def test_failed_initial_search_does_not_attempt_fallback(
     providers: SimpleNamespace,
     code: str,
 ) -> None:
-    providers.ai.return_value = ai_output(MENTIONS | {"items": [
-        {
-            "name": "waffle fries with ketchup", "search_term": "waffle fries ketchup",
-            "quantity": 1, "unit": "each",
+    providers.ai.return_value = ai_output(
+        MENTIONS
+        | {
+            "items": [
+                {
+                    "name": "waffle fries with ketchup",
+                    "search_term": "waffle fries ketchup",
+                    "quantity": 1,
+                    "unit": "each",
+                }
+            ]
         }
-    ]})
+    )
     providers.nutrition.request.side_effect = NutritionError(code)
     response = client.post(f"{ROOT}/drafts", headers=assistant_headers, json=body())
     assert response.status_code == 200, response.text
@@ -794,12 +812,19 @@ def test_draft_canceled_after_initial_search_never_performs_fallback(
     db_session: Session,
     providers: SimpleNamespace,
 ) -> None:
-    providers.ai.return_value = ai_output(MENTIONS | {"items": [
-        {
-            "name": "waffle fries with ketchup", "search_term": "waffle fries ketchup",
-            "quantity": 1, "unit": "each",
+    providers.ai.return_value = ai_output(
+        MENTIONS
+        | {
+            "items": [
+                {
+                    "name": "waffle fries with ketchup",
+                    "search_term": "waffle fries ketchup",
+                    "quantity": 1,
+                    "unit": "each",
+                }
+            ]
         }
-    ]})
+    )
     payload = body()
 
     def cancel(method: str, parameters: dict[str, str]) -> dict[str, Any]:
@@ -978,11 +1003,13 @@ def test_provider_backoff_stops_remaining_searches_and_details_in_same_workflow(
 ) -> None:
     providers.ai.return_value = ai_output(
         MENTIONS
-        | {"items": [
-            MENTIONS["items"][0],
-            {"name": "rice", "search_term": "rice", "quantity": 1, "unit": "cup"},
-            {"name": "salmon", "search_term": "salmon", "quantity": 2, "unit": "oz"},
-        ]}
+        | {
+            "items": [
+                MENTIONS["items"][0],
+                {"name": "rice", "search_term": "rice", "quantity": 1, "unit": "cup"},
+                {"name": "salmon", "search_term": "salmon", "quantity": 2, "unit": "oz"},
+            ]
+        }
     )
     providers.nutrition.request.side_effect = [deepcopy(SEARCH), NutritionError(code, 86400)]
     response = client.post(f"{ROOT}/drafts", headers=assistant_headers, json=body())
@@ -1398,6 +1425,33 @@ def test_decoder_uses_allowlisted_protocols_and_never_uses_uploaded_filename(
     assert arguments[arguments.index("-f") + 1] == "matroska"
     assert "-nostdin" in arguments and "-vn" in arguments
     assert Path(arguments[arguments.index("-i") + 1]).name.startswith("meal-audio-")
+
+
+def test_revocation_during_transcription_cannot_cache_or_return_transcript(
+    client: Any, assistant_headers: Any, db_session: Any, providers: Any
+) -> None:
+    from app.services.account_erasure import erasure_transaction
+
+    response = providers.post.return_value
+
+    async def revoke_before_response(*args: Any, **kwargs: Any) -> Any:
+        with erasure_transaction(db_session):
+            user = db_session.scalar(select(User).where(User.email == "owner@example.com"))
+            user.is_active = False
+            user.session_version += 1
+            db_session.commit()
+        return response
+
+    providers.post.side_effect = revoke_before_response
+    result = client.post(
+        f"{ROOT}/transcriptions",
+        headers=assistant_headers,
+        data={"request_id": str(uuid4())},
+        files={"audio": ("meal.webm", WEBM, "audio/webm")},
+    )
+    assert result.status_code == 401
+    assert meal_voice._transcripts == {}
+    assert DESCRIPTION not in result.text
 
 
 def test_voice_transcript_is_ram_only_duplicate_idempotent_and_uses_shared_quota(

@@ -4,7 +4,7 @@
     "owner": "data-centric-software-solutions",
     "slug": "dinner-swipe",
     "scheme": "dinnerswipe",
-    "version": "0.2.2",
+    "version": "0.3.0",
     "runtimeVersion": {
       "policy": "appVersion"
     },
@@ -22,7 +22,7 @@
     ],
     "ios": {
       "bundleIdentifier": "dev.dcss.dinnerswipe",
-      "buildNumber": "30",
+      "buildNumber": "31",
       "supportsTablet": false,
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Dinner Swipe lets you choose recipe photos from your library."
@@ -34,7 +34,7 @@
         "foregroundImage": "./assets/appearance/black.png",
         "backgroundColor": "#111111"
       },
-      "versionCode": 30
+      "versionCode": 31
     },
     "web": {
       "bundler": "metro",
@@ -46,6 +46,7 @@
       "backgroundColor": "#fff6f3"
     },
     "plugins": [
+      "expo-iap",
       "expo-router",
       ["expo-splash-screen", { "image": "./assets/appearance/black.png", "resizeMode": "contain", "backgroundColor": "#111111", "imageWidth": 200 }],
       "expo-secure-store",

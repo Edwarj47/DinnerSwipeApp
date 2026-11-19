@@ -59,7 +59,7 @@ def test_limited_coupon_expires_and_cannot_extend_by_replaying(
     sub.current_period_end = datetime.utcnow() - timedelta(seconds=1)
     db_session.commit()
     assert not client.get("/api/v1/subscription/status", headers=auth_headers).json()[
-        "basic_active"
+        "premium_active"
     ]
     assert apply(client, auth_headers, "fixture-month").status_code == 409
 
@@ -91,17 +91,17 @@ def test_billing_coupon_uses_checkout_without_unlocking(
 ) -> None:
     db_session.query(UserSubscription).one().status = "inactive"
     db_session.commit()
-    response = apply(client, auth_headers, tier="basic")
+    response = apply(client, auth_headers, tier="premium")
     assert response.status_code == 200, response.text
     assert response.json()["subscription"] is None
     assert response.json()["checkout_url"].startswith("https://checkout.stripe.test/")
     params = stripe_mock.v1.checkout.sessions.create.call_args.args[0]
     assert params["discounts"] == [{"promotion_code": "promo_fixture"}]
     assert "allow_promotion_codes" not in params
-    assert params["payment_method_collection"] == "always"
-    assert params["subscription_data"]["trial_period_days"] == 30
+    assert "payment_method_collection" not in params
+    assert "trial_period_days" not in params["subscription_data"]
     assert not client.get("/api/v1/subscription/status", headers=auth_headers).json()[
-        "basic_active"
+        "premium_active"
     ]
 
 

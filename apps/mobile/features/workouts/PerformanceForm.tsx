@@ -44,7 +44,7 @@ export function PerformanceForm({ template, existing, slotId, groupId, onClose, 
   }
   async function save() {
     setBusy(true); setError("");
-    try { await saveWorkoutPerformance({ ...buildPerformance(template, performedOn, completed, notes, exercises, todayISO()), ...(slotId ? { plan_slot_id: slotId } : {}), ...(groupId ? { household_id: groupId } : {}) }, requestId.current, template); onSaved(); onClose(); }
+    try { await saveWorkoutPerformance({ ...buildPerformance(template, performedOn, completed, notes, exercises, todayISO()), ...(existing?.template_id === null ? { template_id: null } : {}), ...(slotId ? { plan_slot_id: slotId } : {}), ...(groupId ? { household_id: groupId } : {}) }, requestId.current, template); onSaved(); onClose(); }
     catch (error) { setError(error instanceof Error ? error.message : "Session could not be saved."); }
     finally { setBusy(false); }
   }

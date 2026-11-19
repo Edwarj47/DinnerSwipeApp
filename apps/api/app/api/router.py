@@ -15,6 +15,7 @@ from app.api.routes import (
     ingestion,
     meal_assistant,
     media,
+    native_billing,
     nutrition,
     offline,
     plans,
@@ -40,6 +41,7 @@ api_router.include_router(groups.router)
 api_router.include_router(group_planning.router)
 api_router.include_router(group_planning.reminder_router)
 api_router.include_router(premium.router)
+api_router.include_router(native_billing.router)
 api_router.include_router(offline.router)
 api_router.include_router(nutrition.router)
 api_router.include_router(meal_assistant.router)

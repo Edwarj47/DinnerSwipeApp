@@ -1,185 +1,64 @@
-import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { fireEvent, render, waitFor } from "@testing-library/react-native";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { render, waitFor } from "@testing-library/react-native";
 import { Text } from "react-native";
 import { usePathname } from "expo-router";
-
 import { SubscriptionGate } from "@/features/subscription/SubscriptionGate";
 import { apiFetch } from "@/services/api";
 import { AuthSessionContext, useAppAccess } from "@/services/session";
 
-jest.mock("@expo/vector-icons", () => ({ Ionicons: () => null }));
-jest.mock("expo-linking", () => ({ openURL: jest.fn() }));
-jest.mock("expo-router", () => ({ usePathname: jest.fn(() => "/"), Link: () => null }));
-jest.mock("@/components/BrandLogo", () => ({ BrandLogo: () => null }));
-jest.mock("react-native-safe-area-context", () => ({ SafeAreaView: jest.requireActual("react-native").View }));
-jest.mock("@/services/api", () => ({
-  getToken: jest.fn().mockResolvedValue("fixture-token"),
-  addAuthChangeListener: () => () => undefined,
-  clearAuthTokens: jest.fn(),
-  reconnectOffline: jest.fn(),
-  apiFetch: jest.fn()
-}));
-
-// The first native render also transforms lazy RN modules on a cold CI runner.
-// Keep the individual findBy/waitFor deadlines unchanged; only budget that startup.
-test("native paywall opens plan choices and checks out with the selected tier", async () => {
-  const client = new QueryClient({
-    defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } }
-  });
-  const request = jest.mocked(apiFetch);
-  request.mockImplementation(async (path) => {
-    if (path.endsWith("checkout-session")) throw new Error("Checkout fixture unavailable");
-    return {
-      basic_active: false, basic_monthly_price_cents: 599, premium_monthly_price_cents: 999,
-      basic_stripe_configured: true, premium_stripe_configured: true
-    };
-  });
-  const screen = render(
-    <QueryClientProvider client={client}>
-      <AuthSessionContext.Provider value={{ authenticated: true, email: "fixture@example.com" }}>
-      <SubscriptionGate><Text>App content</Text></SubscriptionGate>
-      </AuthSessionContext.Provider>
-    </QueryClientProvider>
-  );
-  try {
-    await screen.findByText("Choose your plan");
-    fireEvent.press(screen.getByLabelText("Subscription plan: Basic, $5.99/month"));
-    fireEvent.press(screen.getByText("Premium"));
-    expect(screen.queryByText("First 30 days free")).toBeNull();
-    fireEvent.press(screen.getByLabelText("Subscribe to Premium"));
-    await waitFor(() => expect(request).toHaveBeenCalledWith(
-      "/api/v1/subscription/checkout-session",
-      { method: "POST", body: JSON.stringify({ tier: "premium" }) }
-    ));
-    await screen.findByText("Checkout fixture unavailable");
-  } finally {
-    screen.unmount();
-    client.clear();
-  }
-}, 20_000);
-
-function ProtectedRecipes() {
-  const recipes = useQuery({ queryKey: ["recipes"], queryFn: () => apiFetch<string[]>("/api/v1/recipes"), retry: false });
-  return <Text>{recipes.data?.join(", ") ?? "Waiting for recipes"}</Text>;
+jest.mock("expo-router", () => ({ usePathname: jest.fn(() => "/") }));
+jest.mock("@/services/api", () => ({ apiFetch: jest.fn() }));
+function Content() { return <Text>{useAppAccess() ? "Basic content" : "Locked"}</Text>; }
+function setup(authenticated = true) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } });
+  const screen = render(<QueryClientProvider client={client}><AuthSessionContext.Provider value={{
+    authenticated, email: "account@test.invalid", userId: "one" }}>
+    <SubscriptionGate><Content /></SubscriptionGate></AuthSessionContext.Provider></QueryClientProvider>);
+  return { screen, close: () => { screen.unmount(); client.clear(); } };
 }
+beforeEach(() => { jest.mocked(apiFetch).mockReset(); jest.mocked(usePathname).mockReturnValue("/"); });
 
-function AppScreens() {
-  return useAppAccess() ? <ProtectedRecipes /> : null;
-}
-
-test("access unlock retries a cached blocked recipe request without reloading", async () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity }, mutations: { gcTime: 0 } } });
-  const request = jest.mocked(apiFetch);
-  request.mockClear();
-  let unlocked = false;
-  const subscription = () => ({ basic_active: unlocked, premium_active: unlocked });
-  request.mockImplementation(async (path) => {
-    if (path.endsWith("coupon-code")) { unlocked = true; return { message: "Access granted.", subscription: subscription() }; }
-    if (path.endsWith("subscription/status")) return subscription();
-    if (path.endsWith("recipes")) {
-      if (!unlocked) throw new Error("Subscription required");
-      return ["Saved dinner"];
-    }
-    return {};
-  });
-  await client.fetchQuery({ queryKey: ["recipes"], queryFn: () => apiFetch("/api/v1/recipes") }).catch(() => undefined);
-  request.mockClear();
-  const screen = render(
-    <QueryClientProvider client={client}>
-      <AuthSessionContext.Provider value={{ authenticated: true, email: "fixture@example.com" }}>
-        <SubscriptionGate><AppScreens /></SubscriptionGate>
-      </AuthSessionContext.Provider>
-    </QueryClientProvider>
-  );
+test("Basic remains free after welcome expires and never opens checkout", async () => {
+  jest.mocked(apiFetch).mockResolvedValue({ basic_active: true, premium_active: false, welcome_eligible: false });
+  const { screen, close } = setup();
   try {
-    await screen.findByText("fixture@example.com");
-    expect(request.mock.calls.some(([path]) => path.endsWith("recipes"))).toBe(false);
-    fireEvent.changeText(screen.getByLabelText("Coupon code"), "test-fixture");
-    fireEvent.press(screen.getByLabelText("Apply"));
-    await screen.findByText("Saved dinner");
-    expect(screen.queryByText("Choose your plan")).toBeNull();
-    expect(client.getQueryState(["recipes"])?.status).toBe("success");
-  } finally { screen.unmount(); client.clear(); }
+    expect(screen.getByText("Basic content")).toBeTruthy();
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    expect(jest.mocked(apiFetch).mock.calls.every(([path]) => path.endsWith("subscription/status"))).toBe(true);
+  } finally { close(); }
 });
-
-test("subscription failure keeps protected screens closed and allows retry", async () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-  const request = jest.mocked(apiFetch);
-  request.mockReset();
-  request.mockRejectedValue(new Error("Offline"));
-  const screen = render(
-    <QueryClientProvider client={client}>
-      <AuthSessionContext.Provider value={{ authenticated: true, email: "fixture@example.com" }}>
-        <SubscriptionGate><AppScreens /></SubscriptionGate>
-      </AuthSessionContext.Provider>
-    </QueryClientProvider>
-  );
-  try {
-    await screen.findByText("Unable to check your access");
-    expect(screen.queryByText("Waiting for recipes")).toBeNull();
-    request.mockResolvedValue({ basic_active: false });
-    fireEvent.press(screen.getByLabelText("Try again"));
-    await screen.findByText("Choose your plan");
-  } finally { screen.unmount(); client.clear(); }
+test("a billing outage cannot paywall authenticated Basic", async () => {
+  jest.mocked(apiFetch).mockRejectedValue(new Error("Offline"));
+  const { screen, close } = setup();
+  try { expect(screen.getByText("Basic content")).toBeTruthy(); } finally { close(); }
 });
-
-test("deletion route does not require subscription access or load protected screens", async () => {
+test("unauthenticated sessions never receive app access", () => {
+  const { screen, close } = setup(false);
+  try { expect(screen.getByText("Locked")).toBeTruthy(); expect(apiFetch).not.toHaveBeenCalled(); } finally { close(); }
+});
+test("account deletion stays independent and loads no app data", () => {
   jest.mocked(usePathname).mockReturnValue("/delete-account");
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
-  jest.mocked(apiFetch).mockClear();
-  const screen = render(<QueryClientProvider client={client}>
-    <AuthSessionContext.Provider value={{ authenticated: true, email: "unpaid@example.com" }}>
-      <SubscriptionGate><Text>Account deletion form</Text><AppScreens /></SubscriptionGate>
-    </AuthSessionContext.Provider>
-  </QueryClientProvider>);
-  try {
-    expect(screen.getByText("Account deletion form")).toBeTruthy();
-    expect(screen.queryByText("Choose your plan")).toBeNull();
-    expect(apiFetch).not.toHaveBeenCalled();
-    expect(screen.queryByText("Waiting for recipes")).toBeNull();
-  } finally { screen.unmount(); client.clear(); jest.mocked(usePathname).mockReturnValue("/"); }
+  const { screen, close } = setup();
+  try { expect(screen.getByText("Locked")).toBeTruthy(); expect(apiFetch).not.toHaveBeenCalled(); } finally { close(); }
 });
-
-test("welcome access verifies first, unlocks Premium once and never opens checkout", async () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } });
-  const request = jest.mocked(apiFetch);
-  request.mockReset();
-  let verified = false, started = false;
-  const status = () => ({ basic_active: started, premium_active: started, welcome_active: started,
-    welcome_eligible: !started, welcome_requires_verification: !verified });
-  request.mockImplementation(async path => {
-    if (path.endsWith("welcome/start")) { started = true; return status(); }
-    if (path.endsWith("subscription/status")) return status();
-    if (path.endsWith("recipes")) return ["Saved dinner"];
-    return {};
+test("verified login automatically starts complimentary Premium without a checkout", async () => {
+  let started = false;
+  jest.mocked(apiFetch).mockImplementation(async path => {
+    if (path.endsWith("welcome/start")) started = true;
+    return { basic_active: true, welcome_eligible: !started, welcome_requires_verification: false, premium_active: started };
   });
-  const screen = render(<QueryClientProvider client={client}><AuthSessionContext.Provider value={{ authenticated: true, email: "new@example.com", userId: "new-user" }}>
-    <SubscriptionGate><AppScreens /></SubscriptionGate>
-  </AuthSessionContext.Provider></QueryClientProvider>);
+  const { screen, close } = setup();
   try {
-    await screen.findByText("No card. No automatic charge.");
-    expect(request.mock.calls.some(([path]) => path.endsWith("welcome/start"))).toBe(false);
-    verified = true;
-    fireEvent.press(screen.getByLabelText("I've verified my email"));
-    await screen.findByText("Saved dinner");
-    expect(request.mock.calls.filter(([path]) => path.endsWith("welcome/start"))).toHaveLength(1);
-    expect(request.mock.calls.some(([path]) => path.endsWith("checkout-session"))).toBe(false);
-  } finally { screen.unmount(); client.clear(); }
+    await waitFor(() => expect(started).toBe(true));
+    expect(screen.getByText("Basic content")).toBeTruthy();
+    expect(jest.mocked(apiFetch).mock.calls.filter(([path]) => path.endsWith("welcome/start"))).toHaveLength(1);
+  } finally { close(); }
 });
-
-test("failed welcome start offers a retry without falling back to a paid checkout", async () => {
-  const client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 }, mutations: { gcTime: 0 } } });
-  const request = jest.mocked(apiFetch);request.mockReset();
-  request.mockImplementation(async path => {
-    if (path.endsWith("welcome/start")) throw new Error("Temporarily unavailable");
-    return { basic_active: false, welcome_eligible: true, welcome_requires_verification: false };
-  });
-  const screen = render(<QueryClientProvider client={client}><AuthSessionContext.Provider value={{ authenticated: true, email: "new@example.com", userId: "new-user" }}>
-    <SubscriptionGate><AppScreens /></SubscriptionGate>
-  </AuthSessionContext.Provider></QueryClientProvider>);
+test("unverified accounts cannot start complimentary Premium", async () => {
+  jest.mocked(apiFetch).mockResolvedValue({ welcome_eligible: true, welcome_requires_verification: true });
+  const { close } = setup();
   try {
-    await screen.findByText("Unable to start your welcome access. Please try again.");
-    expect(request.mock.calls.filter(([path]) => path.endsWith("welcome/start"))).toHaveLength(1);
-    expect(screen.queryByText("Choose your plan")).toBeNull();
-  } finally { screen.unmount(); client.clear(); }
+    await waitFor(() => expect(apiFetch).toHaveBeenCalled());
+    expect(jest.mocked(apiFetch).mock.calls.some(([path]) => path.endsWith("welcome/start"))).toBe(false);
+  } finally { close(); }
 });

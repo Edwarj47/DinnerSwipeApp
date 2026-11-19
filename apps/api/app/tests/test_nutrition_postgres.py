@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from alembic import command
 from app.core.config import Settings, settings
+from app.models.entities import User, uuid_str
 from app.models.nutrition import NutritionCall, NutritionProviderState
 from app.services.nutrition_budget import NutritionBudget, NutritionError
 
@@ -55,10 +56,14 @@ def test_nutrition_concurrent_global_quota(monkeypatch: pytest.MonkeyPatch) -> N
             db.execute(delete(NutritionCall))
             db.commit()
         config.fatsecret_user_daily_budget = 2
+        account_id = uuid_str()
+        with sessions() as db:
+            db.add(User(id=account_id, email=f"{account_id}@test.invalid", password_hash="!"))  # noqa: S106 - unusable fixture login.
+            db.commit()
 
         def reserve_account(_: int) -> str:
             try:
-                budget.reserve("foods.search", user_id="limited-nutrition-account")
+                budget.reserve("foods.search", user_id=account_id)
                 return "reserved"
             except NutritionError as error:
                 return error.code
@@ -69,5 +74,8 @@ def test_nutrition_concurrent_global_quota(monkeypatch: pytest.MonkeyPatch) -> N
         assert account_results.count("account_budget_exhausted") == 6
         with Session(engine) as db:
             assert db.scalar(select(func.count()).select_from(NutritionCall)) == 2
+        with sessions() as db:
+            db.execute(delete(User).where(User.id == account_id))
+            db.commit()
     finally:
         engine.dispose()

@@ -119,7 +119,7 @@ class ExerciseDetailsInput(WorkoutInput):
 
 
 class LogInput(WorkoutInput):
-    template_id: UUID
+    template_id: UUID | None = None
     performed_on: date
     completed: bool = Field(strict=True)
     notes: str | None = Field(default=None, max_length=4000)

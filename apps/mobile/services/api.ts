@@ -211,7 +211,8 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   const owner = offlineOwner();
   const method = init.method?.toUpperCase() ?? "GET";
   // An unrelated service outage must not prevent an online account-deletion request.
-  const accountControl = path === "/api/v1/auth/account/deletion-request" || path === "/api/v1/auth/account/delete-request";
+  const accountControl = ["/api/v1/auth/account/deletion-request", "/api/v1/auth/account/delete-request",
+    "/api/v1/auth/account/deletion", "/api/v1/auth/account/erase"].includes(path);
   const stored = owner ? await loadOffline(owner).catch(() => undefined) : undefined;
   if (epoch !== sessionEpoch) throw new ApiError("Account changed. Try again.", 409);
   if (owner && stored?.subscription?.offline_sync_version === 1 && method !== "GET") {

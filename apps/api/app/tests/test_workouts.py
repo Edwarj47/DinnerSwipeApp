@@ -167,13 +167,13 @@ def test_disabled_default_and_all_routes_gated(
 @pytest.mark.parametrize(
     "tier,verified,expected",
     [
-        (None, True, 402),
+        (None, True, 200),
         ("basic_monthly", False, 403),
         ("basic_monthly", True, 200),
         ("premium_macros_monthly", True, 200),
     ],
 )
-def test_verified_paid_gate(
+def test_verified_free_basic_and_premium_gate(
     workout_client: TestClient,
     db_session: Session,
     tier: str | None,
@@ -182,10 +182,9 @@ def test_verified_paid_gate(
 ) -> None:
     _, headers = account(db_session, "gate", tier=tier, verified=verified)
     status = workout_client.get(f"{BASE}/status", headers=headers)
-    assert status.status_code == (402 if tier is None else 200)
-    if tier:
-        assert status.json() == {"enabled": True}
-        assert status.headers["Cache-Control"] == "no-store"
+    assert status.status_code == 200
+    assert status.json() == {"enabled": True}
+    assert status.headers["Cache-Control"] == "no-store"
     assert workout_client.get(f"{BASE}/templates").status_code == 401
     assert workout_client.get(f"{BASE}/templates", headers=headers).status_code == expected
 
@@ -1209,11 +1208,18 @@ def test_worker_revalidates_access_and_current_group_ownership(
     db_session.commit()
     monkeypatch.setattr(planning, "now_utc", lambda: NOW + timedelta(days=7))
     factory = sessionmaker(bind=db_session.get_bind(), autoflush=False)
-    assert service.process_due_resets(factory) == 0
+    free_basic_continues = invalid in {"unpaid", "expired"}
+    assert service.process_due_resets(factory) == (1 if free_basic_continues else 0)
     db_session.expire_all()
-    assert stored.cursor == original_cursor
+    assert (
+        (stored.cursor != original_cursor)
+        if free_basic_continues
+        else (stored.cursor == original_cursor)
+    )
     assert db_session.get(WorkoutPlanSlot, old_slot["id"])
-    assert db_session.scalar(select(func.count()).select_from(WorkoutPlan)) == 1
+    assert db_session.scalar(select(func.count()).select_from(WorkoutPlan)) == (
+        2 if free_basic_continues else 1
+    )
 
 
 def test_worker_uses_new_paid_owner_after_transfer(

@@ -9,7 +9,9 @@ from app.core.config import settings
 from app.core.rate_limit import auth_rate_limiter
 from app.database.session import SessionLocal
 from app.models.entities import User, UserProfile
+from app.services.account_erasure import process_pending_erasures
 from app.services.media_maintenance import cleanup_media
+from app.services.native_billing import process_native_billing
 from app.services.planning import SETTINGS_KEY, reconcile_current_plan
 
 logger = logging.getLogger(__name__)
@@ -40,6 +42,10 @@ def main() -> None:
     maintenance_at = 0.0
     while True:
         try:
+            with SessionLocal() as db:
+                process_pending_erasures(db)
+            with SessionLocal() as db:
+                process_native_billing(db)
             process_weekly_resets()
             if settings.workouts_enabled:
                 from app.services.workouts import process_due_resets

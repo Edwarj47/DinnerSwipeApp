@@ -1,8 +1,8 @@
 {
-  "version": "0.2.2",
-  "hash": "6b73c94ff94b5023fceb850f662c4848655755acd46408204df7175b9eef0940",
+  "version": "0.3.0",
+  "hash": "02c15b249a1c0e9961e1c0e2eedb18f9be05ab4e9c05235de00e40c47520ecc0",
   "inputs": {
-    "apps/mobile/app.json": "658b409f18f045fe7056df758054a86f3c4a9e61dd51735521df2051ee044962",
+    "apps/mobile/app.json": "6da50241a397645d957d8053093b51a4035d5e7994767ab626f6efdaf06f269b",
     "apps/mobile/assets/adaptive-icon.png": "594cfd430ff1b1782ab470b32f241c7883e678ee2fd664cdbe3f689fc6e6c1e8",
     "apps/mobile/assets/appearance/black.png": "39b65625dae12a2e7ebfe2596b7dbea98c62953e447e4c19800ad868342b67fc",
     "apps/mobile/assets/appearance/black.svg": "741a3545f979d3c28dfc1964edfb7b7cd7c6cc9d1d1f93c6a75ed220f4ed787c",
@@ -30,12 +30,12 @@
     "apps/mobile/modules/app-icons/ios/DinnerSwipeAppIcons.podspec": "398027d8127a7dd26a4ea5cc6a6e72989c4b0d9461ac67b72cbd88f74d15aac1",
     "apps/mobile/modules/app-icons/ios/DinnerSwipeAppIconsModule.swift": "0ff6dc27ebc2f2367c5162039bf1355cc7c03c0f9b5564e3595d824fcf374bdd",
     "apps/mobile/modules/app-icons/package.json": "63513adf22b9f91ad72401679ea3bdfe3abf6f439a0f2ecec53935027c8bff48",
-    "apps/mobile/package.json": "b37e105f7e1485a53f1f58dabde0140e09ff8ab05acf9b211bc91e5cb7a8a21e",
+    "apps/mobile/package.json": "0b886bf1786733ab5af9af12f87e52128c17701697909fda724fd74c995c13f2",
     "apps/mobile/plugins/appIcons.test.cjs": "17824ccd2c589f5f4fd404af9d9ecc001dfcd7147452ecf3dd513face220796b",
     "apps/mobile/plugins/withAndroidMonorepoGradlePaths.js": "4c408188062d3c7a234ff3e011d9ea47407668769a23b45f1db58b163850d1b4",
     "apps/mobile/plugins/withAppIcons.js": "cae3bbce02e429b47da1fbb73dd79ffae921b859f295b095a90f64c07056eb80",
     "apps/mobile/services/appearancePresets.json": "6f59d42e792a07f92991529a82823bc285787498645620924a904428513fdfbe",
-    "package-lock.json": "9bf828474168661dd20dfc18a22151e635cf86a6e2ce69fc36c18d303a481056",
+    "package-lock.json": "add9b89625f91a2b8157852d1b098aacda5c633184f08e5e4e1bc711a933dfd9",
     "package.json": "9cdcde8442b899761cab48a1b5a2fcc264ded688e88cdd58a784afdac69fe4b4"
   }
 }

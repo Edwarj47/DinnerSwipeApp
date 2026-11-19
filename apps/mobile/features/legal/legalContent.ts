@@ -61,7 +61,7 @@ export const privacySections = [
   {
     title: "Subscription And Billing Data",
     body:
-      "Dinner Swipe may store subscription status, plan tier, billing provider identifiers, billing events, trial timing, and support records. Payment cards and checkout are handled by the billing provider and are not stored directly by Dinner Swipe."
+      "Dinner Swipe stores subscription status, product and billing-provider identifiers, verification and billing events, welcome-access timing, and relevant support records. Where native purchases are offered, Apple or Google handles checkout; supported web checkout uses Stripe. Store evidence is verified by our backend, and provider references are stored encrypted where required by the native billing integration. We retain limited detached billing and purchase-ownership records after account deletion to prevent purchase reassignment and handle legitimate billing obligations. Full payment-card details are handled by the purchasing provider, not stored directly by Dinner Swipe."
   },
   {
     title: "Sharing",
@@ -79,9 +79,9 @@ export const privacySections = [
       "The app can save appearance preferences, selected groups, measurement units and optional planning-reminder preferences. Native session credentials are stored using the device's secure-storage facilities; web sign-in uses session cookies. Optional biometric unlock uses your device's authentication service. Dinner Swipe does not receive or store your fingerprint or facial biometric template. Reminder permission is optional; planning reminders are scheduled locally on your device."
   },
   {
-    title: "Account Data And Deletion Requests",
+    title: "Account Data And Deletion",
     body:
-      "You can export account data in User settings, Account, Data and legal. You can request deletion there or at https://dinner.dcss.dev/delete-account after signing in, even without an active subscription. Requests currently require manual review and do not immediately erase your account or cancel billing. The request status remains available on the deletion page. Contact dinnerswipe@dcss.dev about a pending request or if you cannot access your account. Shared group records, subscription obligations and backup handling must be resolved during review; a pending request is not confirmation that deletion has been completed."
+      "You can export data and initiate account deletion in User settings, Account, Data and legal, or at https://dinner.dcss.dev/delete-account after signing in, without a paid subscription. Confirming permanent deletion revokes access and removes your account records, private content, and original recipes and workouts you shared. Other members' independently owned copies and personal logs remain. Transfer shared-group ownership first, or use the existing leave control for a sole-member group. Cleanup failures remain pending and are retried; a pending receipt is not confirmation of completed erasure. An older app or an unavailable fulfillment service may instead submit a manual-review request. Deletion and uninstalling do not cancel external billing or create a refund; manage renewal with the purchasing provider. Deletion need not wait for a paid period to end, but a deleted account's purchases cannot automatically transfer to a new Dinner Swipe account. We retain minimal deletion-suppression and billing records where necessary. Restricted recovery backups can retain residual data; no automatic backup-expiry period is currently promised. Deleted accounts must not be reactivated through a backup restore. Contact dinnerswipe@dcss.dev with a pending receipt or if you cannot access your account."
   },
   {
     title: "Contact",
@@ -133,7 +133,7 @@ export const termsSections = [
   {
     title: "Subscriptions",
     body:
-      "Eligible new verified accounts may receive 30 days of complimentary Premium without a payment card. This welcome access expires without an automatic charge; continuing requires choosing a paid plan. Existing subscriptions keep their current terms. Usage limits apply to AI, voice, and database requests. Paid subscriptions are authorized through checkout, renew until cancelled, and are subject to the price and terms shown at checkout. Accepting app terms does not authorize a charge."
+      "Basic is free. Eligible new verified accounts may receive 30 days of complimentary Premium without a payment card. This welcome access expires without an automatic charge; Basic remains free, and paid Premium requires a separate purchase. The intended U.S. Premium reference price is USD 9.99 per month; the purchasing provider displays the actual localized price, applicable tax and renewal terms before confirmation. Existing subscriptions keep their current terms. Usage limits apply to AI, voice, and database requests. Paid subscriptions renew until cancelled through the provider where purchased. Restoring purchases is not a new purchase or a new complimentary month. Deleting an account or uninstalling the app does not cancel billing or create a refund. Refund requests follow the purchasing provider's process and applicable law; mandatory consumer rights are not excluded. Accepting app terms does not authorize a charge."
   },
   {
     title: "Third-Party Links And Retailers",

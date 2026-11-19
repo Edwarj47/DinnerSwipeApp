@@ -5,7 +5,7 @@ from typing import Annotated, Any
 from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from sqlalchemy import select
 
-from app.api.deps import BasicUser, DbDep
+from app.api.deps import BasicUser, DbDep, VerifiedBasicUser
 from app.core.config import settings
 from app.models.entities import IngestionJob
 from app.schemas.common import RecipeCreate
@@ -51,7 +51,7 @@ def drafts(db: DbDep, current_user: BasicUser) -> list[dict[str, Any]]:
 @router.post("")
 async def generate(
     db: DbDep,
-    current_user: BasicUser,
+    current_user: VerifiedBasicUser,
     request_id: Annotated[str, Form(min_length=16, max_length=120)],
     description: Annotated[str, Form(max_length=6000)] = "",
     image: Annotated[UploadFile | None, File()] = None,

@@ -41,6 +41,27 @@ class Settings(BaseSettings):
     max_spreadsheet_expanded_bytes: int = 52_428_800
     media_account_quota_bytes: int = 524_288_000
     media_cleanup_enabled: bool = False
+    account_erasure_enabled: bool = False
+    native_apple_enabled: bool = False
+    native_google_enabled: bool = False
+    native_token_encryption_key: SecretStr = SecretStr("")
+    native_allow_test_purchases: bool = False
+    native_apple_environment: Literal["Production", "Sandbox"] = "Production"
+    native_apple_product_id: str = ""
+    native_apple_issuer_id: str = ""
+    native_apple_key_id: str = ""
+    native_apple_private_key_path: str = ""
+    native_apple_root_certificates: list[str] = Field(default_factory=list)
+    native_apple_app_id: int | None = None
+    native_google_product_id: str = ""
+    native_google_base_plan_id: str = ""
+    native_google_credentials_path: str = ""
+    native_google_push_audience: str = ""
+    native_google_push_email: str = ""
+    native_reconcile_batch: int = Field(default=10, ge=1, le=50)
+    native_reconcile_budget_seconds: int = Field(default=20, ge=5, le=120)
+    native_verification_lease_hours: int = Field(default=24, ge=1, le=72)
+    native_notification_requests_per_minute: int = Field(default=120, ge=10, le=10000)
     max_upload_size_bytes: int = 10_485_760
     max_import_rows: int = 2_000
     max_cell_length: int = 10_000

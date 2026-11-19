@@ -218,7 +218,8 @@ def test_auth_basic_verification_and_error_cache(
     subscription.status = "inactive"
     db_session.commit()
     response = client.get(ROOT, headers=auth_headers)
-    assert response.status_code == 402 and response.headers["cache-control"] == "no-store"
+    assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
+    assert response.json() == {"campaign": None, "batches": []}
 
 
 def test_owner_only_404_and_unknown_candidate_is_atomic(

@@ -36,6 +36,7 @@ useOfflineStatus.subscribe(state => {
 const PREFIX = "dinnerSwipe.offline.v1.";
 let owner: string | null = null;
 let writes: Promise<unknown> = Promise.resolve();
+const erasedOwners = new Set<string>();
 export function setOfflineOwner(id: string | null) {
   owner = id;
   useOfflineStatus.setState({ edits: [], storageError: "", syncing: false, noticeSince: null });
@@ -45,6 +46,10 @@ export function deviceOffline() { return useOfflineStatus.getState().offline; }
 export function setDeviceOffline(offline: boolean) { useOfflineStatus.setState({ offline }); }
 
 async function readStoredOffline(id: string): Promise<OfflineData> {
+  if (erasedOwners.has(id) || await AsyncStorage.getItem(PREFIX + id + ".erased")) {
+    erasedOwners.add(id);
+    return { version: 1, seenAt: 0, cache: {}, edits: [] };
+  }
   const raw = await AsyncStorage.getItem(PREFIX + id);
   if (!raw) return { version: 1, seenAt: 0, cache: {}, edits: [] };
   const data = JSON.parse(raw) as OfflineData;
@@ -62,10 +67,29 @@ export async function loadOffline(id: string): Promise<OfflineData> {
 }
 
 export async function forgetOfflineSession(id: string) {
+  if (erasedOwners.has(id)) return;
   await changeOffline(id, data => {
     // Pending edits belong to this account and must not be lost on sign-out.
     clearDownloaded(data);
   });
+}
+
+export async function eraseOfflineAccount(id: string) {
+  erasedOwners.add(id);
+  const task = async () => {
+    const apply = async () => {
+      await AsyncStorage.setItem(PREFIX + id + ".erased", "1");
+      await AsyncStorage.removeItem(PREFIX + id);
+      if (owner === id) useOfflineStatus.setState({ edits: [], syncing: false });
+    };
+    if (Platform.OS === "web" && typeof navigator !== "undefined" && navigator.locks) {
+      return navigator.locks.request(PREFIX + id, apply);
+    }
+    return apply();
+  };
+  const result = writes.then(task, task);
+  writes = result.catch(() => undefined);
+  return result;
 }
 
 // One atomic document keeps the outbox and its read snapshots consistent after a crash.
@@ -73,9 +97,11 @@ export async function forgetOfflineSession(id: string) {
 export async function changeOffline<T>(id: string, change: (data: OfflineData) => T): Promise<T> {
   const task = async () => {
     const apply = async () => {
+      if (erasedOwners.has(id) || await AsyncStorage.getItem(PREFIX + id + ".erased")) throw new Error("This account was deleted.");
       const data = await readStoredOffline(id);
       if (expired(data)) clearDownloaded(data);
       const result = change(data);
+      if (erasedOwners.has(id)) throw new Error("This account was deleted.");
       data.seenAt = Math.max(data.seenAt, Date.now());
       const oldest = Object.keys(data.cache).sort((a, b) => data.cache[a].at - data.cache[b].at);
       while (JSON.stringify(data).length > 450000 && oldest.length) delete data.cache[oldest.shift()!];

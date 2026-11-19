@@ -49,6 +49,9 @@ FOOD = {
 
 @pytest.fixture()
 def provider(db_session: Session, monkeypatch: pytest.MonkeyPatch) -> FatSecretClient:
+    db_session.add(
+        User(id="test-provider-account", email="provider@test.invalid", password_hash="!")  # noqa: S106 - unusable fixture login.
+    )
     db_session.add(NutritionProviderState(provider="fatsecret"))
     db_session.commit()
     config = Settings(
@@ -205,7 +208,9 @@ def test_search_details_and_oauth_reserve_for_authenticated_route_user(
         response = client.get(url, headers=authorized_nutrition)
         assert response.status_code == 200, response.text
     assert [call.args[0] for call in reserve.call_args_list] == [
-        "oauth", "foods.search", "food.get.v5",
+        "oauth",
+        "foods.search",
+        "food.get.v5",
     ]
     assert all(call.kwargs["user_id"] == user.id for call in reserve.call_args_list)
     calls = db_session.scalars(select(NutritionCall)).all()

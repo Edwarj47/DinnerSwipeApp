@@ -7,11 +7,12 @@ export type WorkoutTemplate = {
   photo_credit?: PhotoCredit | null;
   exercises: WorkoutExercise[]; owner_id: string; shared?: boolean; discover_enabled?: boolean;
   revision?: string;
+  source_deleted?: boolean;
 };
-export type WorkoutSlot = { id: string; slot_date: string | null; sort_order: number; template_id: string; snapshot: WorkoutTemplate };
+export type WorkoutSlot = { id: string; slot_date: string | null; sort_order: number; template_id: string | null; snapshot: WorkoutTemplate };
 export type WorkoutPlan = { id: string; week_start: string; read_only: boolean; slots: WorkoutSlot[] };
 export type WorkoutSet = { exercise_index: number; set_number: number; reps?: number; weight_kg?: number; duration_seconds?: number };
-export type WorkoutPerformance = { template_id: string; performed_on: string; completed: boolean; notes?: string; sets: WorkoutSet[];
+export type WorkoutPerformance = { template_id: string | null; performed_on: string; completed: boolean; notes?: string; sets: WorkoutSet[];
   exercise_details?: { exercise_index: number; completed: boolean; notes: string }[]; expected_revision?: string; plan_slot_id?: string; household_id?: string };
 export type WorkoutLog = WorkoutPerformance & {
   id?: string; request_uuid?: string; user_id?: string; owner_id?: string; title?: string;

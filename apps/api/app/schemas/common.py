@@ -98,6 +98,10 @@ class AccountDeletionRequest(ApiModel):
     confirmation: str = Field(pattern="^DELETE$")
 
 
+class AccountErasureConfirm(AccountDeletionRequest):
+    billing_acknowledged: bool = False
+
+
 class SubscriptionPlanStatus(ApiModel):
     tier: Literal["basic", "premium"]
     plan_key: str
@@ -109,6 +113,9 @@ class SubscriptionPlanStatus(ApiModel):
 
 
 class PremiumStatus(ApiModel):
+    native_provider: Literal["apple", "google"] | None = None
+    native_verified_at: datetime | None = None
+    native_valid_until: datetime | None = None
     offline_until: datetime | None = None
     offline_sync_version: int = 0
     active: bool
@@ -118,6 +125,7 @@ class PremiumStatus(ApiModel):
     monthly_price_cents: int = 999
     stripe_configured: bool = False
     billing_management_available: bool = False
+    external_subscription_active: bool = False
     current_period_end: datetime | None = None
     cancel_at_period_end: bool = False
     current_tier: Literal["none", "trial", "basic", "premium"] = "none"
@@ -135,7 +143,7 @@ class PremiumStatus(ApiModel):
     welcome_ends_at: datetime | None = None
     welcome_days_remaining: int = 0
     welcome_no_card: bool = True
-    basic_monthly_price_cents: int = 599
+    basic_monthly_price_cents: int = 0
     premium_monthly_price_cents: int = 999
     basic_stripe_configured: bool = False
     premium_stripe_configured: bool = False
@@ -151,7 +159,7 @@ class SubscriptionCheckoutRequest(ApiModel):
 
 
 class CouponRequest(PremiumWaiverRequest):
-    tier: Literal["basic", "premium"] = "basic"
+    tier: Literal["basic", "premium"] = "premium"
 
 
 class CouponResult(ApiModel):

@@ -12,6 +12,8 @@ import { BiometricGate } from "@/components/BiometricGate";
 import { Colors } from "@/components/theme";
 import { NutritionRuntime } from "@/components/NutritionRuntime";
 import { SubscriptionGate } from "@/features/subscription/SubscriptionGate";
+import { AccountErasureReceipt } from "@/features/settings/AccountErasureReceipt";
+import { NativeBillingProvider } from "@/features/subscription/NativeBillingProvider";
 
 const queryClient = new QueryClient({ defaultOptions: {
   queries: { networkMode: "always", retry: false }, mutations: { networkMode: "always", retry: false }
@@ -26,6 +28,7 @@ export default function RootLayout() {
         <BiometricGate>
           <AppearanceProvider>
           <AuthGate>
+            <NativeBillingProvider enabled={!accountControls}>
             <SubscriptionGate>
               {/* Keep provider-cache expiry alive without app-data traffic on account tools. */}
               <NutritionRuntime refresh={!accountControls} />
@@ -33,7 +36,9 @@ export default function RootLayout() {
               <Stack screenOptions={{ headerShown: false }} />
             </SubscriptionGate>
             <StatusBar style="dark" />
+            </NativeBillingProvider>
           </AuthGate>
+          <AccountErasureReceipt />
           </AppearanceProvider>
         </BiometricGate>
         </AppearanceBootstrap>

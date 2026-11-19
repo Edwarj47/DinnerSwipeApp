@@ -8,8 +8,10 @@ from sqlalchemy import engine_from_config, pool
 from alembic import context
 from app.core.config import settings
 from app.models import (
+    account_erasure,  # noqa: F401
     content_automation,  # noqa: F401
     entities,  # noqa: F401
+    native_billing,  # noqa: F401
     nutrition,  # noqa: F401
     security,  # noqa: F401
     workouts,  # noqa: F401

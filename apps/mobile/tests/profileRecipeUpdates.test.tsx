@@ -44,7 +44,7 @@ function mount(element: React.ReactElement) {
   const screen = render(<QueryClientProvider client={client}>{element}</QueryClientProvider>);
   return { ...screen, close: () => { screen.unmount(); client.clear(); } };
 }
-test("Account settings retain subscription, coupon codes, and collapsed settings groups", async () => {
+test("Account settings retain free Basic, native restoration, and collapsed settings groups", async () => {
   const screen = mount(<UserSettingsPanel />);
   try {
     expect(screen.queryByText("tester@example.com")).toBeNull();
@@ -57,7 +57,9 @@ test("Account settings retain subscription, coupon codes, and collapsed settings
     await screen.findByText("tester@example.com");
     expect(screen.getByText("Subscription")).toBeTruthy();
     fireEvent.press(screen.getByLabelText("Expand Subscription"));
-    expect(screen.getByText("Coupon code")).toBeTruthy();
+    expect(screen.getByText("Basic FREE")).toBeTruthy();
+    expect(screen.getByLabelText("Restore purchases")).toBeTruthy();
+    expect(screen.queryByText("Coupon code")).toBeNull();
     expect(screen.getByText("Planning")).toBeTruthy();
     expect(screen.getByText("Device security")).toBeTruthy();
     expect(screen.getByLabelText("App version")).toBeTruthy();

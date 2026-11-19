@@ -156,6 +156,9 @@ export type SubscriptionPlanStatus = {
 };
 
 export type PremiumStatus = {
+  native_provider?: "apple" | "google" | null;
+  native_verified_at?: string | null;
+  native_valid_until?: string | null;
   offline_until?: string | null;
   offline_sync_version?: number;
   active: boolean;
@@ -165,6 +168,7 @@ export type PremiumStatus = {
   monthly_price_cents: number;
   stripe_configured: boolean;
   billing_management_available: boolean;
+  external_subscription_active?: boolean;
   current_period_end?: string | null;
   cancel_at_period_end: boolean;
   current_tier: "none" | "trial" | "basic" | "premium";

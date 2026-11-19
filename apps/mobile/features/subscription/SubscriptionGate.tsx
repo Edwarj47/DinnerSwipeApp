@@ -1,345 +1,48 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as Linking from "expo-linking";
-import { Link, usePathname } from "expo-router";
-import { ReactNode, useEffect, useRef, useState } from "react";
-import { ActivityIndicator, AppState, Platform, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-
-import { BrandLogo } from "@/components/BrandLogo";
-import { Button } from "@/components/Button";
-import { useTransientMessage } from "@/components/useTransientMessage";
-import { useThemeColors, useThemedStyles, ThemeColors } from "@/components/theme";
-import { apiFetch, clearAuthTokens, reconnectOffline } from "@/services/api";
+import { usePathname } from "expo-router";
+import { ReactNode, useEffect, useRef } from "react";
+import { AppState } from "react-native";
+import { apiFetch } from "@/services/api";
 import { AppAccessContext, useAuthSession } from "@/services/session";
-import { CouponResult, PremiumStatus, SubscriptionTier } from "@/services/types";
-import { PlanPicker } from "./PlanPicker";
-import { monthlyPrice, planFeatures } from "./planOptions";
+import { PremiumStatus } from "@/services/types";
 
-type Props = {
-  children: ReactNode;
-};
+const ACCOUNT_PATHS = new Set(["/privacy", "/terms", "/delete-account"]);
 
-// Deletion remains authenticated by AuthGate, but must not require payment.
-const ACCESS_INDEPENDENT_PATHS = new Set(["/privacy", "/terms", "/delete-account"]);
-
-export function SubscriptionGate({ children }: Props) {
-  const styles = useThemedStyles(createStyles);
-  const Colors = useThemeColors();
-  const pathname = usePathname();
-  const queryClient = useQueryClient();
+export function SubscriptionGate({ children }: { children: ReactNode }) {
   const session = useAuthSession();
-  const hadAccess = useRef(false);
+  const path = usePathname();
+  const queries = useQueryClient();
   const owner = session.userId ?? session.email;
-  const currentOwner = useRef(owner);
-  currentOwner.current = owner;
-  const [code, setCode] = useState("");
-  const [statusIsError, setStatusIsError] = useState(false);
-  const [status, setStatus] = useTransientMessage(statusIsError);
-  const [selectedTier, setSelectedTier] = useState<SubscriptionTier>("basic");
-
-  useEffect(() => {
-    setCode("");
-    setStatus("");
-    setSelectedTier("basic");
-    hadAccess.current = false;
-  }, [session.email, setStatus]);
-
-  const shouldCheck = session.authenticated && !ACCESS_INDEPENDENT_PATHS.has(pathname);
-  const subscription = useQuery({
-    queryKey: ["subscription-status"],
-    queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status"),
-    enabled: shouldCheck,
-    retry: false
-  });
-  const startWelcome = useMutation({
+  const current = useRef(owner);
+  current.current = owner;
+  const enabled = session.authenticated && !ACCOUNT_PATHS.has(path);
+  const status = useQuery({ queryKey: ["subscription-status"],
+    queryFn: () => apiFetch<PremiumStatus>("/api/v1/subscription/status"), enabled, retry: false });
+  const welcome = useMutation({
     mutationFn: (_owner: string) => apiFetch<PremiumStatus>("/api/v1/subscription/welcome/start", { method: "POST" }),
-    onSuccess: (data, requestedOwner) => {
-      if (currentOwner.current === requestedOwner) queryClient.setQueryData(["subscription-status"], data);
+    onSuccess: async (_data, requestedOwner) => {
+      if (current.current !== requestedOwner) return;
+      await queries.invalidateQueries({ queryKey: ["subscription-status"] });
+      await queries.invalidateQueries({ queryKey: ["premium-status"] });
     }
   });
-  const beginWelcome = startWelcome.mutate;
-  const resetWelcome = startWelcome.reset;
-  useEffect(() => { resetWelcome(); }, [owner, resetWelcome]);
+  const start = welcome.mutate, reset = welcome.reset;
+  useEffect(() => reset(), [owner, reset]);
   useEffect(() => {
-    if (owner && shouldCheck && subscription.data?.welcome_eligible && !subscription.data.welcome_requires_verification
-      && !startWelcome.isPending && !startWelcome.isError) beginWelcome(owner);
-  }, [owner, shouldCheck, subscription.data?.welcome_eligible, subscription.data?.welcome_requires_verification,
-    startWelcome.isPending, startWelcome.isError, beginWelcome]);
+    if (enabled && owner && status.data?.welcome_eligible && !status.data.welcome_requires_verification
+      && !welcome.isPending && !welcome.isError) start(owner);
+  }, [enabled, owner, status.data?.welcome_eligible, status.data?.welcome_requires_verification,
+    welcome.isPending, welcome.isError, start]);
   useEffect(() => {
-    if (!subscription.data?.welcome_active || !subscription.data.welcome_ends_at) return;
-    const delay = Math.max(100, Math.min(2147483647, Date.parse(subscription.data.welcome_ends_at) - Date.now() + 100));
-    const timer = setTimeout(() => { void queryClient.invalidateQueries({ queryKey: ["subscription-status"] }); }, delay);
-    return () => clearTimeout(timer);
-  }, [subscription.data?.welcome_active, subscription.data?.welcome_ends_at, subscription.dataUpdatedAt, queryClient]);
-  const canUseApp = session.authenticated && Boolean(subscription.data?.basic_active) && !subscription.isError;
-
-  useEffect(() => {
-    if (canUseApp && !hadAccess.current) {
-      // Retry any requests cached before access was granted, including old clients' 402 errors.
-      void queryClient.invalidateQueries({ predicate: (query) => query.queryKey[0] !== "subscription-status" });
-    }
-    hadAccess.current = canUseApp;
-  }, [canUseApp, queryClient]);
-
-  useEffect(() => {
-    if (!shouldCheck) return;
-    const refresh = () => { void queryClient.invalidateQueries({ queryKey: ["subscription-status"] }); };
-    const listener = AppState.addEventListener("change", (state) => { if (state === "active") refresh(); });
-    const web = Platform.OS === "web" && typeof window !== "undefined";
-    if (web) window.addEventListener("focus", refresh);
-    return () => {
-      listener.remove();
-      if (web) window.removeEventListener("focus", refresh);
-    };
-  }, [queryClient, shouldCheck]);
-
-  const applyCode = useMutation({
-    onMutate: () => { setStatus(""); setStatusIsError(false); },
-    mutationFn: () =>
-      apiFetch<CouponResult>("/api/v1/subscription/coupon-code", {
-        method: "POST",
-        body: JSON.stringify({ code, tier: selectedTier })
-      }),
-    onSuccess: async (data) => {
-      setCode("");
-      setStatus(data.message);
-      if (data.subscription) queryClient.setQueryData(["subscription-status"], data.subscription);
-      if (data.checkout_url) await Linking.openURL(data.checkout_url);
-      await refreshSubscriptions(queryClient);
-    },
-    onError: (error) => { setStatusIsError(true); setStatus(error instanceof Error ? error.message : "Unable to apply code."); }
-  });
-
-  const startCheckout = useMutation({
-    onMutate: () => { setStatus(""); setStatusIsError(false); },
-    mutationFn: (tier: SubscriptionTier) =>
-      apiFetch<{ checkout_url: string }>("/api/v1/subscription/checkout-session", {
-        method: "POST",
-        body: JSON.stringify({ tier })
-      }),
-    onSuccess: async (data) => {
-      setStatus("Opening checkout.");
-      await Linking.openURL(data.checkout_url);
-    },
-    onError: (error) => { setStatusIsError(true); setStatus(error instanceof Error ? error.message : "Unable to start checkout."); }
-  });
-
-  const basicPrice = subscription.data?.basic_monthly_price_cents ?? 599;
-  const premiumPrice = subscription.data?.premium_monthly_price_cents ?? 999;
-  const isBasic = selectedTier === "basic";
-  const hasTrial = isBasic && subscription.data?.basic_trial_eligible !== false;
-  const checkoutConfigured = isBasic ? subscription.data?.basic_stripe_configured : subscription.data?.premium_stripe_configured;
-  const busy = startCheckout.isPending || applyCode.isPending;
-
-  const app = <AppAccessContext.Provider value={canUseApp}>{children}</AppAccessContext.Provider>;
-  const switchAccount = async () => {
-    await queryClient.cancelQueries();
-    await clearAuthTokens();
-    queryClient.clear();
-  };
-  if (!shouldCheck || canUseApp) return app;
-  if (subscription.isPending || subscription.isError) {
-    return (
-      <>
-        {app}
-        <SafeAreaView style={styles.overlay}>
-          <View style={styles.checking}>
-            <BrandLogo size={72} framed />
-            {subscription.isPending ? (
-              <><ActivityIndicator color="#fff" /><Text style={styles.subtitle}>Checking your access...</Text></>
-            ) : (
-              <>
-                <Text style={styles.title}>Unable to check your access</Text>
-                <Text style={styles.subtitle}>{subscription.error instanceof Error ? subscription.error.message : "Check your connection and try again."}</Text>
-                <Button label="Try again" icon="refresh" disabled={subscription.isFetching} onPress={async () => { await reconnectOffline(); await subscription.refetch(); }} />
-                <Button label="Switch account" icon="swap-horizontal" onPress={() => { void switchAccount(); }} />
-                <Link href="/delete-account" style={styles.onAccentLink}>Account deletion</Link>
-              </>
-            )}
-          </View>
-        </SafeAreaView>
-      </>
-    );
-  }
-
-  if (subscription.data?.welcome_eligible) {
-    const needsVerification = subscription.data.welcome_requires_verification;
-    return <>{app}<SafeAreaView style={styles.overlay}><ScrollView contentContainerStyle={styles.content}>
-      <View style={styles.container}>
-        <View style={styles.hero}><BrandLogo size={72} framed /><Text style={styles.title}>30 days of Premium, on us</Text>
-          <Text style={styles.subtitle}>No card. No automatic charge.</Text></View>
-        <View style={styles.panel}>
-          <Text style={styles.accountEmail}>{session.email}</Text>
-          {needsVerification ? <>
-            <Text style={styles.nativeNote}>Verify your email to begin your 30 days.</Text>
-            <Button label="Resend verification email" icon="mail-outline" onPress={async () => {
-              const requestedOwner = owner;
-              try { await apiFetch("/api/v1/auth/resend-verification", { method: "POST" });
-                if (currentOwner.current === requestedOwner) setStatus("Verification email requested. Check your inbox."); }
-              catch (error) { if (currentOwner.current === requestedOwner) setStatus(error instanceof Error ? error.message : "Unable to send verification."); }
-            }} />
-            <Button label="I've verified my email" icon="checkmark" variant="primary" disabled={subscription.isFetching}
-              onPress={() => { void subscription.refetch(); }} />
-          </> : <>
-            {startWelcome.isPending ? <ActivityIndicator accessibilityLabel="Starting complimentary Premium" color={Colors.accent} /> : null}
-            {startWelcome.isError ? <Text accessibilityRole="alert" style={styles.nativeNote}>Unable to start your welcome access. Please try again.</Text> : null}
-            <Button label="Start complimentary Premium" icon="sparkles-outline" variant="primary"
-              disabled={startWelcome.isPending || !owner} onPress={() => { if (owner) beginWelcome(owner); }} />
-          </>}
-          {status ? <Text accessibilityLiveRegion="polite" style={styles.nativeNote}>{status}</Text> : null}
-          <Button label="Switch account" icon="swap-horizontal" onPress={() => { void switchAccount(); }} />
-          <Link href="/delete-account" style={styles.nativeNote}>Account deletion</Link>
-        </View>
-      </View>
-    </ScrollView></SafeAreaView></>;
-  }
-
-  return (
-    <>
-      {app}
-      <SafeAreaView style={styles.overlay}>
-        <ScrollView contentContainerStyle={styles.content} keyboardShouldPersistTaps="handled">
-          <View style={styles.container}>
-            <View style={styles.hero}>
-              <BrandLogo size={88} framed />
-              <Text style={styles.kicker}>Dinner Swipe</Text>
-              <Text style={styles.title}>Keep planning dinners together.</Text>
-              <Text style={styles.subtitle}>
-                Your recipes. Your people. A plan for every week.
-              </Text>
-            </View>
-            <View style={styles.panel}>
-              <View style={styles.accountRow}>
-                <View style={styles.accountIdentity}>
-                  <Text style={styles.nativeNote}>Signed in as</Text>
-                  <Text style={styles.accountEmail}>{session.email}</Text>
-                </View>
-                <Button label="Switch account" icon="swap-horizontal" disabled={busy} onPress={() => { void switchAccount(); }} />
-              </View>
-              <Text style={styles.planLabel}>Choose your plan</Text>
-              <PlanPicker
-                value={selectedTier}
-                onChange={(tier) => { setSelectedTier(tier); setStatus(""); }}
-                basicPrice={basicPrice}
-                premiumPrice={premiumPrice}
-                disabled={busy}
-              />
-              <View style={styles.features}>
-                {planFeatures[selectedTier].map((feature) => (
-                  <View key={feature} style={styles.featureRow}>
-                    <Ionicons name="checkmark" color={Colors.basil} size={19} />
-                    <Text style={styles.featureText}>{feature}</Text>
-                  </View>
-                ))}
-              </View>
-              <View style={styles.billingSummary}>
-                <Text style={styles.billingTitle}>{hasTrial ? "First 30 days free" : monthlyPrice(isBasic ? basicPrice : premiumPrice)}</Text>
-                <Text style={styles.nativeNote}>
-                  {hasTrial
-                    ? `Card required. Then ${monthlyPrice(basicPrice)} unless canceled. Upgrade anytime.`
-                    : "Billed monthly from today. Cancel anytime."}
-                </Text>
-              </View>
-              <Button
-                label={startCheckout.isPending ? "Opening checkout..." : hasTrial ? "Start Basic free trial" : isBasic ? "Subscribe to Basic" : "Subscribe to Premium"}
-                icon="card"
-                variant="primary"
-                disabled={!checkoutConfigured || busy}
-                onPress={() => startCheckout.mutate(selectedTier)}
-              />
-              <Text style={styles.nativeNote}>
-                Confirm your subscription securely with Stripe. Cancel in Manage billing.
-              </Text>
-              <View style={styles.codeBox}>
-                <Text style={styles.codeTitle}>Coupon code</Text>
-                <Text style={styles.nativeNote}>Discounts are confirmed in checkout. Free-access coupons apply immediately.</Text>
-                <View style={styles.codeRow}>
-                  <TextInput
-                    accessibilityLabel="Coupon code"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    value={code}
-                    onChangeText={(value) => { setCode(value); setStatus(""); }}
-                    onSubmitEditing={() => { if (code.trim().length >= 3 && !busy) applyCode.mutate(); }}
-                    placeholder="Coupon code"
-                    placeholderTextColor="#9b928b"
-                    style={styles.input}
-                  />
-                  <Button
-                    label="Apply"
-                    icon="ticket"
-                    disabled={code.trim().length < 3 || busy}
-                    onPress={() => applyCode.mutate()}
-                  />
-                </View>
-              </View>
-              <View style={styles.footerRow}>
-                <Link href="/delete-account" style={styles.legalLink}>Account deletion</Link>
-                <View style={styles.legalRow}>
-                  <Link href="/privacy" style={styles.legalLink}>
-                    Privacy
-                  </Link>
-                  <Text style={styles.legalText}> and </Text>
-                  <Link href="/terms" style={styles.legalLink}>
-                    Terms
-                  </Link>
-                </View>
-              </View>
-              {status ? (
-                <View style={styles.statusRow}>
-                  {startCheckout.isPending || applyCode.isPending ? <ActivityIndicator color={Colors.accent} /> : null}
-                  <Text accessibilityRole={statusIsError ? "alert" : undefined} accessibilityLiveRegion="polite" style={[styles.status, statusIsError && styles.error]}>{status}</Text>
-                </View>
-              ) : null}
-            </View>
-          </View>
-        </ScrollView>
-      </SafeAreaView>
-    </>
-  );
+    if (!enabled) return;
+    const refresh = () => { void queries.invalidateQueries({ queryKey: ["subscription-status"] }); };
+    const listener = AppState.addEventListener("change", state => { if (state === "active") refresh(); });
+    const end = status.data?.welcome_active ? status.data.welcome_ends_at : status.data?.current_period_end;
+    const delay = end ? Date.parse(end) - Date.now() + 100 : NaN;
+    const timer = Number.isFinite(delay) && delay > 0
+      ? setTimeout(refresh, Math.min(delay, 2147483647)) : undefined;
+    return () => { listener.remove(); if (timer) clearTimeout(timer); };
+  }, [enabled, queries, status.data?.welcome_active, status.data?.welcome_ends_at, status.data?.current_period_end]);
+  // Basic never requires payment or a billing response. AuthGate still owns authentication.
+  return <AppAccessContext.Provider value={enabled}>{children}</AppAccessContext.Provider>;
 }
-
-async function refreshSubscriptions(queryClient: ReturnType<typeof useQueryClient>) {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: ["subscription-status"] }),
-    queryClient.invalidateQueries({ queryKey: ["premium-status"] }),
-    queryClient.invalidateQueries({ queryKey: ["macro-summary"] }),
-    queryClient.invalidateQueries({ queryKey: ["macro-targets"] })
-  ]);
-}
-
-const createStyles = (Colors: ThemeColors) => (StyleSheet.create({
-  overlay: { position: "absolute", top: 0, right: 0, bottom: 0, left: 0, backgroundColor: Colors.accent, zIndex: 15 },
-  checking: { flex: 1, alignItems: "center", justifyContent: "center", padding: 24, gap: 16 },
-  accountRow: { gap: 10, alignItems: "flex-start", paddingBottom: 14, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  accountIdentity: { width: "100%", gap: 2 },
-  accountEmail: { fontWeight: "700", color: Colors.ink, lineHeight: 21, flexShrink: 1 },
-  content: { flexGrow: 1, justifyContent: "center", alignItems: "center", padding: 20, paddingVertical: 32 },
-  container: { width: "100%", maxWidth: 520, gap: 24 },
-  hero: { alignItems: "center", gap: 9 },
-  kicker: { color: "#fff", fontWeight: "900", textTransform: "uppercase", fontSize: 12 },
-  title: { color: "#fff", fontSize: 30, fontWeight: "900", textAlign: "center", lineHeight: 35 },
-  subtitle: { color: "#ffe6e3", textAlign: "center", lineHeight: 22, maxWidth: 360 },
-  panel: { backgroundColor: Colors.surface, borderColor: "#f7d3cf", borderWidth: 1, borderRadius: 8, padding: 20, gap: 12 },
-  planLabel: { color: Colors.ink, fontSize: 18, fontWeight: "800" },
-  features: { gap: 12, paddingVertical: 8 },
-  featureRow: { flexDirection: "row", gap: 10, alignItems: "flex-start" },
-  featureText: { flex: 1, color: Colors.ink, lineHeight: 21 },
-  comingSoon: { color: Colors.muted, fontSize: 13, lineHeight: 20 },
-  billingSummary: { gap: 4, paddingVertical: 8 },
-  billingTitle: { color: Colors.ink, fontSize: 18, fontWeight: "800" },
-  codeBox: { borderTopWidth: 1, borderTopColor: Colors.border, paddingTop: 16, marginTop: 4, gap: 8 },
-  codeTitle: { color: Colors.ink, fontWeight: "900" },
-  codeRow: { flexDirection: "row", gap: 8, alignItems: "center" },
-  input: { flex: 1, minWidth: 0, minHeight: 48, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, paddingHorizontal: 12, backgroundColor: Colors.surface, color: Colors.ink },
-  footerRow: { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", gap: 12 },
-  legalRow: { flexDirection: "row", flexWrap: "wrap", justifyContent: "flex-end", flex: 1 },
-  legalText: { color: Colors.muted },
-  legalLink: { color: Colors.accentStrong, fontWeight: "900" },
-  onAccentLink: { color: "#fff", fontWeight: "900" },
-  nativeNote: { color: Colors.muted, lineHeight: 20, fontSize: 13 },
-  statusRow: { flexDirection: "row", gap: 8, alignItems: "center" },
-  status: { color: Colors.basil, fontWeight: "700", flex: 1 },
-  error: { color: Colors.danger }
-}));

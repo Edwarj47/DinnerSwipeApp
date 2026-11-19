@@ -149,6 +149,12 @@ def test_sync_requires_current_access_and_limits_lease(
     row = db_session.query(UserSubscription).one()
     row.current_period_end = datetime.now(UTC).replace(tzinfo=None) + timedelta(hours=2)
     db_session.commit()
+    # Free Basic has no paid expiry, but Premium's offline grant remains bounded.
+    status = client.get("/api/v1/subscription/status", headers=auth_headers).json()
+    basic_until = datetime.fromisoformat(status["offline_until"].replace("Z", "+00:00"))
+    assert 71 <= (basic_until - datetime.now(UTC)).total_seconds() / 3600 <= 72
+    row.plan_key = "premium_macros_monthly"
+    db_session.commit()
     status = client.get("/api/v1/subscription/status", headers=auth_headers).json()
     assert (
         datetime.fromisoformat(status["offline_until"].replace("Z", "+00:00")).replace(tzinfo=None)
@@ -156,10 +162,10 @@ def test_sync_requires_current_access_and_limits_lease(
     )
     row.status = "inactive"
     db_session.commit()
-    assert (
-        client.get("/api/v1/subscription/status", headers=auth_headers).json()["offline_until"]
-        is None
-    )
+    status = client.get("/api/v1/subscription/status", headers=auth_headers).json()
+    assert not status["premium_active"] and status["basic_active"]
+    basic_until = datetime.fromisoformat(status["offline_until"].replace("Z", "+00:00"))
+    assert 71 <= (basic_until - datetime.now(UTC)).total_seconds() / 3600 <= 72
 
 
 def test_invalid_macro_does_not_leave_a_receipt(

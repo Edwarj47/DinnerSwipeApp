@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from collections.abc import Callable
-
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
@@ -17,9 +15,7 @@ def test_register_requires_legal_acceptance(client: TestClient) -> None:
     assert "Privacy Policy and Terms of Service" in response.json()["detail"]
 
 
-def test_register_login_and_create_recipe(
-    client: TestClient, grant_basic_access: Callable[[str], object]
-) -> None:
+def test_register_login_and_create_recipe_on_free_basic(client: TestClient) -> None:
     register = client.post(
         "/api/v1/auth/register",
         json={
@@ -39,10 +35,6 @@ def test_register_login_and_create_recipe(
         "instructions": [{"step_number": 1, "text": "Cook beef"}],
         "tags": ["quick"],
     }
-    created = client.post("/api/v1/recipes", json=payload, headers=headers)
-    assert created.status_code == 402
-
-    grant_basic_access("cook@example.com")
     created = client.post("/api/v1/recipes", json=payload, headers=headers)
     assert created.status_code == 200
     assert created.json()["name"] == "Test tacos"

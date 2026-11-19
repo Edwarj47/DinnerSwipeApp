@@ -108,10 +108,16 @@ def test_expiry_does_not_restart_delete_data_or_issue_payment(
     monkeypatch.setattr(billing, "_configured_stripe_client", provider)
     body = client.post("/api/v1/subscription/welcome/start", headers=headers).json()
     assert not body["welcome_active"] and not body["welcome_eligible"]
-    assert not body["premium_active"] and not body["basic_active"]
+    assert not body["premium_active"] and body["basic_active"]
     assert body["welcome_days_remaining"] == 0
     assert grant.ends_at == old_end
-    assert client.get("/api/v1/recipes", headers=headers).status_code == 402
+    assert client.get("/api/v1/recipes", headers=headers).status_code == 200
+    assert (
+        client.put(
+            "/api/v1/macros/targets", headers=headers, json={"daily_calories": 2100}
+        ).status_code
+        == 402
+    )
     assert client.get("/api/v1/auth/account/export", headers=headers).status_code == 200
     assert user.is_active
     assert db_session.query(UserSubscription).count() == 0
@@ -230,7 +236,7 @@ def test_expired_welcome_checkout_has_no_second_basic_trial(
         "url": "https://checkout.stripe.com/test",
     }
     monkeypatch.setattr(billing, "_configured_stripe_client", lambda *_: provider)
-    billing.create_checkout_session(db_session, user, "basic")
+    billing.create_checkout_session(db_session, user, "premium")
     params = provider.v1.checkout.sessions.create.call_args.args[0]
     assert "trial_period_days" not in params["subscription_data"]
     assert "payment_method_collection" not in params

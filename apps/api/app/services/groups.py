@@ -443,6 +443,16 @@ def update_household_settings(
 def transfer_household_owner(
     db: Session, user: User, target_user_id: str, household_id: str | None = None
 ) -> dict[str, Any]:
+    target_user = db.scalar(
+        select(User)
+        .where(User.id == target_user_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    if not target_user:
+        raise HTTPException(404, "Target member not found in this group")
+    if not target_user.is_active:
+        raise HTTPException(409, "Choose an active member before transferring ownership.")
     household = current_household(db, user, household_id)
     db.scalar(select(Household).where(Household.id == household.id).with_for_update())
     current = require_owner(db, user, household)

@@ -1,6 +1,5 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import * as Linking from "expo-linking";
 import { useFocusEffect } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { AppState, Modal, Platform, Pressable, ScrollView, StyleSheet, Text, useWindowDimensions, View, ViewStyle } from "react-native";
@@ -205,22 +204,8 @@ function WeekContent({ selectedWeek, onCurrentWeek, onNavigate }: { selectedWeek
     },
     onError: showError
   });
-  const startPremiumCheckout = useMutation({
-    mutationFn: () =>
-      apiFetch<{ checkout_url: string }>("/api/v1/subscription/checkout-session", {
-        method: "POST",
-        body: JSON.stringify({ tier: "premium" })
-      }),
-    onSuccess: async (data) => {
-      setStatusIsError(false);
-      setStatus("Opening Premium checkout.");
-      await Linking.openURL(data.checkout_url);
-    },
-    onError: showError
-  });
   const plannedCount = sortedSlots.filter((slot) => slot.slot_type === "meal" && slot.recipe_id).length;
   const premiumActive = Boolean(subscription.data?.premium_active ?? subscription.data?.active);
-  const premiumCheckoutReady = Boolean(subscription.data?.premium_stripe_configured);
   const reorder = useMutation({
     mutationFn: (ids: string[]) => apiFetch<WeeklyPlan>("/api/v1/weekly-plans/current/reorder", {
       method: "POST", body: JSON.stringify({ ordered_slot_ids: ids })
@@ -262,15 +247,10 @@ function WeekContent({ selectedWeek, onCurrentWeek, onNavigate }: { selectedWeek
             </Text>
           </View>
           <Button
-            label={premiumCheckoutReady ? "Subscribe" : "Premium"}
-            icon={premiumCheckoutReady ? "card" : "person-circle"}
+            label="Premium options"
+            icon="card"
             variant="primary"
-            disabled={startPremiumCheckout.isPending}
             onPress={() => {
-              if (premiumCheckoutReady) {
-                startPremiumCheckout.mutate();
-                return;
-              }
               openSettings({ section: "account", focus: "subscription" });
             }}
           />

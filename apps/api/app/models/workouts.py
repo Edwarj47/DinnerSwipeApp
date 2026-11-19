@@ -93,7 +93,9 @@ class WorkoutPlanSlot(Base, TimestampMixin):
     __table_args__ = (CheckConstraint("sort_order >= 0", name="ck_workout_slot_order"),)
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     plan_id: Mapped[str] = mapped_column(ForeignKey("workout_plans.id"), index=True)
-    template_id: Mapped[str] = mapped_column(ForeignKey("workout_templates.id"), index=True)
+    template_id: Mapped[str | None] = mapped_column(
+        ForeignKey("workout_templates.id"), index=True, nullable=True
+    )
     slot_date: Mapped[date | None] = mapped_column(Date, nullable=True)
     sort_order: Mapped[int] = mapped_column(Integer)
     snapshot: Mapped[dict[str, Any]] = mapped_column(JSON)
@@ -132,7 +134,9 @@ class WorkoutLog(Base, TimestampMixin):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=uuid_str)
     user_id: Mapped[str] = mapped_column(ForeignKey("users.id"), index=True)
     request_uuid: Mapped[str] = mapped_column(String(36))
-    template_id: Mapped[str] = mapped_column(ForeignKey("workout_templates.id"), index=True)
+    template_id: Mapped[str | None] = mapped_column(
+        ForeignKey("workout_templates.id"), index=True, nullable=True
+    )
     performed_on: Mapped[date] = mapped_column(Date, index=True)
     completed: Mapped[bool] = mapped_column(Boolean, default=False)
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)

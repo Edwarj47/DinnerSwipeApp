@@ -79,6 +79,24 @@ def test_basic_three_drafts_even_after_discard_and_duplicate_retry(
     assert activity[0]["draft"] is None
 
 
+def test_free_basic_requires_verified_email_before_external_ai_dispatch(
+    client: TestClient, auth_headers: dict[str, str], db_session: Session
+) -> None:
+    user = db_session.query(User).filter_by(email="owner@example.com").one()
+    user.email_verified = False
+    db_session.commit()
+    assert submit(client, auth_headers).status_code == 403
+    assert db_session.query(IngestionJob).count() == 0
+    assert (
+        client.post(
+            "/api/v1/url-ingestion",
+            headers=auth_headers,
+            json={"urls": ["https://example.org/recipe"]},
+        ).status_code
+        == 403
+    )
+
+
 def test_premium_unlimited_monthly_and_new_month_resets_basic(
     client: TestClient,
     auth_headers: dict[str, str],
@@ -184,4 +202,6 @@ def test_auth_ownership_and_inflight_reservation(
     sub = db_session.query(UserSubscription).one()
     sub.status = "canceled"
     db_session.commit()
-    assert client.get("/api/v1/ai-recipes/usage", headers=auth_headers).status_code == 402
+    usage = client.get("/api/v1/ai-recipes/usage", headers=auth_headers)
+    assert usage.status_code == 200  # Free Basic retains its bounded AI allowance.
+    assert usage.json()["limit"] == 3

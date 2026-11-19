@@ -64,7 +64,7 @@ function WeekContent() {
             <Button label="" icon="trash-outline" variant="quiet-danger" accessibilityLabel={`Remove ${slot.snapshot.title}`} disabled={busy} onPress={() => remove.mutate(slot.id)} />
           </View>
         </> : null}
-        {!readOnly ? <Button label="Log performance" icon="barbell-outline" disabled={busy} onPress={() => { setPerformanceSlot(slot.id); setPerformance(slot.snapshot); }} /> : null}
+        {!readOnly ? <Button label="Log performance" icon="barbell-outline" disabled={busy || slot.template_id === null} onPress={() => { setPerformanceSlot(slot.id); setPerformance(slot.snapshot); }} /> : null}
       </View></View>)}
       {!slots.some(slot => (slot.slot_date ?? "") === day.iso) ? <Text style={styles.muted}>No workouts</Text> : null}
     </View>) : null}
@@ -75,7 +75,7 @@ function WeekContent() {
       {!pending.length && !proposals.isLoading && !proposals.isError ? <Text style={styles.muted}>No pending proposals</Text> : null}
     </View> : null}
     <WorkoutQueueNotice />
-    {detail ? <WorkoutDetail template={detail} onClose={() => setDetail(null)} onLog={readOnly ? undefined : () => { setPerformance(detail); setDetail(null); }} /> : null}
+    {detail ? <WorkoutDetail template={detail} onClose={() => setDetail(null)} onLog={readOnly || detail.source_deleted ? undefined : () => { setPerformance(detail); setDetail(null); }} /> : null}
     {performance && !readOnly ? <PerformanceForm template={performance} slotId={performanceSlot} onClose={() => { setPerformance(null); setPerformanceSlot(undefined); }} onSaved={() => { void client.invalidateQueries({ queryKey: workoutKey(owner, "logs") }); void client.invalidateQueries({ queryKey: workoutKey(owner, "progress") }); }} /> : null}
   </Screen>;
 }

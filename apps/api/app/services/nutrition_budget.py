@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.config import Settings
+from app.models.entities import User
 from app.models.nutrition import NutritionCall, NutritionProviderState
 
 
@@ -28,6 +29,11 @@ class NutritionBudget:
 
     def reserve(self, kind: str, background: bool = False, user_id: str | None = None) -> str:
         with self.sessions() as db:
+            if user_id:
+                # Serialize with erasure before recording a non-FK usage association.
+                user = db.scalar(select(User).where(User.id == user_id).with_for_update())
+                if user is None or not user.is_active:
+                    raise NutritionError("account_unavailable")
             state = db.scalar(
                 select(NutritionProviderState)
                 .where(NutritionProviderState.provider == "fatsecret")

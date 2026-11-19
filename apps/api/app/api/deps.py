@@ -46,12 +46,16 @@ async def get_current_user(
     if expected and expected != user.id:
         raise HTTPException(409, "Account changed. Reload before continuing.")
     premium = await run_in_threadpool(is_premium_access_active, db, user)
-    with acting_as(
-        RequestActor(
-            user.id, premium, bool(consent_status(user)["accepted"])
-        )
-    ):
-        yield user
+    with acting_as(RequestActor(user.id, premium, bool(consent_status(user)["accepted"]))):
+        previous = db.info.get("authenticated_actor")
+        db.info["authenticated_actor"] = (user.id, user.session_version)
+        try:
+            yield user
+        finally:
+            if previous is None:
+                db.info.pop("authenticated_actor", None)
+            else:
+                db.info["authenticated_actor"] = previous
 
 
 def get_verified_user(current_user: Annotated[User, Depends(get_current_user)]) -> User:

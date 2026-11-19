@@ -12,6 +12,12 @@ WELCOME_OFFER = "premium_welcome_30d_v1"
 WELCOME_DAYS = 30
 
 
+def native_paid_history(db: Session, user: User) -> bool:
+    from app.services.native_billing import native_history
+
+    return native_history(db, user)
+
+
 def welcome_for_user(db: Session, user: User) -> ComplimentaryPremiumAccess | None:
     return db.get(ComplimentaryPremiumAccess, user.id)
 
@@ -63,7 +69,7 @@ def start_welcome(db: Session, user: User) -> ComplimentaryPremiumAccess:
         raise HTTPException(
             409, "An earlier checkout must be resolved before welcome access can start."
         )
-    if paid_history(subscription):
+    if paid_history(subscription) or native_paid_history(db, user):
         raise HTTPException(409, "Your existing subscription terms are unchanged.")
     now = datetime.utcnow()
     welcome.started_at = now

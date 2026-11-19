@@ -146,7 +146,7 @@ def test_premium_waiver_unlocks_macro_tracking(
     assert deleted.json()["status"] == "deleted"
 
 
-def test_basic_access_requires_subscription_or_stripe_trial(
+def test_basic_is_free_without_subscription_and_legacy_stripe_trial_is_preserved(
     client: TestClient, db_session: Session
 ) -> None:
     registered = client.post(
@@ -164,14 +164,19 @@ def test_basic_access_requires_subscription_or_stripe_trial(
     status = client.get("/api/v1/subscription/status", headers=headers)
     assert status.status_code == 200
     body = status.json()
-    assert body["current_tier"] == "none"
-    assert body["basic_active"] is False
+    assert body["current_tier"] == "basic"
+    assert body["basic_active"] is True
     assert body["premium_active"] is False
     assert body["trial_days_remaining"] == 0
 
     blocked_recipes = client.get("/api/v1/recipes", headers=headers)
-    assert blocked_recipes.status_code == 402
-    assert "Choose a subscription" in blocked_recipes.json()["detail"]
+    assert blocked_recipes.status_code == 200
+    assert (
+        client.put(
+            "/api/v1/macros/targets", headers=headers, json={"daily_calories": 2100}
+        ).status_code
+        == 402
+    )
 
     user = db_session.query(User).filter_by(email="nosub@example.com").one()
     db_session.add(
@@ -280,7 +285,7 @@ def test_stripe_account_mismatch_blocks_checkout(
     assert "Stripe account mismatch" in response.text
 
 
-def test_legacy_basic_checkout_uses_basic_price_and_card_required_trial(
+def test_new_paid_basic_checkout_is_rejected_before_provider_dispatch(
     client: TestClient,
     auth_headers: dict[str, str],
     monkeypatch: pytest.MonkeyPatch,
@@ -328,19 +333,9 @@ def test_legacy_basic_checkout_uses_basic_price_and_card_required_trial(
         json={"tier": "basic"},
     )
 
-    assert response.status_code == 200
-    assert response.json()["checkout_url"] == "https://checkout.stripe.test/basic"
-    params = captured["params"]
-    assert params["line_items"] == [{"price": "price_basic", "quantity": 1}]
-    assert params["subscription_data"]["metadata"]["tier"] == "basic"
-    assert params["subscription_data"]["trial_period_days"] == settings.basic_free_trial_days
-    missing_payment_method = params["subscription_data"]["trial_settings"]["end_behavior"][
-        "missing_payment_method"
-    ]
-    assert missing_payment_method == "cancel"
-    assert params["payment_method_collection"] == "always"
-    assert "payment_method_types" not in params
-    assert captured["stripe_version"] == settings.stripe_api_version
+    assert response.status_code == 409
+    assert "Basic is free" in response.text
+    assert captured == {}
 
 
 def test_signed_stripe_webhook_is_processed(
@@ -371,9 +366,7 @@ def test_signed_stripe_webhook_is_processed(
     ).encode("utf-8")
     timestamp = str(int(time.time()))
     signed_payload = timestamp.encode("utf-8") + b"." + payload
-    signature = hmac.new(
-        webhook_secret.encode("utf-8"), signed_payload, hashlib.sha256
-    ).hexdigest()
+    signature = hmac.new(webhook_secret.encode("utf-8"), signed_payload, hashlib.sha256).hexdigest()
 
     response = client.post(
         "/api/v1/premium/stripe/webhook",
