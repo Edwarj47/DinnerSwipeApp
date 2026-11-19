@@ -86,10 +86,10 @@ if (!["127.0.0.1", "localhost"].includes(address.hostname))
           return reply(
             verifyEmail
               ? {
-                  basic_active: false,
+                  basic_active: true,
                   premium_active: false,
                   active: false,
-                  current_tier: "none",
+                  current_tier: "basic",
                   plans: [],
                   welcome_eligible: true,
                   welcome_requires_verification: true,
@@ -227,6 +227,11 @@ if (!["127.0.0.1", "localhost"].includes(address.hostname))
       await page.getByTestId("tour-toolbar").waitFor({ state: "hidden" });
       verifyEmail = true;
       await page.reload();
+      await page.getByRole("button", { name: "Swiping for: Personal", exact: true }).waitFor();
+      await page.getByRole("button", { name: "Open settings", exact: true }).click();
+      await page.getByRole("button", { name: "Expand Account", exact: true }).click();
+      await page.getByRole("button", { name: "Expand Subscription", exact: true }).click();
+      await page.getByText("Basic FREE", { exact: true }).waitFor();
       await page
         .getByText("30 days of Premium, on us", { exact: true })
         .waitFor();
