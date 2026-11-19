@@ -14,7 +14,7 @@
   "devDependencies": {
     "@typescript-eslint/parser": "^8.59.0",
     "eslint": "^9.39.5",
-    "eslint-import-resolver-typescript": "^3.10.1",
+    "eslint-import-resolver-typescript": "^4.4.5",
     "typescript": "~6.0.3"
   }
 }
